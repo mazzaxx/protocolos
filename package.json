@@ -7,14 +7,14 @@
     "dev": "vite",
     "server": "PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
-    "start": "npm run start:production",
-    "start:production": "npm run build && npm run start:server",
-    "start:server": "PORT=3002 node server/server.js",
+    "start": "node server/server.js",
+    "start:production": "node server/server.js",
+    "start:server": "node server/server.js",
     "build": "vite build",
     "preview": "vite preview",
-    "preview:production": "npm run build && npm run start:server",
+    "preview:production": "npm run build && npm run start",
     "lint": "eslint .",
-    "prepare": "npm run build"
+    "prepare": "echo 'Skipping build for backend-only deploy'"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

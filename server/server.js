@@ -11,14 +11,30 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares
-app.use(cors());
-app.use(express.json());
+// Lista de origens permitidas para CORS
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://seu-site-netlify.netlify.app', // SUBSTITUA pela sua URL do Netlify
+  // Adicione outras URLs se necessário
+];
 
-// Servir arquivos estáticos do frontend em produção
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../dist')));
-}
+// Middlewares
+app.use(cors({
+  origin: function (origin, callback) {
+    // Permitir requisições sem origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+app.use(express.json());
 
 // Log de todas as requisições para debug
 app.use((req, res, next) => {
@@ -30,20 +46,9 @@ app.use((req, res, next) => {
 app.use('/api', authRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Servir o frontend para todas as rotas não-API em produção
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
-  });
-}
-
 // Rota de teste
 app.get('/', (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
-  } else {
-    res.json({ message: 'Servidor de autenticação funcionando!' });
-  }
+  res.json({ message: 'Servidor de autenticação funcionando!' });
 });
 
 // Rota de teste para admin

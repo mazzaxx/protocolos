@@ -4,6 +4,36 @@ Sistema completo para gerenciamento de protocolos jurídicos com autenticação 
 
 ## 🚀 Deploy Rápido (Gratuito)
 
+### Passo a Passo Completo para Deploy
+
+#### 1. Deploy do Backend no Railway
+1. Acesse [railway.app](https://railway.app) e faça login
+2. Clique em "New Project" → "Deploy from GitHub repo"
+3. Selecione este repositório
+4. O Railway detectará automaticamente o Node.js
+5. Anote a URL gerada (ex: `https://seu-projeto-railway.up.railway.app`)
+
+#### 2. Configurar Frontend para Produção
+1. Edite o arquivo `.env` e coloque a URL do Railway:
+   ```
+   VITE_API_BASE_URL=https://sua-url-railway.up.railway.app
+   ```
+2. Edite o arquivo `netlify.toml` e substitua as URLs pelos seus domínios reais
+3. Edite o arquivo `server/server.js` e adicione sua URL do Netlify na lista de origens permitidas
+
+#### 3. Deploy do Frontend no Netlify
+1. Acesse [netlify.com](https://netlify.com) e faça login
+2. Clique em "New site from Git"
+3. Conecte seu repositório GitHub
+4. Configure:
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+5. Nas configurações do site, vá em "Environment variables" e adicione:
+   - `VITE_API_BASE_URL` = sua URL do Railway
+
+#### 4. Verificar CORS no Backend
+Certifique-se de que o backend está configurado para aceitar requisições do seu domínio Netlify.
+
 ### Railway (Recomendado)
 1. Fork este repositório
 2. Acesse [railway.app](https://railway.app)
@@ -60,14 +90,16 @@ npm run preview:production
 
 ## Acesso ao sistema
 
-- **URL:** http://localhost:5173
+- **URL de desenvolvimento:** http://localhost:5173
+- **URL de produção:** Sua URL do Netlify
 - **Email de teste:** admin@escritorio.com  
 - **Senha de teste:** 123456
 
 ## 🌐 URLs de Acesso
 
 - **Desenvolvimento**: http://localhost:5173
-- **Produção**: Será fornecida após deploy
+- **Backend**: Sua URL do Railway
+- **Frontend**: Sua URL do Netlify
 
 ## Funcionalidades
 
