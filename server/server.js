@@ -15,8 +15,15 @@ const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://seu-site-netlify.netlify.app', // SUBSTITUA pela sua URL do Netlify
-  // Adicione outras URLs se necessário
+  'http://localhost:4173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:4173',
+  // URL real do Netlify
+  'https://ncasistemaprotocolos.netlify.app',
+  // URLs alternativas do Netlify (caso mude)
+  'https://sistema-juridico.netlify.app',
+  'https://sistema-protocolos.netlify.app',
 ];
 
 // Middlewares
@@ -28,8 +35,13 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      console.log('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
+      console.log('CORS warning - origin not in allowedOrigins:', origin);
+      // Em desenvolvimento, permitir qualquer origem localhost ou netlify
+      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('netlify.app')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
     }
   },
   credentials: true
@@ -48,12 +60,35 @@ app.use('/api/admin', adminRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
-  res.json({ message: 'Servidor de autenticação funcionando!' });
+  res.json({ 
+    message: 'Servidor de autenticação funcionando!',
+    timestamp: new Date().toISOString(),
+    routes: [
+      'GET /',
+      'POST /api/login',
+      'GET /api/verify',
+      'GET /api/admin/funcionarios',
+      'POST /api/admin/funcionarios',
+      'PUT /api/admin/funcionarios/:id',
+      'DELETE /api/admin/funcionarios/:id'
+    ]
+  });
 });
 
 // Rota de teste para admin
 app.get('/api/admin/test', (req, res) => {
-  res.json({ message: 'Rotas admin funcionando!' });
+  res.json({ 
+    message: 'Rotas admin funcionando!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Rota de teste para API
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    message: 'API funcionando!',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Middleware de erro 404

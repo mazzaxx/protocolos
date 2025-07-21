@@ -27,6 +27,10 @@ export function Login({ onLogin }: LoginProps) {
 
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const loginUrl = `${apiBaseUrl}/api/login`;
+      
+      console.log('Tentando fazer login em:', loginUrl);
+      
       const response = await fetch(`${apiBaseUrl}/api/login`, {
         method: 'POST',
         headers: {
@@ -35,7 +39,10 @@ export function Login({ onLogin }: LoginProps) {
         body: JSON.stringify(formData),
       });
 
+      console.log('Response status:', response.status);
+      
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (data.success) {
         // Salvar dados do usuário no localStorage
@@ -47,7 +54,7 @@ export function Login({ onLogin }: LoginProps) {
     } catch (err) {
       console.error('Erro de login:', err);
       if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        setError('Não foi possível conectar ao servidor. Verifique sua conexão com a internet.');
+        setError('Erro de conexão com o servidor. Verifique se o backend está rodando na porta 3002.');
       } else {
         setError('Erro de conexão. Tente novamente.');
       }
