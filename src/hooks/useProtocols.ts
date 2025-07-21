@@ -4,7 +4,8 @@ import { Protocol } from '../types';
 // Função para buscar email do usuário por ID
 const getUserEmailById = async (userId: number): Promise<string> => {
   try {
-    const response = await fetch('http://localhost:3002/api/admin/funcionarios');
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios`);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -19,8 +20,8 @@ const getUserEmailById = async (userId: number): Promise<string> => {
     return 'Email não disponível';
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      console.error('Erro: Backend não está rodando. Execute "npm run server" ou "npm run dev:full"');
-      return 'Backend offline';
+      console.error('Erro: Não foi possível conectar ao servidor');
+      return 'Servidor offline';
     }
     console.error('Erro ao buscar email do usuário:', error);
     return 'Email não disponível';

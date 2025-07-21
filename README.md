@@ -2,6 +2,22 @@
 
 Sistema completo para gerenciamento de protocolos jurídicos com autenticação de funcionários.
 
+## 🚀 Deploy Rápido (Gratuito)
+
+### Railway (Recomendado)
+1. Fork este repositório
+2. Acesse [railway.app](https://railway.app)
+3. Login com GitHub
+4. "New Project" → "Deploy from GitHub repo"
+5. Selecione o repositório
+6. Deploy automático em ~2 minutos
+
+### Render
+1. Fork este repositório  
+2. Acesse [render.com](https://render.com)
+3. "New Web Service" → Conecte GitHub
+4. Configure: `npm run start:production`
+
 ## Como executar o projeto
 
 ### 1. Instalar dependências
@@ -14,40 +30,32 @@ npm install
 npm run dev:full
 ```
 
-## Deploy Gratuito (Railway)
+## 🔧 Desenvolvimento Local
 
-### 1. Preparar para produção
+### 1. Instalar dependências
 ```bash
-# Instalar dependências
 npm install
+```
 
-# Testar build local
+### 2. Executar em desenvolvimento
+```bash
+# Servidor + Frontend juntos
+npm run dev:full
+```
+
+**Ou separadamente:**
+```bash
+# Backend
+npm run server
+
+# Frontend (nova aba do terminal)
+npm run dev
+```
+
+### 3. Testar build de produção
+```bash
 npm run build
 npm run preview:production
-```
-
-### 2. Deploy no Railway
-1. Acesse [railway.app](https://railway.app)
-2. Conecte seu GitHub
-3. Selecione este repositório
-4. Railway detectará automaticamente e fará deploy
-5. Acesse a URL fornecida
-
-### 3. Outras opções gratuitas
-- **Render**: render.com (750h/mês grátis)
-- **Vercel + Supabase**: Frontend + Backend separados
-- **Netlify + Railway**: Híbrido
-
-Ou executar separadamente:
-
-**Backend (servidor de autenticação):**
-```bash
-npm run server
-```
-
-**Frontend:**
-```bash
-npm run dev
 ```
 
 ## Acesso ao sistema
@@ -55,6 +63,11 @@ npm run dev
 - **URL:** http://localhost:5173
 - **Email de teste:** admin@escritorio.com  
 - **Senha de teste:** 123456
+
+## 🌐 URLs de Acesso
+
+- **Desenvolvimento**: http://localhost:5173
+- **Produção**: Será fornecida após deploy
 
 ## Funcionalidades
 

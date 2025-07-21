@@ -26,7 +26,8 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3002/api/login', {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,7 +47,7 @@ export function Login({ onLogin }: LoginProps) {
     } catch (err) {
       console.error('Erro de login:', err);
       if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        setError('Não foi possível conectar ao servidor. Verifique se o backend está rodando na porta 3002.');
+        setError('Não foi possível conectar ao servidor. Verifique sua conexão com a internet.');
       } else {
         setError('Erro de conexão. Tente novamente.');
       }

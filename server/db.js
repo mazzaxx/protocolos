@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Criar conexão com o banco de dados
-const dbPath = path.join(__dirname, 'database.sqlite');
+const dbPath = process.env.DATABASE_URL || path.join(__dirname, 'database.sqlite');
 const db = new sqlite.Database(dbPath);
 
 // Criar tabela funcionarios se não existir

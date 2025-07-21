@@ -5,15 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server/server.js",
+    "server": "PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
-    "start": "node server/server.js",
+    "start": "npm run start:production",
     "start:production": "npm run build && npm run start:server",
-    "start:server": "node server/server.js",
+    "start:server": "PORT=3002 node server/server.js",
     "build": "vite build",
+    "preview": "vite preview",
     "preview:production": "npm run build && npm run start:server",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "prepare": "npm run build"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
