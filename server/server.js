@@ -51,6 +51,8 @@ app.use(express.json());
 // Log de todas as requisições para debug
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
+  console.log('Origin:', req.headers.origin);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   next();
 });
 
@@ -63,6 +65,8 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'Servidor de autenticação funcionando!',
     timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT,
     routes: [
       'GET /',
       'POST /api/login',

@@ -6,6 +6,9 @@ const router = express.Router();
 // Listar todos os funcionários
 router.get('/funcionarios', (req, res) => {
   console.log('GET /funcionarios chamado');
+  console.log('Headers recebidos:', req.headers);
+  console.log('Origin:', req.headers.origin);
+  
   db.all("SELECT id, email, permissao FROM funcionarios ORDER BY id", (err, rows) => {
     if (err) {
       console.error('Erro ao buscar funcionários:', err);

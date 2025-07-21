@@ -55,7 +55,19 @@ Certifique-se de que o backend está configurado para aceitar requisições do s
 npm install
 ```
 
-### 2. Executar servidor backend e frontend simultaneamente
+### 2. Escolher modo de execução
+
+#### Modo Local (Desenvolvimento)
+```bash
+npm run dev:local
+```
+
+#### Modo Nuvem (Testes com backend em produção)
+```bash
+npm run dev:cloud
+```
+
+#### Modo Completo Local
 ```bash
 npm run dev:full
 ```
