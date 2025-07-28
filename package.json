@@ -18,7 +18,8 @@
     "lint": "eslint .",
     "postinstall": "echo 'Railway deploy complete'",
     "test:server": "curl http://localhost:3002 || echo 'Servidor não está rodando'",
-    "debug": "concurrently \"npm run server\" \"npm run dev\" --kill-others-on-fail"
+    "debug": "concurrently \"npm run server\" \"npm run dev\" --kill-others-on-fail",
+    "test:connectivity": "node server/test-connectivity.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

@@ -26,6 +26,9 @@ const allowedOrigins = [
   // URLs alternativas do Netlify (caso mude)
   'https://sistema-juridico.netlify.app',
   'https://sistema-protocolos.netlify.app',
+  // URLs de deploy preview do Netlify
+  /https:\/\/.*--ncasistemaprotocolos\.netlify\.app$/,
+  /https:\/\/deploy-preview-.*--ncasistemaprotocolos\.netlify\.app$/,
 ];
 
 // Middlewares
@@ -34,7 +37,17 @@ app.use(cors({
     // Permitir requisições sem origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    // Verificar se a origem está na lista ou corresponde a um padrão regex
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return allowedOrigin === origin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
       console.log('CORS warning - origin not in allowedOrigins:', origin);
@@ -46,7 +59,10 @@ app.use(cors({
       }
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200
 }));
 app.use(express.json());
 
@@ -63,9 +79,19 @@ try {
 
 // Log de todas as requisições para debug
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
-  console.log('Origin:', req.headers.origin);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  const timestamp = new Date().toISOString();
+  console.log(`\n🌐 ${req.method} ${req.path} - ${timestamp}`);
+  console.log('📍 Origin:', req.headers.origin);
+  console.log('🔧 User-Agent:', req.headers['user-agent']?.substring(0, 50) + '...');
+  
+  // Log apenas headers importantes para reduzir ruído
+  const importantHeaders = {
+    'content-type': req.headers['content-type'],
+    'authorization': req.headers.authorization ? '[PRESENTE]' : '[AUSENTE]',
+    'x-forwarded-for': req.headers['x-forwarded-for'],
+    'referer': req.headers.referer
+  };
+  console.log('📋 Headers importantes:', importantHeaders);
   next();
 });
 
@@ -76,11 +102,14 @@ app.use('/api', protocolRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
+  console.log('🏠 Rota raiz acessada');
   res.json({ 
     message: 'Servidor de autenticação funcionando!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     port: PORT,
+    database: 'SQLite conectado',
+    cors: 'Configurado para Netlify',
     routes: [
       'GET /',
       'POST /api/login',
@@ -88,7 +117,11 @@ app.get('/', (req, res) => {
       'GET /api/admin/funcionarios',
       'POST /api/admin/funcionarios',
       'PUT /api/admin/funcionarios/:id',
-      'DELETE /api/admin/funcionarios/:id'
+      'DELETE /api/admin/funcionarios/:id',
+      'GET /api/protocolos',
+      'POST /api/protocolos',
+      'PUT /api/protocolos/:id',
+      'DELETE /api/protocolos/:id'
     ]
   });
 });
@@ -106,6 +139,35 @@ app.get('/api/test', (req, res) => {
   res.json({ 
     message: 'API funcionando!',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Rota de health check
+app.get('/health', (req, res) => {
+  console.log('🏥 Health check solicitado');
+  
+  // Verificar se o banco está funcionando
+  db.get("SELECT COUNT(*) as count FROM funcionarios", (err, row) => {
+    if (err) {
+      console.error('❌ Erro no health check:', err);
+      return res.status(500).json({
+        status: 'unhealthy',
+        database: 'error',
+        timestamp: new Date().toISOString(),
+        error: err.message
+      });
+    }
+    
+    console.log('✅ Health check OK');
+    res.json({
+      status: 'healthy',
+      database: 'connected',
+      users: row.count,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      version: '1.0.0'
+    });
   });
 });
 
@@ -127,21 +189,21 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-  console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`\n🚀 ========================================`);
+  console.log(`🚀 SERVIDOR INICIADO COM SUCESSO!`);
+  console.log(`🚀 ========================================`);
+  console.log(`📡 Porta: ${PORT}`);
+  console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🗄️  Banco: SQLite inicializado`);
+  console.log(`🔐 CORS: Configurado para Netlify`);
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`Acesse: http://localhost:${PORT}`);
+    console.log(`🔗 Local: http://localhost:${PORT}`);
   }
-  console.log('Rotas disponíveis:');
-  console.log('- GET /api/login');
-  console.log('- POST /api/login');
-  console.log('- GET /api/verify');
-  console.log('- GET /api/admin/funcionarios');
-  console.log('- POST /api/admin/funcionarios');
-  console.log('- PUT /api/admin/funcionarios/:id');
-  console.log('- DELETE /api/admin/funcionarios/:id');
-  console.log('- GET /api/protocolos');
-  console.log('- POST /api/protocolos');
-  console.log('- PUT /api/protocolos/:id');
-  console.log('- DELETE /api/protocolos/:id');
+  console.log(`🌐 Frontend: https://ncasistemaprotocolos.netlify.app`);
+  console.log(`📋 Rotas principais:`);
+  console.log(`   - POST /api/login (Autenticação)`);
+  console.log(`   - GET /api/protocolos (Listar protocolos)`);
+  console.log(`   - POST /api/protocolos (Criar protocolo)`);
+  console.log(`   - GET /api/admin/funcionarios (Admin)`);
+  console.log(`🚀 ========================================\n`);
 });

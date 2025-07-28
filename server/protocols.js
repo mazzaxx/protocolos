@@ -6,6 +6,8 @@ const router = express.Router();
 // Listar todos os protocolos
 router.get('/protocolos', (req, res) => {
   console.log('GET /protocolos chamado');
+  console.log('Origin:', req.headers.origin);
+  console.log('User-Agent:', req.headers['user-agent']);
   
   db.all(`
     SELECT p.*, f.email as createdByEmail 
@@ -36,6 +38,13 @@ router.get('/protocolos', (req, res) => {
     }));
 
     console.log('Protocolos encontrados:', protocolos.length);
+    console.log('Últimos 3 protocolos:', protocolos.slice(0, 3).map(p => ({
+      id: p.id,
+      processNumber: p.processNumber,
+      status: p.status,
+      createdAt: p.createdAt
+    })));
+    
     res.json({
       success: true,
       protocolos
@@ -46,6 +55,8 @@ router.get('/protocolos', (req, res) => {
 // Criar novo protocolo
 router.post('/protocolos', (req, res) => {
   console.log('POST /protocolos chamado com:', req.body);
+  console.log('Origin:', req.headers.origin);
+  console.log('Content-Type:', req.headers['content-type']);
   
   const {
     processNumber,
@@ -78,6 +89,15 @@ router.post('/protocolos', (req, res) => {
     description: 'Protocolo criado',
     performedBy: req.body.createdByEmail || 'Usuário'
   }];
+
+  console.log('Tentando inserir protocolo com ID:', id);
+  console.log('Dados do protocolo:', {
+    processNumber,
+    court,
+    system,
+    status: status || 'Aguardando',
+    createdBy
+  });
 
   db.run(`
     INSERT INTO protocolos (
@@ -112,13 +132,16 @@ router.post('/protocolos', (req, res) => {
   ], function(err) {
     if (err) {
       console.error('Erro ao criar protocolo:', err);
+      console.error('SQL Error details:', err.message);
       return res.status(500).json({ 
         success: false, 
-        message: 'Erro ao criar protocolo' 
+        message: 'Erro ao criar protocolo: ' + err.message
       });
     }
 
-    console.log('Protocolo criado com ID:', id);
+    console.log('✅ Protocolo criado com sucesso! ID:', id);
+    console.log('Rows affected:', this.changes);
+    
     res.json({
       success: true,
       message: 'Protocolo criado com sucesso',

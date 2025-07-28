@@ -193,6 +193,7 @@ export function ProtocolForm() {
     setShowConfirmModal(false);
 
     setIsSubmitting(true);
+    console.log('🚀 Iniciando envio do protocolo...');
     
     try {
       // Converter arquivos de petição para base64
@@ -235,7 +236,7 @@ export function ProtocolForm() {
         ? customPetitionType.trim()
         : formData.petitionType;
 
-      addProtocol({
+      const protocolData = {
         ...formData,
         petitionType: finalPetitionType,
         procurationType: formData.needsProcuration ? finalProcurationType : undefined,
@@ -245,7 +246,12 @@ export function ProtocolForm() {
         status: 'Aguardando',
         assignedTo,
         isDistribution,
-      });
+      };
+      
+      console.log('📋 Dados do protocolo preparados:', protocolData);
+      
+      const result = await addProtocol(protocolData);
+      console.log('✅ Protocolo adicionado:', result);
 
       setSubmitSuccess(true);
       setFormData({
@@ -270,7 +276,8 @@ export function ProtocolForm() {
       
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
-      console.error('Erro ao enviar protocolo:', error);
+      console.error('❌ Erro ao enviar protocolo:', error);
+      alert('Erro ao enviar protocolo. Verifique a conexão e tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

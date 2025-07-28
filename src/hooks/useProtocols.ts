@@ -5,7 +5,9 @@ import { Protocol } from '../types';
 const getUserEmailById = async (userId: number): Promise<string> => {
   try {
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios`);
+    const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios`, {
+      credentials: 'include'
+    });
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -35,15 +37,27 @@ export function useProtocols() {
 
   // Função para buscar protocolos do servidor
   const fetchProtocols = async () => {
+    console.log('🔄 Buscando protocolos do servidor...');
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const response = await fetch(`${apiBaseUrl}/api/protocolos`);
+      const url = `${apiBaseUrl}/api/protocolos`;
+      console.log('📡 URL da requisição:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
       
       if (!response.ok) {
+        console.error('❌ Erro na resposta:', response.status, response.statusText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
+      console.log('📦 Dados recebidos:', data);
       
       if (data.success) {
         const protocolsWithDates = data.protocolos.map((p: any) => ({
@@ -51,25 +65,40 @@ export function useProtocols() {
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt),
         }));
+        console.log('✅ Protocolos processados:', protocolsWithDates.length);
         setProtocols(protocolsWithDates);
+      } else {
+        console.error('❌ Resposta sem sucesso:', data);
       }
     } catch (error) {
-      console.error('Erro ao buscar protocolos:', error);
+      console.error('❌ Erro ao buscar protocolos:', error);
+      
       // Em caso de erro, tentar carregar do localStorage como fallback
       const stored = localStorage.getItem('protocols');
       if (stored) {
+        console.log('📂 Carregando do localStorage como fallback');
         const parsed = JSON.parse(stored);
         setProtocols(parsed.map((p: any) => ({
           ...p,
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt),
         })));
+      } else {
+        console.log('❌ Nenhum dado no localStorage');
       }
     }
   };
 
   useEffect(() => {
     fetchProtocols();
+    
+    // Configurar polling para atualizar a cada 10 segundos
+    const interval = setInterval(() => {
+      console.log('🔄 Atualizando protocolos automaticamente...');
+      fetchProtocols();
+    }, 10000); // 10 segundos
+    
+    return () => clearInterval(interval);
   }, [updateTrigger]);
 
   // Carregar emails dos usuários quando os protocolos mudarem
@@ -108,6 +137,7 @@ export function useProtocols() {
   };
 
   const addProtocol = async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
+    console.log('➕ Adicionando novo protocolo:', protocol);
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       
@@ -119,31 +149,44 @@ export function useProtocols() {
         createdByEmail: userEmail
       };
       
-      const response = await fetch(`${apiBaseUrl}/api/protocolos`, {
+      const url = `${apiBaseUrl}/api/protocolos`;
+      console.log('📡 Enviando para:', url);
+      console.log('📦 Dados enviados:', protocolData);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(protocolData),
       });
 
+      console.log('📡 Status da resposta:', response.status);
+      
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro na resposta:', response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('📦 Resposta recebida:', data);
       
       if (data.success) {
+        console.log('✅ Protocolo criado com sucesso no servidor!');
         // Atualizar lista local
         forceRefresh();
         return data.protocolo;
       } else {
+        console.error('❌ Resposta sem sucesso:', data);
         throw new Error(data.message || 'Erro ao criar protocolo');
       }
     } catch (error) {
-      console.error('Erro ao adicionar protocolo:', error);
+      console.error('❌ Erro ao adicionar protocolo:', error);
       
       // Fallback: salvar no localStorage
+      console.log('💾 Salvando no localStorage como fallback');
       const newProtocol: Protocol = {
         ...protocol,
         id: Date.now().toString(),
@@ -189,6 +232,7 @@ export function useProtocols() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(updateData),
       });
 
@@ -199,13 +243,14 @@ export function useProtocols() {
       const data = await response.json();
       
       if (data.success) {
+        console.log('✅ Protocolo atualizado no servidor');
         forceRefresh();
         return true;
       } else {
         throw new Error(data.message || 'Erro ao atualizar protocolo');
       }
     } catch (error) {
-      console.error('Erro ao atualizar protocolo no servidor:', error);
+      console.error('❌ Erro ao atualizar protocolo no servidor:', error);
       return false;
     }
   };

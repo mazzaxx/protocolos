@@ -11,6 +11,61 @@ import { ManualQueue } from './components/ManualQueue';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ReturnedQueue } from './components/ReturnedQueue';
 
+// Componente para mostrar status de conectividade
+function ConnectivityStatus() {
+  const [isOnline, setIsOnline] = React.useState(navigator.onLine);
+  const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
+
+  React.useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Verificar status do backend
+    const checkBackend = async () => {
+      try {
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+        const response = await fetch(`${apiBaseUrl}/`, { 
+          method: 'GET',
+          credentials: 'include'
+        });
+        setBackendStatus(response.ok ? 'online' : 'offline');
+      } catch {
+        setBackendStatus('offline');
+      }
+    };
+
+    checkBackend();
+    const interval = setInterval(checkBackend, 30000); // Verificar a cada 30 segundos
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
+  }, []);
+
+  if (!isOnline || backendStatus === 'offline') {
+    return (
+      <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
+        {!isOnline ? '🔴 Sem conexão com a internet' : '🔴 Servidor temporariamente indisponível'}
+      </div>
+    );
+  }
+
+  if (backendStatus === 'checking') {
+    return (
+      <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
+        🟡 Verificando conexão com o servidor...
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function Dashboard() {
   const { hasPermission, canAccessQueues, canAccessSpecificQueue, canMoveToQueue, user } = useAuth();
   type Tab = 'send' | 'robot' | 'carlos' | 'deyse' | 'tracking' | 'returned' | 'admin';
@@ -61,6 +116,7 @@ function Dashboard() {
   return (
     <>
       <Header />
+      <ConnectivityStatus />
       <div className="min-h-screen bg-gray-50">
 
       {/* Navigation Tabs */}

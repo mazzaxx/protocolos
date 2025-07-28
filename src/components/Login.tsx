@@ -29,32 +29,36 @@ export function Login({ onLogin }: LoginProps) {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const loginUrl = `${apiBaseUrl}/api/login`;
       
-      console.log('Tentando fazer login em:', loginUrl);
+      console.log('🔐 Tentando fazer login em:', loginUrl);
+      console.log('📧 Email:', formData.email);
       
       const response = await fetch(`${apiBaseUrl}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
 
-      console.log('Response status:', response.status);
+      console.log('📡 Status da resposta:', response.status);
       
       const data = await response.json();
-      console.log('Response data:', data);
+      console.log('📦 Dados da resposta:', data);
 
       if (data.success) {
+        console.log('✅ Login realizado com sucesso!');
         // Salvar dados do usuário no localStorage
         localStorage.setItem('user', JSON.stringify(data.user));
         onLogin(data.user);
       } else {
+        console.log('❌ Falha no login:', data.message);
         setError(data.message || 'Erro ao fazer login');
       }
     } catch (err) {
-      console.error('Erro de login:', err);
+      console.error('❌ Erro de login:', err);
       if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        setError('Erro de conexão com o servidor. Verifique se o backend está rodando na porta 3002.');
+        setError('Erro de conexão com o servidor. Verifique sua conexão com a internet.');
       } else {
         setError('Erro de conexão. Tente novamente.');
       }
