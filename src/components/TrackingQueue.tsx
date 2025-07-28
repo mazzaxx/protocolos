@@ -1,101 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Eye, X, AlertTriangle, FileCheck, RotateCcw, Search, Filter, Calendar, User, Clock, ArrowRight, CheckCircle, AlertCircle, History, ChevronLeft, ChevronDown, ChevronRight, XCircle, RefreshCw } from 'lucide-react';
+import { BarChart3, Eye, X, Clock, User, ArrowRight, ChevronLeft, History, FileText, AlertCircle, CheckCircle, AlertTriangle, RotateCcw, XCircle } from 'lucide-react';
 import { useProtocols } from '../hooks/useProtocols';
 import { useAuth } from '../contexts/AuthContext';
-import { STATUS_COLORS, Protocol } from '../types';
+import { Protocol, STATUS_COLORS } from '../types';
 
 export function TrackingQueue() {
-  const { protocols, updateProtocolStatus, updateTrigger, userEmails } = useProtocols();
+  const { protocols, forceRefresh, userEmails, cancelProtocol } = useProtocols();
   const { user } = useAuth();
-  const [filter, setFilter] = useState({
-    status: '',
-    dateFrom: '',
-    dateTo: '',
-    cnjSearch: '', // Novo filtro para busca por CNJ
-  });
-  const [autoRefresh, setAutoRefresh] = useState(false);
   const [selectedProtocol, setSelectedProtocol] = useState<Protocol | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
-  const [expandedProtocols, setExpandedProtocols] = useState<Set<string>>(new Set()); // Para controlar quais protocolos estão expandidos
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCompletedProtocols, setShowCompletedProtocols] = useState(false);
 
-  // Filtrar apenas protocolos criados pelo usuário atual
+  // Filtrar protocolos criados pelo usuário atual
   const getUserProtocols = () => {
-    return protocols.filter(p => p.createdBy === user!.id);
+    const userProtocols = protocols.filter(p => p.createdBy === user!.id);
+    
+    if (showCompletedProtocols) {
+      // Mostrar apenas protocolos peticionados e cancelados
+      return userProtocols.filter(p => p.status === 'Peticionado' || p.status === 'Cancelado');
+    } else {
+      // Mostrar apenas protocolos ativos (não peticionados nem cancelados)
+      return userProtocols.filter(p => p.status !== 'Peticionado' && p.status !== 'Cancelado');
+    }
   };
 
   const userProtocols = getUserProtocols();
 
-  // Auto-refresh effect
-  useEffect(() => {
-    if (autoRefresh) {
-      const interval = setInterval(() => {
-        // Força atualização dos protocolos
-        window.location.reload();
-      }, 30000); // 30 segundos
-
-      return () => clearInterval(interval);
-    }
-  }, [autoRefresh]);
-
-  // Função para alternar expansão do protocolo
-  const toggleProtocolExpansion = (protocolId: string) => {
-    setExpandedProtocols(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(protocolId)) {
-        newSet.delete(protocolId);
-      } else {
-        newSet.add(protocolId);
-      }
-      return newSet;
-    });
-  };
-
-  // Aplicar filtros
-  const filteredProtocols = userProtocols.filter(protocol => {
-    // Filtro por status
-    if (filter.status && protocol.status !== filter.status) {
-      return false;
-    }
-
-    // Filtro por data de início
-    if (filter.dateFrom) {
-      const protocolDate = new Date(protocol.createdAt);
-      const filterDate = new Date(filter.dateFrom);
-      if (protocolDate < filterDate) {
-        return false;
-      }
-    }
-
-    // Filtro por data de fim
-    if (filter.dateTo) {
-      const protocolDate = new Date(protocol.createdAt);
-      const filterDate = new Date(filter.dateTo);
-      filterDate.setHours(23, 59, 59, 999); // Incluir todo o dia
-      if (protocolDate > filterDate) {
-        return false;
-      }
-    }
-
-    // Filtro por busca CNJ
-    if (filter.cnjSearch) {
-      const searchTerm = filter.cnjSearch.toLowerCase().replace(/[^\d]/g, '');
-      const protocolNumber = protocol.processNumber.toLowerCase().replace(/[^\d]/g, '');
-      if (!protocolNumber.includes(searchTerm)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-
-  const clearFilters = () => {
-    setFilter({
-      status: '',
-      dateFrom: '',
-      dateTo: '',
-      cnjSearch: '',
-    });
+  const handleRefreshQueue = () => {
+    setIsRefreshing(true);
+    
+    // Forçar recarregamento dos dados do localStorage
+    setTimeout(() => {
+      forceRefresh();
+      setIsRefreshing(false);
+    }, 500);
   };
 
   const handleProtocolClick = (protocol: Protocol) => {
@@ -110,47 +51,6 @@ export function TrackingQueue() {
     setShowActivityLog(false);
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Aguardando':
-        return <Clock className="h-3 w-3" />;
-      case 'Peticionado':
-        return <CheckCircle className="h-3 w-3" />;
-      case 'Erro':
-        return <XCircle className="h-3 w-3" />;
-      case 'Devolvido':
-        return <AlertCircle className="h-3 w-3" />;
-      default:
-        return null;
-    }
-  };
-
-  const getResponsibleInfo = (protocol: Protocol) => {
-    if (protocol.status !== 'Aguardando') {
-      return null;
-    }
-
-    if (protocol.assignedTo === 'Carlos') {
-      return {
-        text: 'Carlos',
-        color: 'bg-blue-100 text-blue-800',
-        icon: <User className="h-3 w-3 mr-1" />
-      };
-    } else if (protocol.assignedTo === 'Deyse') {
-      return {
-        text: 'Deyse',
-        color: 'bg-purple-100 text-purple-800',
-        icon: <User className="h-3 w-3 mr-1" />
-      };
-    } else {
-      return {
-        text: 'Robô',
-        color: 'bg-red-100 text-red-800',
-        icon: <FileText className="h-3 w-3 mr-1" />
-      };
-    }
-  };
-
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
   };
@@ -162,378 +62,261 @@ export function TrackingQueue() {
     });
   };
 
+  const getStatusIcon = (status: Protocol['status']) => {
+    switch (status) {
+      case 'Aguardando':
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+      case 'Em Execução':
+        return <BarChart3 className="h-4 w-4 text-blue-500" />;
+      case 'Peticionado':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'Devolvido':
+        return <AlertCircle className="h-4 w-4 text-orange-500" />;
+      case 'Cancelado':
+        return <X className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-500" />;
+    }
+  };
+
+  const getQueueName = (protocol: Protocol) => {
+    if (protocol.assignedTo === 'Carlos') return 'Fila do Carlos';
+    if (protocol.assignedTo === 'Deyse') return 'Fila da Deyse';
+    return 'Fila do Robô';
+  };
+
+  const getQueuePosition = (protocol: Protocol) => {
+    // Filtrar protocolos na mesma fila e com status 'Aguardando'
+    const sameQueueProtocols = protocols.filter(p => 
+      p.status === 'Aguardando' && 
+      p.assignedTo === protocol.assignedTo
+    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    const position = sameQueueProtocols.findIndex(p => p.id === protocol.id) + 1;
+    return position > 0 ? position : null;
+  };
+
+  const canCancelProtocol = (protocol: Protocol) => {
+    return protocol.status !== 'Em Execução' && protocol.status !== 'Peticionado';
+  };
+
+  const handleCancelProtocol = () => {
+    if (selectedProtocol) {
+      cancelProtocol(selectedProtocol.id, userEmails[user!.id] || user!.email);
+      setShowCancelModal(false);
+      handleCloseModal();
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Meus Protocolos</h2>
-          <p className="text-sm text-gray-600">Acompanhe o status dos seus protocolos enviados</p>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {showCompletedProtocols ? 'Protocolos Peticionados e Cancelados' : 'Acompanhamento de Protocolos'}
+          </h2>
+          <p className="text-sm text-gray-600">
+            {showCompletedProtocols 
+              ? 'Visualize seus protocolos finalizados (peticionados e cancelados)'
+              : 'Visualize o status dos seus protocolos em andamento'
+            }
+          </p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex space-x-3">
           <button
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`flex items-center px-4 py-2 rounded-md ${
-              autoRefresh 
-                ? 'bg-green-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            onClick={() => setShowCompletedProtocols(!showCompletedProtocols)}
+            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              showCompletedProtocols 
+                ? 'text-blue-600 bg-blue-100 hover:bg-blue-200' 
+                : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
             }`}
+            title={showCompletedProtocols ? 'Voltar para protocolos ativos' : 'Ver protocolos peticionados e cancelados'}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${autoRefresh ? 'animate-spin' : ''}`} />
-            {autoRefresh ? 'Atualização Ativa' : 'Atualização Manual'}
+            {showCompletedProtocols ? (
+              <>
+                <ArrowRight className="h-4 w-4 mr-2 rotate-180" />
+                Voltar para Ativos
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Peticionados e Cancelados
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleRefreshQueue}
+            disabled={isRefreshing}
+            className="flex items-center px-3 py-2 text-sm font-medium text-green-600 bg-green-100 hover:bg-green-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Atualizar lista de protocolos"
+          >
+            <RotateCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar Lista'}
           </button>
         </div>
       </div>
 
-      {/* Filtros Melhorados */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex items-center mb-4">
-          <Filter className="h-5 w-5 text-gray-400 mr-2" />
-          <h3 className="text-lg font-medium text-gray-900">Filtros</h3>
-          {(filter.status || filter.dateFrom || filter.dateTo || filter.cnjSearch) && (
-            <button
-              onClick={clearFilters}
-              className="ml-auto text-sm text-blue-600 hover:text-blue-800"
-            >
-              Limpar Filtros
-            </button>
-          )}
+      {userProtocols.length === 0 ? (
+        <div className="text-center py-12">
+          <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {showCompletedProtocols ? 'Nenhum protocolo finalizado' : 'Nenhum protocolo ativo'}
+          </h3>
+          <p className="text-gray-600">
+            {showCompletedProtocols 
+              ? 'Você não possui protocolos peticionados ou cancelados.'
+              : 'Você não possui protocolos em andamento no momento.'
+            }
+          </p>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Busca por CNJ */}
-          <div className="lg:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Buscar por Número do Processo (CNJ)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                value={filter.cnjSearch}
-                onChange={(e) => setFilter(prev => ({ ...prev, cnjSearch: e.target.value }))}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ex: 0000000-00.0000.0.00.0000"
-              />
-            </div>
-            {filter.cnjSearch && (
-              <p className="mt-1 text-xs text-gray-500">
-                Buscando por: "{filter.cnjSearch}"
-              </p>
-            )}
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Status
-            </label>
-            <select
-              value={filter.status}
-              onChange={(e) => setFilter(prev => ({ ...prev, status: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Todos os status</option>
-              <option value="Aguardando">Aguardando</option>
-              <option value="Peticionado">Peticionado</option>
-              <option value="Erro">Erro</option>
-              <option value="Devolvido">Devolvido</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Data de (início)
-            </label>
-            <input
-              type="date"
-              value={filter.dateFrom}
-              onChange={(e) => setFilter(prev => ({ ...prev, dateFrom: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Data até (fim)
-            </label>
-            <input
-              type="date"
-              value={filter.dateTo}
-              onChange={(e) => setFilter(prev => ({ ...prev, dateTo: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Indicador de resultados */}
-        {filteredProtocols.length !== userProtocols.length && (
-          <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+      ) : (
+        <>
+          {/* Contador de protocolos */}
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm text-blue-800">
-              Mostrando {filteredProtocols.length} de {userProtocols.length} protocolos
-              {filter.cnjSearch && ` para "${filter.cnjSearch}"`}
+              <strong>
+                {showCompletedProtocols 
+                  ? `${userProtocols.length} protocolo${userProtocols.length !== 1 ? 's' : ''} finalizado${userProtocols.length !== 1 ? 's' : ''}`
+                  : `${userProtocols.length} protocolo${userProtocols.length !== 1 ? 's' : ''} em andamento`
+                }
+              </strong>
+              {showCompletedProtocols && (
+                <span className="ml-2 text-xs">
+                  (Peticionados: {userProtocols.filter(p => p.status === 'Peticionado').length}, 
+                  Cancelados: {userProtocols.filter(p => p.status === 'Cancelado').length})
+                </span>
+              )}
             </p>
           </div>
-        )}
-      </div>
-
-      {/* Tabela de Protocolos com Expansão */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
+          
+          <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className={showCompletedProtocols ? "bg-blue-50" : "bg-green-50"}>
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8">
-                  {/* Coluna para botão de expansão */}
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Processo
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tipo
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Responsável
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Processo
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Data Envio
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tribunal
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tipo de Petição
+                </th>
+                {!showCompletedProtocols && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Fila Atual
+                  </th>
+                )}
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {showCompletedProtocols ? 'Data de Finalização' : 'Data de Envio'}
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ação
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProtocols.map((protocol) => (
-                <React.Fragment key={protocol.id}>
-                  {/* Linha principal do protocolo */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => toggleProtocolExpansion(protocol.id)}
-                        className="text-gray-400 hover:text-gray-600 focus:outline-none"
-                        title={expandedProtocols.has(protocol.id) ? 'Ocultar detalhes' : 'Mostrar detalhes'}
-                      >
-                        {expandedProtocols.has(protocol.id) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </button>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {protocol.processNumber}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {protocol.jurisdiction}
-                      </div>
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="text-sm text-gray-900 truncate max-w-xs" title={protocol.petitionType}>
-                        {protocol.petitionType}
-                      </div>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[protocol.status]}`}>
-                        {getStatusIcon(protocol.status)}
-                        <span className="ml-1">{protocol.status}</span>
+              {userProtocols.map((protocol) => (
+                <tr key={protocol.id} className={showCompletedProtocols ? "hover:bg-blue-50" : "hover:bg-green-50"}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      {getStatusIcon(protocol.status)}
+                      <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[protocol.status]}`}>
+                        {protocol.status}
                       </span>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      {(() => {
-                        const responsibleInfo = getResponsibleInfo(protocol);
-                        return responsibleInfo ? (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${responsibleInfo.color}`}>
-                            {responsibleInfo.icon}
-                            {responsibleInfo.text}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      <div className="flex items-center">
+                        {protocol.isDistribution && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 mr-2">
+                            📋 DIST
                           </span>
-                        ) : (
-                          <span className="text-xs text-gray-500">-</span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {protocol.createdAt.toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => handleProtocolClick(protocol)}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Ver Detalhes
-                      </button>
-                    </td>
-                  </tr>
-
-                  {/* Linha expandida com detalhes */}
-                  {expandedProtocols.has(protocol.id) && (
-                    <tr className="bg-gray-50">
-                      <td colSpan={7} className="px-6 py-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {/* Informações Básicas */}
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-medium text-gray-900 border-b pb-1">Informações Básicas</h4>
-                            
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600">Tribunal</label>
-                              <p className="text-sm text-gray-900 mt-1">{protocol.court}</p>
-                            </div>
-                            
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600">Sistema</label>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mt-1">
-                                {protocol.system}
-                              </span>
-                            </div>
-
-                            <div className="flex space-x-4">
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600">Fatal</label>
-                                {protocol.isFatal ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 mt-1">
-                                    <AlertTriangle className="h-3 w-3 mr-1" />
-                                    Sim
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-gray-500 mt-1">Não</span>
-                                )}
-                              </div>
-                              
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600">Procuração</label>
-                                {protocol.needsProcuration ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-1">
-                                    <FileCheck className="h-3 w-3 mr-1" />
-                                    Sim
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-gray-500 mt-1">Não</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Status e Datas */}
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-medium text-gray-900 border-b pb-1">Status e Datas</h4>
-                            
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600">Data de Criação</label>
-                              <p className="text-sm text-gray-900 mt-1">{formatDate(protocol.createdAt)}</p>
-                            </div>
-                            
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600">Última Atualização</label>
-                              <p className="text-sm text-gray-900 mt-1">{formatDate(protocol.updatedAt)}</p>
-                            </div>
-
-                            {protocol.status === 'Aguardando' && (
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600">Posição na Fila</label>
-                                <p className="text-sm font-medium text-gray-900 mt-1">#{protocol.queuePosition}</p>
-                              </div>
-                            )}
-
-                            {protocol.status === 'Devolvido' && protocol.returnReason && (
-                              <div>
-                                <label className="block text-xs font-medium text-orange-600">Motivo da Devolução</label>
-                                <p className="text-sm text-orange-800 bg-orange-50 p-2 rounded mt-1">{protocol.returnReason}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Documentos e Observações */}
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-medium text-gray-900 border-b pb-1">Documentos e Observações</h4>
-                            
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600">Documentos ({protocol.documents.length})</label>
-                              <div className="mt-1 space-y-1">
-                                {protocol.documents.slice(0, 3).map((doc) => (
-                                  <div key={doc.id} className="flex items-center text-xs text-gray-700">
-                                    <FileText className="h-3 w-3 text-gray-400 mr-1 flex-shrink-0" />
-                                    <span className="truncate" title={doc.name}>
-                                      {doc.name}
-                                    </span>
-                                    <span className="ml-1 text-gray-500">
-                                      ({doc.category === 'petition' ? 'P' : 'C'})
-                                    </span>
-                                  </div>
-                                ))}
-                                {protocol.documents.length > 3 && (
-                                  <p className="text-xs text-gray-500">
-                                    +{protocol.documents.length - 3} mais...
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            {protocol.observations && (
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600">Observações</label>
-                                <p className="text-sm text-gray-900 bg-yellow-50 p-2 rounded mt-1">
-                                  {protocol.observations}
-                                </p>
-                              </div>
-                            )}
-
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600">Criado por</label>
-                              <p className="text-sm text-gray-900 mt-1">
-                                {userEmails[protocol.createdBy] || 'Carregando...'}
-                              </p>
-                            </div>
-                          </div>
+                        )}
+                        {protocol.processType && (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 ${
+                            protocol.processType === 'civel' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {protocol.processType === 'civel' ? '⚖️' : '👷'}
+                          </span>
+                        )}
+                        {protocol.processNumber || (protocol.isDistribution ? 'Distribuição sem número' : protocol.processNumber)}
+                      </div>
+                    </div>
+                    {protocol.isFatal && (
+                      <div className="flex items-center mt-1">
+                        <AlertTriangle className="h-3 w-3 text-red-500 mr-1" />
+                        <span className="text-xs text-red-600 font-medium">FATAL</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">
+                      {protocol.court || (protocol.isDistribution ? 'Tribunal não especificado' : protocol.court)}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {protocol.jurisdiction || (protocol.isDistribution ? 'Jurisdição não especificada' : protocol.jurisdiction)}
+                      {protocol.isDistribution && (
+                        <span className="ml-2 text-orange-600 font-medium">📋 Distribuição</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">
+                      {protocol.petitionType || (protocol.isDistribution ? 'Tipo não especificado' : protocol.petitionType)}
+                    </div>
+                  </td>
+                  {!showCompletedProtocols && (
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {getQueueName(protocol)}
+                      </div>
+                      {protocol.status === 'Aguardando' && getQueuePosition(protocol) && (
+                        <div className="text-xs text-gray-500">
+                          Posição: {getQueuePosition(protocol)}º na fila
                         </div>
-                      </td>
-                    </tr>
+                      )}
+                    </td>
                   )}
-                </React.Fragment>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {showCompletedProtocols ? formatDate(protocol.updatedAt) : formatDate(protocol.createdAt)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button
+                      onClick={() => handleProtocolClick(protocol)}
+                      className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                        showCompletedProtocols 
+                          ? 'text-blue-700 bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
+                          : 'text-green-700 bg-green-100 hover:bg-green-200 focus:ring-green-500'
+                      }`}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Visualizar
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
         </div>
-        
-        {filteredProtocols.length === 0 && (
-          <div className="text-center py-12">
-            <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {filter.cnjSearch ? 'Nenhum protocolo encontrado' : 'Nenhum protocolo encontrado com os filtros aplicados'}
-            </h3>
-            <p className="text-gray-600">
-              {filter.cnjSearch 
-                ? `Não foi encontrado nenhum protocolo com o número "${filter.cnjSearch}"`
-                : 'Tente ajustar os filtros ou criar um novo protocolo'
-              }
-            </p>
-            {(filter.status || filter.dateFrom || filter.dateTo || filter.cnjSearch) && (
-              <button
-                onClick={clearFilters}
-                className="mt-3 text-blue-600 hover:text-blue-800 text-sm"
-              >
-                Limpar todos os filtros
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
-      {/* Modal de Visualização do Protocolo (mantido igual) */}
+      {/* Modal de Visualização do Protocolo */}
       {isModalOpen && selectedProtocol && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-4 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style={{ zIndex: 1000 }}>
+          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
             {!showActivityLog ? (
               <>
                 {/* Header do Modal */}
                 <div className="flex items-center justify-between pb-3 border-b">
                   <div className="flex items-center space-x-4">
                     <h3 className="text-lg font-medium text-gray-900">
-                      Detalhes do Protocolo - Acompanhamento
+                      Detalhes do Protocolo
                     </h3>
                     <button
                       onClick={() => setShowActivityLog(true)}
@@ -554,19 +337,29 @@ export function TrackingQueue() {
 
                 {/* Conteúdo Principal */}
                 <div className="mt-4 space-y-4">
-                  {/* Status Atual */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                  {/* Status do Protocolo */}
+                  <div className="bg-gray-50 border rounded-md p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Status Atual:</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[selectedProtocol.status]}`}>
+                      <div className="flex items-center">
                         {getStatusIcon(selectedProtocol.status)}
-                        <span className="ml-1">{selectedProtocol.status}</span>
-                      </span>
+                        <span className={`ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[selectedProtocol.status]}`}>
+                          {selectedProtocol.status}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Fila atual: <strong>{getQueueName(selectedProtocol)}</strong>
+                      </div>
                     </div>
-                    {selectedProtocol.assignedTo && (
-                      <div className="mt-2 flex items-center">
-                        <span className="text-sm font-medium text-gray-700">Responsável:</span>
-                        <span className="ml-2 text-sm text-gray-900">{selectedProtocol.assignedTo}</span>
+                    {selectedProtocol.status === 'Aguardando' && getQueuePosition(selectedProtocol) && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        <strong>Posição na fila:</strong> {getQueuePosition(selectedProtocol)}º
+                      </div>
+                    )}
+                    {selectedProtocol.status === 'Devolvido' && selectedProtocol.returnReason && (
+                      <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded">
+                        <p className="text-sm text-orange-800">
+                          <strong>Motivo da devolução:</strong> {selectedProtocol.returnReason}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -577,8 +370,8 @@ export function TrackingQueue() {
                       <label className="block text-sm font-medium text-gray-700">
                         Número do Processo
                       </label>
-                      <p className="mt-1 text-sm text-gray-900 font-medium">
-                        {selectedProtocol.processNumber}
+                      <p className="mt-1 text-sm text-gray-900">
+                        {selectedProtocol.processNumber || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.processNumber)}
                       </p>
                     </div>
                     <div>
@@ -586,16 +379,16 @@ export function TrackingQueue() {
                         Tribunal
                       </label>
                       <p className="mt-1 text-sm text-gray-900">
-                        {selectedProtocol.court}
+                        {selectedProtocol.court || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.court)}
                       </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
                         Sistema
                       </label>
-                      <p className="mt-1">
+                      <p className="mt-1 text-sm text-gray-900">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          {selectedProtocol.system}
+                          {selectedProtocol.system || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.system)}
                         </span>
                       </p>
                     </div>
@@ -604,7 +397,7 @@ export function TrackingQueue() {
                         Grau da Jurisdição
                       </label>
                       <p className="mt-1 text-sm text-gray-900">
-                        {selectedProtocol.jurisdiction}
+                        {selectedProtocol.jurisdiction || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.jurisdiction)}
                       </p>
                     </div>
                     <div>
@@ -612,12 +405,12 @@ export function TrackingQueue() {
                         Tipo de Petição
                       </label>
                       <p className="mt-1 text-sm text-gray-900">
-                        {selectedProtocol.petitionType}
+                        {selectedProtocol.petitionType || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.petitionType)}
                       </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
-                        Data de Criação
+                        Data de Envio
                       </label>
                       <p className="mt-1 text-sm text-gray-900">
                         {formatDate(selectedProtocol.createdAt)}
@@ -631,25 +424,13 @@ export function TrackingQueue() {
                       <label className="block text-sm font-medium text-gray-700">
                         Observações
                       </label>
-                      <p className="mt-1 text-sm text-gray-900 bg-yellow-50 p-2 rounded">
+                      <p className="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">
                         {selectedProtocol.observations}
                       </p>
                     </div>
                   )}
 
-                  {/* Motivo da Devolução (se aplicável) */}
-                  {selectedProtocol.status === 'Devolvido' && selectedProtocol.returnReason && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
-                      <label className="block text-sm font-medium text-orange-800">
-                        Motivo da Devolução
-                      </label>
-                      <p className="mt-1 text-sm text-orange-700">
-                        {selectedProtocol.returnReason}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Documentos */}
+                  {/* Lista de Documentos */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Documentos Anexados ({selectedProtocol.documents.length})
@@ -657,12 +438,70 @@ export function TrackingQueue() {
                     <div className="bg-gray-50 rounded-lg p-3">
                       {selectedProtocol.documents.map((doc) => (
                         <div key={doc.id} className="flex items-center py-1">
-                          <FileCheck className="h-4 w-4 text-gray-500 mr-2" />
+                          <FileText className="h-4 w-4 text-gray-500 mr-2" />
                           <span className="text-sm text-gray-900">
                             {doc.name} ({doc.category === 'petition' ? 'Petição' : 'Complementar'})
                           </span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Tipo de Procuração */}
+                  {selectedProtocol.needsProcuration && selectedProtocol.procurationType && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Tipo de Procuração
+                      </label>
+                      <p className="mt-1 text-sm text-gray-900 bg-blue-50 p-2 rounded">
+                        {selectedProtocol.procurationType}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Guias de Recolhimento */}
+                  {selectedProtocol.needsGuia && selectedProtocol.guias && selectedProtocol.guias.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Guias de Recolhimento ({selectedProtocol.guias.length})
+                      </label>
+                      <div className="space-y-2">
+                        {selectedProtocol.guias.map((guia, index) => (
+                          <div key={guia.id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-green-800">
+                                Guia #{index + 1} - {guia.system}
+                              </span>
+                            </div>
+                            <p className="text-sm text-green-700 font-mono">
+                              {guia.number}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botão de Fechar */}
+                <div className="pt-4 border-t">
+                  <div className="flex justify-between">
+                    {canCancelProtocol(selectedProtocol) && (
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Cancelar Protocolo
+                      </button>
+                    )}
+                    <div className={canCancelProtocol(selectedProtocol) ? '' : 'ml-auto'}>
+                      <button
+                        onClick={handleCloseModal}
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        Fechar
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -700,13 +539,11 @@ export function TrackingQueue() {
                       <strong>Processo:</strong> {selectedProtocol.processNumber}
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
-                      Status atual: {selectedProtocol.status}
+                      Status: {selectedProtocol.status}
                     </p>
-                    {selectedProtocol.assignedTo && (
-                      <p className="text-xs text-gray-600">
-                        Responsável: {selectedProtocol.assignedTo}
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-600">
+                      Fila: {getQueueName(selectedProtocol)}
+                    </p>
                   </div>
                   
                   <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -761,67 +598,77 @@ export function TrackingQueue() {
         </div>
       )}
 
-      {/* Resumo Estatístico */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <Clock className="h-8 w-8 text-yellow-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Aguardando</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {userProtocols.filter(p => p.status === 'Aguardando').length}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <CheckCircle className="h-8 w-8 text-green-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Peticionado</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {userProtocols.filter(p => p.status === 'Peticionado').length}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <XCircle className="h-8 w-8 text-red-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Erro</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {userProtocols.filter(p => p.status === 'Erro').length}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center">
-            <AlertCircle className="h-8 w-8 text-orange-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Devolvidos</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {userProtocols.filter(p => p.status === 'Devolvido').length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Modal de Confirmação de Cancelamento */}
+      {showCancelModal && selectedProtocol && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style={{ zIndex: 1001 }}>
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center mb-4">
+                <XCircle className="h-6 w-6 text-red-600 mr-2" />
+                <h3 className="text-lg font-medium text-gray-900">
+                  Cancelar Protocolo
+                </h3>
+              </div>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Tem certeza que deseja cancelar este protocolo?
+                </p>
+                <div className="bg-gray-50 p-3 rounded-md">
+                  <p className="text-sm font-medium text-gray-900">
+                    {selectedProtocol.processNumber || 'Distribuição sem número'}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    {selectedProtocol.petitionType || 'Tipo não especificado'}
+                  </p>
+                </div>
+                <p className="text-xs text-red-600 mt-2">
+                  <strong>Atenção:</strong> Esta ação não pode ser desfeita.
+                </p>
+              </div>
 
-      {/* Instruções de Uso */}
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+                >
+                  Não, manter protocolo
+                </button>
+                <button
+                  onClick={handleCancelProtocol}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+                >
+                  Sim, cancelar protocolo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Informações sobre Acompanhamento */}
       <div className="mt-6 p-4 bg-green-50 rounded-lg">
-        <h3 className="font-medium text-green-900 mb-2">Como usar o acompanhamento:</h3>
+        <h3 className="font-medium text-green-900 mb-2">
+          {showCompletedProtocols ? 'Sobre Protocolos Finalizados:' : 'Sobre o Acompanhamento:'}
+        </h3>
         <ul className="text-sm text-green-800 space-y-1">
-          <li>• <strong>Busca por CNJ:</strong> Digite o número do processo para encontrar rapidamente</li>
-          <li>• <strong>Seta de expansão:</strong> Clique na seta (▶) para ver todos os detalhes do protocolo</li>
-          <li>• <strong>Filtros:</strong> Use os filtros para refinar sua busca por status, data, etc.</li>
-          <li>• <strong>Ver Detalhes:</strong> Clique no botão para abrir o modal completo com histórico</li>
-          <li>• <strong>Atualização automática:</strong> Ative para monitorar mudanças em tempo real</li>
-          <li>• <strong>Relatórios:</strong> Acesse a aba "Administração" para baixar relatórios completos</li>
+          {showCompletedProtocols ? (
+            <>
+              <li>• Visualize protocolos que foram peticionados com sucesso</li>
+              <li>• Veja protocolos que foram cancelados</li>
+              <li>• A data mostrada é quando o protocolo foi finalizado</li>
+              <li>• Use o botão "Voltar para Ativos" para ver protocolos em andamento</li>
+              <li>• Clique em "Visualizar" para ver detalhes e histórico completo</li>
+            </>
+          ) : (
+            <>
+              <li>• Visualize protocolos em andamento (aguardando, em execução, devolvidos)</li>
+              <li>• Acompanhe o status em tempo real</li>
+              <li>• Veja em qual fila seu protocolo está sendo processado</li>
+              <li>• Use o botão "Peticionados e Cancelados" para ver protocolos finalizados</li>
+              <li>• Clique em "Visualizar" para ver detalhes completos</li>
+            </>
+          )}
         </ul>
       </div>
     </div>

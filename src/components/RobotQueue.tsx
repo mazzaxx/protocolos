@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, FileText, X, CheckCircle, XCircle, Eye, AlertTriangle, FileCheck, Square, CheckSquare, RotateCcw, AlertCircle, History, Clock, User, ArrowRight, ChevronLeft, Filter } from 'lucide-react';
+import { Download, FileText, X, CheckCircle, XCircle, Eye, AlertTriangle, FileCheck, Square, CheckSquare, RotateCcw, AlertCircle, History, Clock, User, ArrowRight, ChevronLeft, Filter, Bell, BellRing } from 'lucide-react';
 import { useProtocols } from '../hooks/useProtocols';
 import { useAuth } from '../contexts/AuthContext';
 import { Protocol } from '../types';
@@ -14,11 +14,14 @@ export function RobotQueue() {
   const [selectedProtocols, setSelectedProtocols] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
-  const [returnReason, setReturnReason] = useState('');
+  const [showConfirmReturnModal, setShowConfirmReturnModal] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [systemFilter, setSystemFilter] = useState('');
+  const [executingProtocols, setExecutingProtocols] = useState<Set<string>>(new Set());
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [selectedProtocolAlerts, setSelectedProtocolAlerts] = useState<any[]>([]);
 
   // Definir os grupos de sistemas para filtro
   const SYSTEM_GROUPS = {
@@ -45,7 +48,7 @@ export function RobotQueue() {
   };
   // Filtrar protocolos da fila do robô em tempo real
   const getRobotProtocols = () => {
-    const pendingProtocols = protocols.filter(p => p.status === 'Aguardando');
+    const pendingProtocols = protocols.filter(p => p.status === 'Aguardando' || p.status === 'Em Execução');
     let robotProtocols = pendingProtocols.filter(p => !p.assignedTo);
     
     // Aplicar filtro de sistema se selecionado
@@ -84,6 +87,18 @@ export function RobotQueue() {
   };
 
   const robotProtocols = getRobotProtocols();
+
+  // Função para calcular a posição na fila do robô
+  const getRobotQueuePosition = (protocol: Protocol) => {
+    if (protocol.status !== 'Aguardando') return null;
+    
+    const robotQueueProtocols = robotProtocols
+      .filter(p => p.status === 'Aguardando')
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    const position = robotQueueProtocols.findIndex(p => p.id === protocol.id) + 1;
+    return position > 0 ? position : null;
+  };
 
   // Limpar seleções quando protocolos são movidos
   useEffect(() => {
@@ -125,7 +140,33 @@ export function RobotQueue() {
   };
 
   const handleDownload = (doc: any) => {
-    // Simular download do documento
+    try {
+      // Criar blob a partir do conteúdo base64
+      const byteCharacters = atob(doc.content.split(',')[1]);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: doc.type });
+      
+      // Criar URL temporária e fazer download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro ao fazer download:', error);
+      alert('Erro ao fazer download do arquivo. Verifique se o arquivo está válido.');
+    }
+  };
+
+  const handleDownloadSimulated = (doc: any) => {
+    // Função alternativa para simulação (caso o base64 não funcione)
     const link = document.createElement('a');
     link.href = doc.content;
     link.download = doc.name;
@@ -161,6 +202,22 @@ export function RobotQueue() {
     setIsModalOpen(true);
   };
 
+  const handleExecutionToggle = (protocolId: string) => {
+    setExecutingProtocols(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(protocolId)) {
+        newSet.delete(protocolId);
+        // Voltar para status "Aguardando"
+        updateProtocolStatus(protocolId, 'Aguardando');
+      } else {
+        newSet.add(protocolId);
+        // Alterar para status "Em Execução"
+        updateProtocolStatus(protocolId, 'Em Execução');
+      }
+      return newSet;
+    });
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedProtocol(null);
@@ -181,16 +238,16 @@ export function RobotQueue() {
   };
 
   const handleReturnProtocol = () => {
-    if (selectedProtocol && returnReason.trim()) {
-      returnProtocol(selectedProtocol.id, returnReason.trim(), 'Robô');
+    if (selectedProtocol) {
+      // Devolução do robô sem justificativa - apenas move para fila do Carlos
+      returnProtocol(selectedProtocol.id, 'Devolvido pelo Robô para análise manual', 'Robô');
       
       // Mostrar notificação de sucesso
       setSuccessMessage('Protocolo devolvido com sucesso!');
       setShowSuccessNotification(true);
       
       // Limpar estados e fechar modal
-      setShowReturnModal(false);
-      setReturnReason('');
+      setShowConfirmReturnModal(false);
       handleCloseModal();
       
       // Forçar atualização da lista
@@ -320,6 +377,9 @@ export function RobotQueue() {
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Documentos
                 </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                   Ação
                 </th>
@@ -344,20 +404,36 @@ export function RobotQueue() {
                   )}
                   <td className="px-3 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900" data-process-number={protocol.processNumber}>
-                      {protocol.processNumber}
+                      <div className="flex items-center">
+                        {protocol.isDistribution && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 mr-2">
+                            📋 DISTRIBUIÇÃO
+                          </span>
+                        )}
+                        {protocol.processType && (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 ${
+                            protocol.processType === 'civel' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {protocol.processType === 'civel' ? '⚖️ CÍVEL' : '👷 TRABALHISTA'}
+                          </span>
+                        )}
+                        {protocol.processNumber || (protocol.isDistribution ? 'Distribuição sem número' : protocol.processNumber)}
+                      </div>
                     </div>
                     <div className="text-xs text-gray-500">
-                      {protocol.jurisdiction}
+                      {protocol.jurisdiction || (protocol.isDistribution ? 'Jurisdição não especificada' : protocol.jurisdiction)}
                     </div>
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {protocol.system}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      protocol.isDistribution ? 'bg-orange-100 text-orange-800' : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      {protocol.system || (protocol.isDistribution ? 'Sistema não especificado' : protocol.system)}
                     </span>
                   </td>
                   <td className="px-3 py-4 max-w-xs">
                     <div className="text-sm text-gray-900 truncate" data-petition-type={protocol.petitionType} title={protocol.petitionType}>
-                      {protocol.petitionType}
+                      {protocol.petitionType || (protocol.isDistribution ? 'Tipo não especificado' : protocol.petitionType)}
                     </div>
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap">
@@ -390,14 +466,34 @@ export function RobotQueue() {
                     </div>
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => handleProtocolClick(protocol)}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 whitespace-nowrap"
-                      data-action="view-protocol"
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Visualizar
-                    </button>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={executingProtocols.has(protocol.id)}
+                        onChange={() => handleExecutionToggle(protocol.id)}
+                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded mr-2"
+                      />
+                      <span className="text-xs text-gray-600">
+                        {executingProtocols.has(protocol.id) ? 'Em Execução' : 'Aguardando'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleProtocolClick(protocol)}
+                        disabled={!executingProtocols.has(protocol.id)}
+                        className={`inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md transition-colors ${
+                          executingProtocols.has(protocol.id)
+                            ? 'text-blue-700 bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
+                            : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                        } focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50`}
+                        data-action="view-protocol"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Visualizar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -410,18 +506,18 @@ export function RobotQueue() {
       {/* Modal de Visualização do Protocolo */}
       {isModalOpen && selectedProtocol && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-4 border w-11/12 max-w-xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
+          <div className="relative top-2 mx-auto p-4 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white max-h-[96vh] overflow-y-auto">
             {!showActivityLog ? (
               <>
                 {/* Header do Modal */}
-                <div className="flex items-center justify-between pb-2 border-b">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-200">
                   <div className="flex items-center space-x-4">
-                    <h3 className="text-lg font-medium text-gray-900">
+                    <h3 className="text-lg font-bold text-gray-900">
                       Detalhes do Protocolo
                     </h3>
                     <button
                       onClick={() => setShowActivityLog(true)}
-                      className="flex items-center px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                      className="flex items-center px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                       title="Ver histórico de atividades"
                     >
                       <History className="h-3 w-3 mr-1" />
@@ -438,197 +534,256 @@ export function RobotQueue() {
                 </div>
 
                 {/* Conteúdo do Modal */}
-                <div className="mt-3 space-y-3">
+                <div className="mt-3">
                   {/* Informações do Criador */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-md p-2">
-                    <div className="flex items-center">
-                      <span className="text-sm font-medium text-gray-700">Criado por:</span>
-                      <span className="ml-2 text-sm text-gray-900">{userEmails[selectedProtocol.createdBy] || 'Carregando...'}</span>
-                    </div>
-                  </div>
-
-                  {/* Informações do Processo */}
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700">
-                        Número do Processo
-                      </label>
-                      <p className="mt-1 text-sm text-gray-900 font-medium" data-modal-process-number={selectedProtocol.processNumber}>
-                        {selectedProtocol.processNumber}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700">
-                        Tribunal
-                      </label>
-                      <p className="mt-1 text-xs text-gray-900" data-modal-court={selectedProtocol.court}>
-                        {selectedProtocol.court}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700">
-                        Sistema
-                      </label>
-                      <p className="mt-1" data-modal-system={selectedProtocol.system}>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          {selectedProtocol.system}
-                        </span>
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700">
-                        Grau da Jurisdição
-                      </label>
-                      <p className="mt-1 text-sm text-gray-900" data-modal-jurisdiction={selectedProtocol.jurisdiction}>
-                        {selectedProtocol.jurisdiction}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700">
-                        Tipo de Petição
-                      </label>
-                      <p className="mt-1 text-xs text-gray-900" data-modal-petition-type={selectedProtocol.petitionType}>
-                        {selectedProtocol.petitionType}
-                      </p>
-                    </div>
-                    <div className="col-span-2">
-                      <div className="flex space-x-4">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700">
-                            Fatal
-                          </label>
-                          {selectedProtocol.isFatal ? (
-                            <p className="mt-1 text-xs font-bold text-red-600 flex items-center" data-modal-fatal="true">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              SIM
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-xs text-gray-600" data-modal-fatal="false">
-                              Não
-                            </p>
-                          )}
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700">
-                            Procuração
-                          </label>
-                          {selectedProtocol.needsProcuration ? (
-                            <p className="mt-1 text-xs font-bold text-blue-600 flex items-center" data-modal-needs-procuration="true">
-                              <FileCheck className="h-3 w-3 mr-1" />
-                              SIM
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-xs text-gray-600" data-modal-needs-procuration="false">
-                              Não
-                            </p>
-                          )}
-                        </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-medium text-blue-700">Criado por:</span>
+                        <span className="ml-2 text-sm font-bold text-blue-900">{userEmails[selectedProtocol.createdBy] || 'Carregando...'}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-blue-600">Data:</div>
+                        <div className="text-sm font-semibold text-blue-900">{formatDate(selectedProtocol.createdAt)}</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Observações */}
-                  {selectedProtocol.observations && (
+                  {/* Layout em duas colunas */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Coluna Esquerda - Informações do Processo */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700">
-                        Observações
-                      </label>
-                      <p className="mt-1 text-xs text-gray-900 bg-yellow-50 p-2 rounded" data-modal-observations={selectedProtocol.observations}>
-                        {selectedProtocol.observations}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Lista de Documentos Compacta */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Arquivos da Petição */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        📄 Petição ({selectedProtocol.documents.filter(d => d.category === 'petition').length})
-                      </label>
-                      <div className="bg-blue-50 rounded p-2 border border-blue-200 max-h-20 overflow-y-auto">
-                        {selectedProtocol.documents.filter(d => d.category === 'petition').map((doc) => (
-                          <div key={doc.id} className="flex items-center py-0.5">
-                            <FileText className="h-3 w-3 text-blue-600 mr-1 flex-shrink-0" />
-                            <span className="text-xs text-gray-900 truncate" data-modal-petition-document={doc.name} title={doc.name}>
-                              {doc.name}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Documentos Complementares */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        📎 Outros ({selectedProtocol.documents.filter(d => d.category === 'complementary').length})
-                      </label>
-                      <div className="bg-gray-50 rounded p-2 max-h-20 overflow-y-auto">
-                        {selectedProtocol.documents.filter(d => d.category === 'complementary').length > 0 ? (
-                          selectedProtocol.documents.filter(d => d.category === 'complementary').map((doc) => (
-                            <div key={doc.id} className="flex items-center py-0.5">
-                              <FileText className="h-3 w-3 text-gray-500 mr-1 flex-shrink-0" />
-                              <span className="text-xs text-gray-900 truncate" data-modal-complementary-document={doc.name} title={doc.name}>
-                                {doc.name}
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2 border-b pb-1">📋 Informações</h4>
+                      
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Número do Processo
+                          </label>
+                          <p className="text-sm font-bold text-gray-900 bg-gray-50 p-2 rounded" data-modal-process-number={selectedProtocol.processNumber}>
+                            {selectedProtocol.processNumber}
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Tribunal
+                          </label>
+                          <p className="text-xs text-gray-900 bg-gray-50 p-2 rounded" data-modal-court={selectedProtocol.court}>
+                            {selectedProtocol.court}
+                          </p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Sistema
+                            </label>
+                            <div data-modal-system={selectedProtocol.system}>
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                {selectedProtocol.system || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.system)}
                               </span>
                             </div>
-                          ))
-                        ) : (
-                          <span className="text-xs text-gray-500">Nenhum</span>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Jurisdição
+                            </label>
+                            <p className="text-xs text-gray-900 bg-gray-50 p-1 rounded" data-modal-jurisdiction={selectedProtocol.jurisdiction}>
+                              {selectedProtocol.jurisdiction || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.jurisdiction)}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Tipo de Petição
+                          </label>
+                          <p className="text-xs text-gray-900 bg-gray-50 p-2 rounded" data-modal-petition-type={selectedProtocol.petitionType}>
+                            {selectedProtocol.petitionType || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.petitionType)}
+                          </p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-red-50 border border-red-200 rounded p-2">
+                            <label className="block text-xs font-medium text-red-700 mb-1">
+                              Fatal
+                            </label>
+                            {selectedProtocol.isFatal ? (
+                              <p className="text-sm font-bold text-red-600 flex items-center" data-modal-fatal="true">
+                                <AlertTriangle className="h-4 w-4 mr-1" />
+                                SIM
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-600" data-modal-fatal="false">
+                                Não
+                              </p>
+                            )}
+                          </div>
+                          
+                          <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                            <label className="block text-xs font-medium text-blue-700 mb-1">
+                              Procuração
+                            </label>
+                            {selectedProtocol.needsProcuration ? (
+                              <p className="text-sm font-bold text-blue-600 flex items-center" data-modal-needs-procuration="true">
+                                <FileCheck className="h-4 w-4 mr-1" />
+                                SIM
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-600" data-modal-needs-procuration="false">
+                                Não
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Observações */}
+                        {selectedProtocol.observations && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Observações
+                            </label>
+                            <p className="text-xs text-gray-900 bg-yellow-50 border border-yellow-200 p-2 rounded" data-modal-observations={selectedProtocol.observations}>
+                              {selectedProtocol.observations}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* Tipo de Procuração */}
+                        {selectedProtocol.needsProcuration && selectedProtocol.procurationType && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Tipo de Procuração
+                            </label>
+                            <p className="text-xs text-gray-900 bg-blue-50 border border-blue-200 p-2 rounded">
+                              {selectedProtocol.procurationType}
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Botões para Download - Compactos */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={handleDownloadPetition}
-                      className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      data-action="download-petition"
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      📄 Baixar Petição
-                    </button>
-
-                    {selectedProtocol.documents.filter(d => d.category === 'complementary').length > 0 && (
-                      <button
-                        onClick={handleDownloadComplementaryDocuments}
-                        className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                        data-action="download-complementary-documents"
-                      >
-                        <Download className="h-3 w-3 mr-1" />
-                        📎 Baixar Outros
-                      </button>
+                    {/* Posição na Fila do Robô */}
+                    {getRobotQueuePosition(selectedProtocol) && (
+                      <div className="bg-red-50 border border-red-200 rounded p-3">
+                        <h5 className="text-xs font-medium text-red-800 mb-1">🤖 Posição na Fila do Robô</h5>
+                        <div className="flex items-center">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            #{getRobotQueuePosition(selectedProtocol)} na fila
+                          </span>
+                        </div>
+                        <div className="text-xs text-red-600 mt-1">
+                          Baseado na ordem de criação
+                        </div>
+                      </div>
                     )}
-                  </div>
 
-                  {/* Botões de Status - Compactos */}
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t">
-                    <button
-                      onClick={handleMarkAsDone}
-                      className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                      data-action="mark-as-done"
-                    >
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Feito
-                    </button>
-                    <button
-                      onClick={handleMarkAsError}
-                      className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                      data-action="mark-as-error"
-                    >
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Erro
-                    </button>
-                    <button
-                      onClick={() => setShowReturnModal(true)}
-                      className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                      data-action="return-protocol"
-                    >
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      Devolver
-                    </button>
+                    {/* Coluna Direita - Documentos e Ações */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2 border-b pb-1">📎 Documentos e Ações</h4>
+                      
+                      {/* Guias de Recolhimento */}
+                      {selectedProtocol.needsGuia && selectedProtocol.guias && selectedProtocol.guias.length > 0 && (
+                        <div className="mb-3">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            💰 Guias de Recolhimento ({selectedProtocol.guias.length})
+                          </label>
+                          <div className="space-y-1">
+                            {selectedProtocol.guias.map((guia, index) => (
+                              <div key={guia.id} className="bg-green-50 border border-green-200 rounded p-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium text-green-800">
+                                    Guia #{index + 1} - {guia.system}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-green-700 font-mono mt-1">
+                                  {guia.number}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Documentos */}
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          📄 Documentos ({selectedProtocol.documents.length})
+                        </label>
+                        
+                        <div className="grid grid-cols-1 gap-2">
+                          {/* Petição */}
+                          <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <h5 className="text-xs font-medium text-blue-800">📄 Petição ({selectedProtocol.documents.filter(d => d.category === 'petition').length})</h5>
+                              <button
+                                onClick={handleDownloadPetition}
+                                className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                                data-action="download-petition"
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Baixar
+                              </button>
+                            </div>
+                            <div className="text-xs text-blue-700">
+                              {selectedProtocol.documents.filter(d => d.category === 'petition').length} arquivo(s)
+                            </div>
+                          </div>
+                          
+                          {/* Documentos Complementares */}
+                          {selectedProtocol.documents.filter(d => d.category === 'complementary').length > 0 && (
+                            <div className="bg-gray-50 border border-gray-200 rounded p-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <h5 className="text-xs font-medium text-gray-800">📎 Complementares ({selectedProtocol.documents.filter(d => d.category === 'complementary').length})</h5>
+                                <button
+                                  onClick={handleDownloadComplementaryDocuments}
+                                  className="inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white bg-gray-600 hover:bg-gray-700 transition-colors"
+                                  data-action="download-complementary-documents"
+                                >
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Baixar
+                                </button>
+                              </div>
+                              <div className="text-xs text-gray-700">
+                                {selectedProtocol.documents.filter(d => d.category === 'complementary').length} arquivo(s)
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Botões de Ação - Sempre Visíveis */}
+                      <div className="bg-gray-50 border border-gray-200 rounded p-3">
+                        <h5 className="text-xs font-medium text-gray-800 mb-2">🎯 Ações do Robô</h5>
+                        <div className="grid grid-cols-1 gap-2">
+                          <button
+                            onClick={handleMarkAsDone}
+                            className="w-full inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 transition-colors"
+                            data-action="mark-as-done"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            ✅ PETICIONADO COM SUCESSO
+                          </button>
+                          
+                          <button
+                            onClick={() => setShowConfirmReturnModal(true)}
+                            className="w-full inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded text-white bg-orange-600 hover:bg-orange-700 transition-colors"
+                            data-action="return-protocol"
+                          >
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            🔄 DEVOLVER PROTOCOLO
+                          </button>
+                        </div>
+                        
+                        <div className="mt-2 pt-2 border-t border-gray-300">
+                          <p className="text-xs text-gray-600 text-center">
+                            💡 Use os atributos data-action para automação
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </>
@@ -721,44 +876,102 @@ export function RobotQueue() {
         </div>
       )}
 
-      {/* Modal de Devolução */}
-      {showReturnModal && (
+      {/* Modal de Confirmação de Devolução */}
+      {showConfirmReturnModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-5 border w-80 shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 Devolver Protocolo
               </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Informe o motivo da devolução para o criador do protocolo:
+              <p className="text-sm text-gray-600 mb-6">
+                Tem certeza que deseja devolver este protocolo para análise manual?
               </p>
-              
-              <textarea
-                value={returnReason}
-                onChange={(e) => setReturnReason(e.target.value)}
-                placeholder="Ex: Documentos incompletos, dados incorretos, etc."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                rows={4}
-                required
-              />
 
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="flex justify-center space-x-3">
                 <button
                   onClick={() => {
-                    setShowReturnModal(false);
-                    setReturnReason('');
+                    setShowConfirmReturnModal(false);
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
                 >
-                  Cancelar
+                  Não
                 </button>
                 <button
                   onClick={handleReturnProtocol}
-                  disabled={!returnReason.trim()}
-                  className="px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-md transition-colors"
                 >
-                  Devolver Protocolo
+                  Sim
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal de Alertas */}
+      {showAlertsModal && selectedProtocol && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between pb-3 border-b">
+                <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                  <BellRing className="h-5 w-5 text-red-500 mr-2" />
+                  Alertas do Protocolo
+                </h3>
+                <button
+                  onClick={() => setShowAlertsModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="mt-4">
+                <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-gray-700">
+                    <strong>Processo:</strong> {selectedProtocol.processNumber}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Criado por: {userEmails[selectedProtocol.createdBy] || 'Carregando...'}
+                  </p>
+                </div>
+                
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {selectedProtocolAlerts.length > 0 ? (
+                    selectedProtocolAlerts
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .map((alert) => (
+                        <div key={alert.id} className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-shrink-0 mt-1">
+                              <AlertTriangle className="h-4 w-4 text-orange-500" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-orange-900">Alerta Urgente</p>
+                              <p className="text-sm text-orange-800 mt-1">{alert.message}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-sm text-orange-600">
+                                  <span className="flex items-center">
+                                    <User className="h-3 w-3 mr-1" />
+                                    {userEmails[alert.createdBy] || 'Usuário'}
+                                  </span>
+                                </span>
+                                <span className="text-xs text-orange-500">
+                                  {new Date(alert.createdAt).toLocaleDateString('pt-BR')} às {new Date(alert.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <Bell className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500">Nenhum alerta para este protocolo</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -781,12 +994,14 @@ export function RobotQueue() {
           <li>• <strong>Filtros de Sistema:</strong> Use os filtros para visualizar apenas protocolos de sistemas específicos</li>
           <li>• Clique no botão "Visualizar" para abrir os detalhes do protocolo</li>
           <li>• Use "Atualizar Fila" no topo da página para recarregar protocolos do localStorage</li>
+          <li>• <strong>Alertas (🔔):</strong> Botão vermelho piscante indica alertas urgentes do advogado</li>
           <li>• No modal, use data-modal-* para capturar os dados do processo</li>
           <li>• Use "📄 Baixar Petição" (data-action="download-petition") para baixar apenas a petição</li>
           <li>• Use "📎 Baixar Outros" (data-action="download-complementary-documents") para baixar apenas os complementares</li>
           <li>• Use "Feito" ou "Erro" para atualizar o status do processo</li>
-          <li>• Use "Devolver" (data-action="return-protocol") para devolver o protocolo ao criador com motivo</li>
+          <li>• Use "Devolver" (data-action="return-protocol") para enviar protocolo para análise manual (apenas confirmação)</li>
           <li>• Todos os botões têm atributos data-action para fácil identificação</li>
+          <li>• <strong>IMPORTANTE:</strong> Protocolos devolvidos pelo robô vão automaticamente para o Carlos</li>
         </ul>
         <div className="mt-3 p-3 bg-blue-100 rounded-md">
           <h4 className="font-medium text-blue-900 mb-2">Sistemas Aceitos pelo Robô:</h4>

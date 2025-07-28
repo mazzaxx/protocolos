@@ -4,12 +4,16 @@ export interface Protocol {
   court: string;
   system: string;
   jurisdiction: '1º Grau' | '2º Grau';
+  processType: 'civel' | 'trabalhista'; // Novo campo para diferenciar tipos
   isFatal: boolean;
   needsProcuration: boolean;
+  procurationType?: string;
+  needsGuia: boolean;
+  guias: ProtocolGuia[];
   petitionType: string;
   observations?: string;
   documents: ProtocolDocument[];
-  status: 'Aguardando' | 'Peticionado' | 'Erro' | 'Devolvido';
+  status: 'Aguardando' | 'Em Execução' | 'Peticionado' | 'Devolvido' | 'Cancelado';
   assignedTo?: 'Carlos' | 'Deyse' | null; // Para fila manual
   createdBy: number; // ID do usuário que criou o protocolo
   returnReason?: string; // Motivo da devolução
@@ -17,8 +21,14 @@ export interface Protocol {
   updatedAt: Date;
   queuePosition: number;
   activityLog?: ProtocolActivity[]; // Log de atividades do protocolo
+  isDistribution?: boolean; // Indica se é uma distribuição
 }
 
+export interface ProtocolGuia {
+  id: string;
+  number: string;
+  system: 'ESAJ' | 'TJRJ Eletrônico';
+}
 export interface ProtocolActivity {
   id: string;
   timestamp: Date;
@@ -26,6 +36,15 @@ export interface ProtocolActivity {
   description: string;
   performedBy?: string; // Email ou nome de quem executou a ação
   details?: string; // Detalhes adicionais (ex: motivo da devolução)
+}
+
+export interface ProtocolAlert {
+  id: string;
+  protocolId: string;
+  message: string;
+  createdBy: number; // ID do usuário que criou o alerta
+  createdAt: Date;
+  isRead: boolean;
 }
 
 export interface User {
@@ -64,15 +83,72 @@ export interface ProtocolDocument {
   category: 'petition' | 'complementary';
 }
 
+export const PROCURATION_TYPES = [
+  'Grupo Santander - Aymore/Santander/Santander leasing',
+  'Grupo Votorantim - Banco Votorantim/BV',
+  'Grupo Safra - Safra/J Safra/Safra crédito',
+  'Associação Petrobras de Saúde - APS',
+  'Petróleo Brasileiro - Petrobras',
+  'Fundação São Francisco Xavier - FSFX',
+  'Banco Pan',
+  'Banco BRB',
+  'Banco ITAÚ',
+  'Superdigital',
+  'UNIMED',
+  'Previdência Usiminas',
+  'Sankyu',
+  'Aperam América',
+  'Aperam Bioenergia',
+  'Consul',
+  'Outros (especificar)',
+];
+
 export const COURTS = [
-  'Tribunal de Justiça de São Paulo',
-  'Tribunal de Justiça do Rio de Janeiro',
-  'Tribunal de Justiça de Minas Gerais',
+  // Tribunais Superiores
+  'Supremo Tribunal Federal',
+  'Superior Tribunal de Justiça',
+  'Tribunal Superior do Trabalho',
+  'Superior Tribunal Militar',
+  'Tribunal Superior Eleitoral',
+  
+  // Tribunais Regionais Federais
   'Tribunal Regional Federal da 1ª Região',
   'Tribunal Regional Federal da 2ª Região',
   'Tribunal Regional Federal da 3ª Região',
-  'Superior Tribunal de Justiça',
-  'Supremo Tribunal Federal',
+  'Tribunal Regional Federal da 4ª Região',
+  'Tribunal Regional Federal da 5ª Região',
+  'Tribunal Regional Federal da 6ª Região',
+  
+  // Tribunais de Justiça Estaduais
+  'Tribunal de Justiça do Acre',
+  'Tribunal de Justiça de Alagoas',
+  'Tribunal de Justiça do Amapá',
+  'Tribunal de Justiça do Amazonas',
+  'Tribunal de Justiça da Bahia',
+  'Tribunal de Justiça do Ceará',
+  'Tribunal de Justiça do Distrito Federal e Territórios',
+  'Tribunal de Justiça do Espírito Santo',
+  'Tribunal de Justiça de Goiás',
+  'Tribunal de Justiça do Maranhão',
+  'Tribunal de Justiça do Mato Grosso',
+  'Tribunal de Justiça do Mato Grosso do Sul',
+  'Tribunal de Justiça de Minas Gerais',
+  'Tribunal de Justiça do Pará',
+  'Tribunal de Justiça da Paraíba',
+  'Tribunal de Justiça do Paraná',
+  'Tribunal de Justiça de Pernambuco',
+  'Tribunal de Justiça do Piauí',
+  'Tribunal de Justiça do Rio de Janeiro',
+  'Tribunal de Justiça do Rio Grande do Norte',
+  'Tribunal de Justiça do Rio Grande do Sul',
+  'Tribunal de Justiça de Rondônia',
+  'Tribunal de Justiça de Roraima',
+  'Tribunal de Justiça de Santa Catarina',
+  'Tribunal de Justiça de São Paulo',
+  'Tribunal de Justiça de Sergipe',
+  'Tribunal de Justiça de Tocantins',
+  
+  // Tribunais Regionais do Trabalho
   'Tribunal Regional do Trabalho da 1ª Região (RJ)',
   'Tribunal Regional do Trabalho da 2ª Região (SP)',
   'Tribunal Regional do Trabalho da 3ª Região (MG)',
@@ -97,6 +173,40 @@ export const COURTS = [
   'Tribunal Regional do Trabalho da 22ª Região (PI)',
   'Tribunal Regional do Trabalho da 23ª Região (MT)',
   'Tribunal Regional do Trabalho da 24ª Região (MS)',
+  
+  // Tribunais Regionais Eleitorais
+  'Tribunal Regional Eleitoral do Acre',
+  'Tribunal Regional Eleitoral de Alagoas',
+  'Tribunal Regional Eleitoral do Amapá',
+  'Tribunal Regional Eleitoral do Amazonas',
+  'Tribunal Regional Eleitoral da Bahia',
+  'Tribunal Regional Eleitoral do Ceará',
+  'Tribunal Regional Eleitoral do Distrito Federal',
+  'Tribunal Regional Eleitoral do Espírito Santo',
+  'Tribunal Regional Eleitoral de Goiás',
+  'Tribunal Regional Eleitoral do Maranhão',
+  'Tribunal Regional Eleitoral do Mato Grosso',
+  'Tribunal Regional Eleitoral do Mato Grosso do Sul',
+  'Tribunal Regional Eleitoral de Minas Gerais',
+  'Tribunal Regional Eleitoral do Pará',
+  'Tribunal Regional Eleitoral da Paraíba',
+  'Tribunal Regional Eleitoral do Paraná',
+  'Tribunal Regional Eleitoral de Pernambuco',
+  'Tribunal Regional Eleitoral do Piauí',
+  'Tribunal Regional Eleitoral do Rio de Janeiro',
+  'Tribunal Regional Eleitoral do Rio Grande do Norte',
+  'Tribunal Regional Eleitoral do Rio Grande do Sul',
+  'Tribunal Regional Eleitoral de Rondônia',
+  'Tribunal Regional Eleitoral de Roraima',
+  'Tribunal Regional Eleitoral de Santa Catarina',
+  'Tribunal Regional Eleitoral de São Paulo',
+  'Tribunal Regional Eleitoral de Sergipe',
+  'Tribunal Regional Eleitoral de Tocantins',
+  
+  // Tribunais de Justiça Militar
+  'Tribunal de Justiça Militar do Estado de Minas Gerais',
+  'Tribunal de Justiça Militar do Estado do Rio Grande do Sul',
+  'Tribunal de Justiça Militar do Estado de São Paulo',
 ];
 
 export const PETITION_TYPES = [
@@ -116,14 +226,20 @@ export const PETITION_TYPES = [
   'Petição Avulsa',
   'Cumprimento de Sentença',
   'Execução',
-  'Outros',
+  'Outros'
+];
+
+export const PROCESS_TYPES = [
+  { value: 'civel', label: 'Cível' },
+  { value: 'trabalhista', label: 'Trabalhista' }
 ];
 
 export const STATUS_COLORS = {
   'Aguardando': 'bg-yellow-100 text-yellow-800',
+  'Em Execução': 'bg-blue-100 text-blue-800',
   'Peticionado': 'bg-green-100 text-green-800',
-  'Erro': 'bg-red-100 text-red-800',
   'Devolvido': 'bg-orange-100 text-orange-800',
+  'Cancelado': 'bg-red-100 text-red-800',
 };
 
 export const TRIBUNAL_SYSTEMS = [

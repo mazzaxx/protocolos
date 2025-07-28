@@ -110,8 +110,8 @@ npm run preview:production
 ## 🌐 URLs de Acesso
 
 - **Desenvolvimento**: http://localhost:5173
-- **Backend**: Sua URL do Railway
-- **Frontend**: Sua URL do Netlify
+- **Backend**: https://sistema-protocolos-juridicos-production.up.railway.app
+- **Frontend**: https://ncasistemaprotocolos.netlify.app
 
 ## Funcionalidades
 
@@ -129,8 +129,10 @@ npm run preview:production
 - Acompanhamento de status
 
 ### Banco de Dados
-- SQLite local
+- SQLite no Railway (produção)
+- SQLite local (desenvolvimento)
 - Tabela de funcionários
+- Tabela de protocolos
 - Usuário de teste pré-criado
 
 ## Estrutura do Projeto
@@ -149,6 +151,8 @@ src/
 server/
 ├── server.js              # Servidor Express
 ├── auth.js                # Rotas de autenticação  
+├── protocols.js           # Rotas de protocolos
+├── admin.js               # Rotas administrativas
 ├── db.js                  # Configuração SQLite
 └── database.sqlite        # Banco de dados (criado automaticamente)
 ```
@@ -159,3 +163,4 @@ server/
 - **Backend:** Node.js, Express
 - **Banco:** SQLite3
 - **Autenticação:** Context API + localStorage
+- **Deploy:** Railway (backend) + Netlify (frontend)

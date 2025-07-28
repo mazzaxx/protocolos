@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import db, { initializeDb } from './db.js';
 import authRoutes from './auth.js';
 import adminRoutes from './admin.js';
+import protocolRoutes from './protocols.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +50,17 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Inicializar o banco de dados antes de configurar as rotas
+console.log('Inicializando banco de dados...');
+
+try {
+  await initializeDb();
+  console.log('Banco de dados inicializado com sucesso!');
+} catch (error) {
+  console.error('Erro ao inicializar banco de dados:', error);
+  process.exit(1);
+}
+
 // Log de todas as requisições para debug
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
@@ -59,6 +72,7 @@ app.use((req, res, next) => {
 // Rotas
 app.use('/api', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', protocolRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
@@ -95,6 +109,14 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Rota de teste para protocolos
+app.get('/api/protocolos/test', (req, res) => {
+  res.json({ 
+    message: 'Rotas de protocolos funcionando!',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Middleware de erro 404
 app.use('*', (req, res) => {
   console.log(`Rota não encontrada: ${req.method} ${req.originalUrl}`);
@@ -118,4 +140,8 @@ app.listen(PORT, () => {
   console.log('- POST /api/admin/funcionarios');
   console.log('- PUT /api/admin/funcionarios/:id');
   console.log('- DELETE /api/admin/funcionarios/:id');
+  console.log('- GET /api/protocolos');
+  console.log('- POST /api/protocolos');
+  console.log('- PUT /api/protocolos/:id');
+  console.log('- DELETE /api/protocolos/:id');
 });

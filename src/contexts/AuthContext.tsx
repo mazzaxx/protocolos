@@ -8,6 +8,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasPermission: (permission: keyof typeof USER_PERMISSIONS.admin) => boolean;
   canAccessQueues: boolean;
+  canAccessSpecificQueue: (queueName: 'carlos' | 'deyse' | 'robot') => boolean;
+  canMoveToQueue: (targetQueue: 'carlos' | 'deyse' | 'robot') => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,6 +46,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const canAccessQueues = hasPermission('canAccessAllQueues');
+  
+  // Função específica para verificar se o usuário pode acessar uma fila específica
+  const canAccessSpecificQueue = (queueName: 'carlos' | 'deyse' | 'robot'): boolean => {
+    if (!user) return false;
+    
+    // Admin e mod podem acessar todas as filas
+    if (user.permissao === 'admin' || user.permissao === 'mod') return true;
+    
+    return false;
+  };
+
+  // Função para verificar se pode mover protocolos entre filas
+  const canMoveToQueue = (targetQueue: 'carlos' | 'deyse' | 'robot'): boolean => {
+    if (!user) return false;
+    
+    // Admin e mod podem mover para qualquer fila
+    if (user.permissao === 'admin' || user.permissao === 'mod') return true;
+    
+    return false;
+  };
+
   const isAuthenticated = !!user;
 
   return (
@@ -53,7 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout, 
       isAuthenticated, 
       hasPermission, 
-      canAccessQueues 
+      canAccessQueues,
+      canAccessSpecificQueue,
+      canMoveToQueue
     }}>
       {children}
     </AuthContext.Provider>

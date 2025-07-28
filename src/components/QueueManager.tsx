@@ -14,7 +14,7 @@ interface QueueManagerProps {
 
 export function QueueManager({ protocols, currentQueue, selectedProtocols, setSelectedProtocols, onProtocolsMoved }: QueueManagerProps) {
   const { moveProtocolToQueue, moveMultipleProtocols } = useProtocols();
-  const { hasPermission } = useAuth();
+  const { hasPermission, canMoveToQueue } = useAuth();
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [movedCount, setMovedCount] = useState(0);
@@ -135,7 +135,10 @@ export function QueueManager({ protocols, currentQueue, selectedProtocols, setSe
               </p>
               
               <div className="space-y-3">
-                {['robot', 'carlos', 'deyse'].filter(queue => queue !== currentQueue).map((targetQueue) => (
+                {['robot', 'carlos', 'deyse']
+                  .filter(queue => queue !== currentQueue)
+                  .filter(queue => canMoveToQueue(queue as 'carlos' | 'deyse' | 'robot'))
+                  .map((targetQueue) => (
                   <button
                     key={targetQueue}
                     onClick={() => handleMoveProtocols(targetQueue as any)}

@@ -3,6 +3,7 @@ import { AlertCircle, FileText, Eye, X, CheckCircle, Edit, RotateCcw, Upload, Hi
 import { useProtocols } from '../hooks/useProtocols';
 import { useAuth } from '../contexts/AuthContext';
 import { Protocol, COURTS, PETITION_TYPES, TRIBUNAL_SYSTEMS } from '../types';
+import { determineQueueAssignment } from '../utils/protocolUtils';
 
 export function ReturnedQueue() {
   const { protocols, updateProtocolStatus, forceRefresh, updateProtocol, userEmails } = useProtocols();
@@ -17,8 +18,11 @@ export function ReturnedQueue() {
     court: '',
     system: '',
     jurisdiction: '' as '' | '1º Grau' | '2º Grau',
+    processType: '' as '' | 'civel' | 'trabalhista',
     isFatal: false,
     needsProcuration: false,
+    procurationType: '',
+    needsGuia: false,
     petitionType: '',
     observations: '',
   });
@@ -52,8 +56,11 @@ export function ReturnedQueue() {
       court: protocol.court,
       system: protocol.system,
       jurisdiction: protocol.jurisdiction,
+      processType: protocol.processType || 'civel',
       isFatal: protocol.isFatal,
       needsProcuration: protocol.needsProcuration,
+      procurationType: protocol.procurationType || '',
+      needsGuia: protocol.needsGuia || false,
       petitionType: protocol.petitionType,
       observations: protocol.observations || '',
     });
@@ -149,8 +156,23 @@ export function ReturnedQueue() {
           updatedDocuments = [...selectedProtocol.documents, ...newPetitionDocs, ...newComplementaryDocs];
         }
 
-        // Determinar se deve ir para fila manual (se tem observações)
-        const assignedTo = determineQueueAssignment(editFormData);
+        // REGRA CRÍTICA: Protocolos reenviados da aba de devolvidos NUNCA vão para o robô
+        // Devem retornar para a mesma fila manual de onde vieram, ou Carlos como padrão
+        let assignedTo: 'Carlos' | 'Deyse';
+        
+        // Verificar de onde o protocolo veio originalmente através do log de atividades
+        const lastQueueMove = selectedProtocol.activityLog?.find(log => 
+          log.action === 'moved_to_queue' && 
+          (log.description.includes('Fila do Carlos') || log.description.includes('Fila da Deyse'))
+        );
+        
+        // Se veio da Deyse, volta para a Deyse. Caso contrário, vai para o Carlos
+        if (lastQueueMove && lastQueueMove.description.includes('Fila da Deyse')) {
+          assignedTo = 'Deyse';
+        } else {
+          // Padrão: Carlos (incluindo protocolos que vieram do robô)
+          assignedTo = 'Carlos';
+        }
 
         const updates = {
           ...editFormData,
@@ -168,69 +190,65 @@ export function ReturnedQueue() {
     }
   };
 
-  // Função para determinar automaticamente para qual fila enviar o protocolo
-  const determineQueueAssignment = (data: typeof editFormData): 'Carlos' | 'Deyse' | null => {
-    // Se tem observações, vai para o Carlos
-    if (data.observations.trim()) {
-      return 'Carlos';
+  const handleDownload = (doc: any) => {
+    try {
+      // Criar blob a partir do conteúdo base64
+      const byteCharacters = atob(doc.content.split(',')[1]);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: doc.type });
+      
+      // Criar URL temporária e fazer download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro ao fazer download:', error);
+      alert('Erro ao fazer download do arquivo. Verifique se o arquivo está válido.');
     }
-
-    // Se é 2º grau, vai para o Carlos
-    if (data.jurisdiction === '2º Grau') {
-      return 'Carlos';
-    }
-
-    // Verificar se o sistema/tribunal se encaixa nos parâmetros do robô
-    const isRobotEligible = checkRobotEligibility(data.system, data.court);
-    
-    // Se não se encaixa nos parâmetros do robô, vai para o Carlos
-    if (!isRobotEligible) {
-      return 'Carlos';
-    }
-
-    // Se passou por todas as verificações, vai para a fila do robô (null)
-    return null;
   };
 
-  // Função para verificar se o protocolo é elegível para a fila do robô
-  const checkRobotEligibility = (system: string, court: string): boolean => {
-    // PJe Diversos (todos os PJe exceto MG)
-    if (system === 'PJe' && court !== 'Tribunal de Justiça de Minas Gerais') {
-      return true;
-    }
-
-    // PJe MG (apenas PJe de Minas Gerais)
-    if (system === 'PJe' && court === 'Tribunal de Justiça de Minas Gerais') {
-      return true;
-    }
-
-    // ESAJ SP (apenas ESAJ de São Paulo)
-    if (system === 'ESAJ' && court === 'Tribunal de Justiça de São Paulo') {
-      return true;
-    }
-
-    // eProc RS/SC
-    if (system === 'eProc' && (
-      court === 'Tribunal de Justiça do Rio Grande do Sul' ||
-      court === 'Tribunal de Justiça de Santa Catarina'
-    )) {
-      return true;
-    }
-
-    // Projudi PR
-    if (system === 'Projudi' && court === 'Tribunal de Justiça do Paraná') {
-      return true;
-    }
-
-    // Se não se encaixa em nenhum dos critérios acima, não é elegível para o robô
-    return false;
+  const handleDownloadSimulated = (doc: any) => {
+    // Função alternativa para simulação (caso o base64 não funcione)
+    const link = document.createElement('a');
+    link.href = doc.content;
+    link.download = doc.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleResubmitWithoutChanges = () => {
     if (selectedProtocol) {
-      // Reenviar protocolo sem alterações - volta para status "Aguardando"
+      // REGRA CRÍTICA: Protocolos reenviados da aba de devolvidos NUNCA vão para o robô
+      // Devem retornar para a mesma fila manual de onde vieram, ou Carlos como padrão
+      let assignedTo: 'Carlos' | 'Deyse';
+      
+      // Verificar de onde o protocolo veio originalmente através do log de atividades
+      const lastQueueMove = selectedProtocol.activityLog?.find(log => 
+        log.action === 'moved_to_queue' && 
+        (log.description.includes('Fila do Carlos') || log.description.includes('Fila da Deyse'))
+      );
+      
+      // Se veio da Deyse, volta para a Deyse. Caso contrário, vai para o Carlos
+      if (lastQueueMove && lastQueueMove.description.includes('Fila da Deyse')) {
+        assignedTo = 'Deyse';
+      } else {
+        // Padrão: Carlos (incluindo protocolos que vieram do robô)
+        assignedTo = 'Carlos';
+      }
+      
       const updates = {
         status: 'Aguardando' as const,
+        assignedTo,
         returnReason: undefined, // Limpar motivo da devolução
       };
       updateProtocol(selectedProtocol.id, updates, userEmails[user!.id] || user!.email);
@@ -302,20 +320,37 @@ export function ReturnedQueue() {
                 <tr key={protocol.id} className="hover:bg-orange-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
-                      {protocol.processNumber}
+                      <div className="flex items-center">
+                        {protocol.isDistribution && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 mr-2">
+                            📋 DIST
+                          </span>
+                        )}
+                        {protocol.processType && (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 ${
+                            protocol.processType === 'civel' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {protocol.processType === 'civel' ? '⚖️' : '👷'}
+                          </span>
+                        )}
+                        {protocol.processNumber || (protocol.isDistribution ? 'Distribuição sem número' : protocol.processNumber)}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      {protocol.court}
+                      {protocol.court || (protocol.isDistribution ? 'Tribunal não especificado' : protocol.court)}
                     </div>
                     <div className="text-sm text-gray-500">
-                      {protocol.jurisdiction}
+                      {protocol.jurisdiction || (protocol.isDistribution ? 'Jurisdição não especificada' : protocol.jurisdiction)}
+                      {protocol.isDistribution && (
+                        <span className="ml-2 text-orange-600 font-medium">📋 Distribuição</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      {protocol.petitionType}
+                      {protocol.petitionType || (protocol.isDistribution ? 'Tipo não especificado' : protocol.petitionType)}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -408,7 +443,7 @@ export function ReturnedQueue() {
                             Número do Processo
                           </label>
                           <p className="mt-1 text-sm text-gray-900">
-                            {selectedProtocol.processNumber}
+                            {selectedProtocol.processNumber || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.processNumber)}
                           </p>
                         </div>
                         <div>
@@ -416,7 +451,7 @@ export function ReturnedQueue() {
                             Tribunal
                           </label>
                           <p className="mt-1 text-sm text-gray-900">
-                            {selectedProtocol.court}
+                            {selectedProtocol.court || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.court)}
                           </p>
                         </div>
                         <div>
@@ -425,7 +460,7 @@ export function ReturnedQueue() {
                           </label>
                           <p className="mt-1 text-sm text-gray-900">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                              {selectedProtocol.system}
+                              {selectedProtocol.system || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.system)}
                             </span>
                           </p>
                         </div>
@@ -434,7 +469,7 @@ export function ReturnedQueue() {
                             Grau da Jurisdição
                           </label>
                           <p className="mt-1 text-sm text-gray-900">
-                            {selectedProtocol.jurisdiction}
+                            {selectedProtocol.jurisdiction || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.jurisdiction)}
                           </p>
                         </div>
                         <div>
@@ -442,7 +477,7 @@ export function ReturnedQueue() {
                             Tipo de Petição
                           </label>
                           <p className="mt-1 text-sm text-gray-900">
-                            {selectedProtocol.petitionType}
+                            {selectedProtocol.petitionType || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.petitionType)}
                           </p>
                         </div>
                       </div>
@@ -475,6 +510,41 @@ export function ReturnedQueue() {
                           ))}
                         </div>
                       </div>
+
+                      {/* Tipo de Procuração */}
+                      {selectedProtocol.needsProcuration && selectedProtocol.procurationType && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Tipo de Procuração
+                          </label>
+                          <p className="mt-1 text-sm text-gray-900 bg-blue-50 p-2 rounded">
+                            {selectedProtocol.procurationType}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Guias de Recolhimento */}
+                      {selectedProtocol.needsGuia && selectedProtocol.guias && selectedProtocol.guias.length > 0 && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Guias de Recolhimento ({selectedProtocol.guias.length})
+                          </label>
+                          <div className="space-y-2">
+                            {selectedProtocol.guias.map((guia, index) => (
+                              <div key={guia.id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium text-green-800">
+                                    Guia #{index + 1} - {guia.system}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-green-700 font-mono">
+                                  {guia.number}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Instruções para Correção */}
                       <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
@@ -528,6 +598,21 @@ export function ReturnedQueue() {
                           </div>
                         </div>
 
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Tipo de Processo
+                          </label>
+                          <select
+                            name="processType"
+                            value={editFormData.processType}
+                            onChange={handleInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Selecione o tipo</option>
+                            <option value="civel">Cível</option>
+                            <option value="trabalhista">Trabalhista</option>
+                          </select>
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Sistema do Tribunal

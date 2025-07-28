@@ -1,25 +1,34 @@
 import React, { useState } from 'react';
-import { Upload, FileText, AlertCircle, CheckCircle, AlertTriangle, FileCheck } from 'lucide-react';
-import { COURTS, PETITION_TYPES, TRIBUNAL_SYSTEMS } from '../types';
+import { Upload, FileText, AlertCircle, CheckCircle, AlertTriangle, FileCheck, Plus, X } from 'lucide-react';
+import { COURTS, PETITION_TYPES, TRIBUNAL_SYSTEMS, PROCURATION_TYPES, PROCESS_TYPES, ProtocolGuia } from '../types';
 import { useProtocols } from '../hooks/useProtocols';
 import { useAuth } from '../contexts/AuthContext';
 import { extractTribunalInfo, isValidCNJFormat } from '../utils/cnjMapping';
+import { checkRobotEligibility, determineQueueAssignment } from '../utils/protocolUtils';
 
 export function ProtocolForm() {
   const { addProtocol } = useProtocols();
   const { user } = useAuth();
+  const [isDistribution, setIsDistribution] = useState(false);
   const [formData, setFormData] = useState({
     processNumber: '',
     court: '',
     system: '',
     jurisdiction: '' as '' | '1º Grau' | '2º Grau',
+    processType: '' as '' | 'civel' | 'trabalhista',
     isFatal: false,
     needsProcuration: false,
+    procurationType: '',
+    needsGuia: false,
     petitionType: '',
     observations: '',
   });
   const [petitionDocuments, setPetitionDocuments] = useState<File[]>([]);
   const [complementaryDocuments, setComplementaryDocuments] = useState<File[]>([]);
+  const [guias, setGuias] = useState<ProtocolGuia[]>([]);
+  const [customProcuration, setCustomProcuration] = useState('');
+  const [customPetitionType, setCustomPetitionType] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -36,7 +45,54 @@ export function ProtocolForm() {
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+
+    // Limpar campos relacionados quando desmarca checkboxes
+    if (name === 'needsProcuration' && !checked) {
+      setFormData(prev => ({ ...prev, procurationType: '' }));
+      setCustomProcuration('');
+    }
+    if (name === 'needsGuia' && !checked) {
+      setGuias([]);
+    }
+    if (name === 'petitionType' && value !== 'Outros') {
+      setCustomPetitionType('');
+    }
   };
+
+  // Funções para gerenciar guias
+  const addGuia = () => {
+    const newGuia: ProtocolGuia = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      number: '',
+      system: formData.system === 'ESAJ' ? 'ESAJ' : 'TJRJ Eletrônico'
+    };
+    setGuias(prev => [...prev, newGuia]);
+  };
+
+  const removeGuia = (id: string) => {
+    setGuias(prev => prev.filter(guia => guia.id !== id));
+  };
+
+  const updateGuia = (id: string, number: string) => {
+    setGuias(prev => prev.map(guia => 
+      guia.id === id ? { ...guia, number } : guia
+    ));
+  };
+
+  // Validação de formato de guia
+  const validateGuiaFormat = (number: string, system: string): boolean => {
+    if (system === 'ESAJ') {
+      // Formato: 250590176268310-0001 (15 dígitos + hífen + 4 dígitos)
+      return /^\d{15}-\d{4}$/.test(number);
+    } else if (system === 'TJRJ Eletrônico') {
+      // Formato: 61832908243-08 (11 dígitos + hífen + 2 dígitos)
+      return /^\d{11}-\d{2}$/.test(number);
+    }
+    return false;
+  };
+
+  // Verificar se deve mostrar campos de guia
+  const shouldShowGuiaFields = formData.system === 'ESAJ' || formData.system === 'TJRJ Eletrônico';
 
   const handleProcessNumberBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const processNumber = e.target.value.trim();
@@ -53,12 +109,14 @@ export function ProtocolForm() {
           ...prev,
           court: tribunalInfo.name,
           system: tribunalInfo.system,
+          processType: tribunalInfo.processType,
         }));
         
         // Remove erros dos campos que foram preenchidos automaticamente
         setErrors(prev => ({
           ...prev,
           court: '',
+          processType: '',
         }));
       }
     }
@@ -85,21 +143,54 @@ export function ProtocolForm() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.processNumber.trim()) newErrors.processNumber = 'Número do processo é obrigatório';
-    if (!formData.court) newErrors.court = 'Tribunal é obrigatório';
-    if (!formData.jurisdiction) newErrors.jurisdiction = 'Grau da jurisdição é obrigatório';
-    if (!formData.system.trim()) newErrors.system = 'Sistema do tribunal é obrigatório';
-    if (!formData.petitionType) newErrors.petitionType = 'Tipo de petição é obrigatório';
-    if (petitionDocuments.length === 0) newErrors.petitionDocuments = 'Pelo menos um arquivo de petição deve ser anexado';
+    // Se não é distribuição, aplicar validações normais
+    if (!isDistribution) {
+      if (!formData.processNumber.trim()) newErrors.processNumber = 'Número do processo é obrigatório';
+      if (!formData.court) newErrors.court = 'Tribunal é obrigatório';
+      if (!formData.jurisdiction) newErrors.jurisdiction = 'Grau da jurisdição é obrigatório';
+      if (!formData.processType) newErrors.processType = 'Tipo de processo é obrigatório';
+      if (!formData.system.trim()) newErrors.system = 'Sistema do tribunal é obrigatório';
+      if (!formData.petitionType) newErrors.petitionType = 'Tipo de petição é obrigatório';
+      if (petitionDocuments.length === 0) newErrors.petitionDocuments = 'Pelo menos um arquivo de petição deve ser anexado';
+    }
+
+    // Validações condicionais
+    if (formData.needsProcuration && !formData.procurationType) {
+      newErrors.procurationType = 'Tipo de procuração é obrigatório';
+    }
+    if (formData.procurationType === 'Outros (especificar)' && !customProcuration.trim()) {
+      newErrors.customProcuration = 'Especifique o tipo de procuração';
+    }
+    if (formData.petitionType === 'Outros' && !customPetitionType.trim()) {
+      newErrors.customPetitionType = 'Especifique o tipo de petição';
+    }
+    if (formData.needsGuia && guias.length === 0) {
+      newErrors.guias = 'Adicione pelo menos uma guia';
+    }
+    if (formData.needsGuia) {
+      const invalidGuias = guias.filter(guia => !validateGuiaFormat(guia.number, guia.system));
+      if (invalidGuias.length > 0) {
+        newErrors.guias = 'Formato de guia inválido';
+      }
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
+
+    // Mostrar modal de confirmação
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    setShowConfirmModal(false);
 
     setIsSubmitting(true);
     
@@ -132,14 +223,28 @@ export function ProtocolForm() {
       const allDocuments = [...petitionProtocolDocuments, ...complementaryProtocolDocuments];
 
       // Lógica de direcionamento automático
-      const assignedTo = determineQueueAssignment(formData);
+      const assignedTo = determineQueueAssignment(formData, isDistribution);
+
+      // Preparar tipo de procuração final
+      const finalProcurationType = formData.procurationType === 'Outros (especificar)' 
+        ? customProcuration.trim() 
+        : formData.procurationType;
+
+      // Preparar tipo de petição final
+      const finalPetitionType = formData.petitionType === 'Outros'
+        ? customPetitionType.trim()
+        : formData.petitionType;
 
       addProtocol({
         ...formData,
+        petitionType: finalPetitionType,
+        procurationType: formData.needsProcuration ? finalProcurationType : undefined,
+        guias: formData.needsGuia ? guias : [],
         createdBy: user!.id,
         documents: allDocuments,
         status: 'Aguardando',
         assignedTo,
+        isDistribution,
       });
 
       setSubmitSuccess(true);
@@ -148,13 +253,20 @@ export function ProtocolForm() {
         court: '',
         system: '',
         jurisdiction: '',
+        processType: '',
         isFatal: false,
         needsProcuration: false,
+        procurationType: '',
+        needsGuia: false,
         petitionType: '',
         observations: '',
       });
       setPetitionDocuments([]);
       setComplementaryDocuments([]);
+      setGuias([]);
+      setCustomProcuration('');
+      setCustomPetitionType('');
+      setIsDistribution(false);
       
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
@@ -171,64 +283,6 @@ export function ProtocolForm() {
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = error => reject(error);
     });
-  };
-
-  // Função para determinar automaticamente para qual fila enviar o protocolo
-  const determineQueueAssignment = (data: typeof formData): 'Carlos' | 'Deyse' | null => {
-    // Se tem observações, vai para o Carlos
-    if (data.observations.trim()) {
-      return 'Carlos';
-    }
-
-    // Se é 2º grau, vai para o Carlos
-    if (data.jurisdiction === '2º Grau') {
-      return 'Carlos';
-    }
-
-    // Verificar se o sistema/tribunal se encaixa nos parâmetros do robô
-    const isRobotEligible = checkRobotEligibility(data.system, data.court);
-    
-    // Se não se encaixa nos parâmetros do robô, vai para o Carlos
-    if (!isRobotEligible) {
-      return 'Carlos';
-    }
-
-    // Se passou por todas as verificações, vai para a fila do robô (null)
-    return null;
-  };
-
-  // Função para verificar se o protocolo é elegível para a fila do robô
-  const checkRobotEligibility = (system: string, court: string): boolean => {
-    // PJe Diversos (todos os PJe exceto MG)
-    if (system === 'PJe' && court !== 'Tribunal de Justiça de Minas Gerais') {
-      return true;
-    }
-
-    // PJe MG (apenas PJe de Minas Gerais)
-    if (system === 'PJe' && court === 'Tribunal de Justiça de Minas Gerais') {
-      return true;
-    }
-
-    // ESAJ SP (apenas ESAJ de São Paulo)
-    if (system === 'ESAJ' && court === 'Tribunal de Justiça de São Paulo') {
-      return true;
-    }
-
-    // eProc RS/SC
-    if (system === 'eProc' && (
-      court === 'Tribunal de Justiça do Rio Grande do Sul' ||
-      court === 'Tribunal de Justiça de Santa Catarina'
-    )) {
-      return true;
-    }
-
-    // Projudi PR
-    if (system === 'Projudi' && court === 'Tribunal de Justiça do Paraná') {
-      return true;
-    }
-
-    // Se não se encaixa em nenhum dos critérios acima, não é elegível para o robô
-    return false;
   };
 
   const formatFileSize = (bytes: number) => {
@@ -251,13 +305,42 @@ export function ProtocolForm() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Envio de Protocolo</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Envio de Protocolo</h2>
+        
+        {/* Checkbox de Distribuição */}
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="isDistribution"
+            checked={isDistribution}
+            onChange={(e) => setIsDistribution(e.target.checked)}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="isDistribution" className="ml-2 text-sm font-medium text-gray-700">
+            É uma distribuição?
+          </label>
+        </div>
+      </div>
+      
+      {/* Aviso sobre distribuição */}
+      {isDistribution && (
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+          <div className="flex items-start">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-yellow-800">
+              <p className="font-medium">Modo Distribuição Ativado</p>
+              <p>Nenhum campo é obrigatório. Campos vazios aparecerão como " - " nos detalhes.</p>
+            </div>
+          </div>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label htmlFor="processNumber" className="block text-sm font-medium text-gray-700 mb-2">
-              Número do Processo *
+              Número do Processo {!isDistribution && '*'}
             </label>
             <input
               type="text"
@@ -280,14 +363,14 @@ export function ProtocolForm() {
             {formData.processNumber && isValidCNJFormat(formData.processNumber) && (
               <p className="mt-1 text-sm text-green-600 flex items-center">
                 <CheckCircle className="h-4 w-4 mr-1" />
-                Número CNJ válido - Tribunal e sistema identificados automaticamente
+                Número CNJ válido - Tribunal, sistema e tipo identificados automaticamente
               </p>
             )}
           </div>
 
           <div>
             <label htmlFor="jurisdiction" className="block text-sm font-medium text-gray-700 mb-2">
-              Grau da Jurisdição *
+              Grau da Jurisdição {!isDistribution && '*'}
             </label>
             <select
               id="jurisdiction"
@@ -311,38 +394,69 @@ export function ProtocolForm() {
           </div>
         </div>
 
-        <div>
-          <label htmlFor="system" className="block text-sm font-medium text-gray-700 mb-2">
-            Sistema do Tribunal *
-          </label>
-          <select
-            id="system"
-            name="system"
-            value={formData.system}
-            onChange={handleInputChange}
-            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.system ? 'border-red-500' : 'border-gray-300'
-            }`}
-          >
-            <option value="">Selecione o sistema</option>
-            {TRIBUNAL_SYSTEMS.map(system => (
-              <option key={system} value={system}>{system}</option>
-            ))}
-          </select>
-          {errors.system && (
-            <p className="mt-1 text-sm text-red-600 flex items-center">
-              <AlertCircle className="h-4 w-4 mr-1" />
-              {errors.system}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label htmlFor="processType" className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo de Processo {!isDistribution && '*'}
+            </label>
+            <select
+              id="processType"
+              name="processType"
+              value={formData.processType}
+              onChange={handleInputChange}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.processType ? 'border-red-500' : 'border-gray-300'
+              }`}
+            >
+              <option value="">Selecione o tipo</option>
+              {PROCESS_TYPES.map(type => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+            {errors.processType && (
+              <p className="mt-1 text-sm text-red-600 flex items-center">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                {errors.processType}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              O tipo é identificado automaticamente com base no número do processo CNJ
             </p>
-          )}
-          <p className="mt-1 text-xs text-gray-500">
-            O sistema é identificado automaticamente com base no número do processo CNJ, mas pode ser selecionado manualmente
-          </p>
+          </div>
+
+          <div>
+            <label htmlFor="system" className="block text-sm font-medium text-gray-700 mb-2">
+              Sistema do Tribunal {!isDistribution && '*'}
+            </label>
+            <select
+              id="system"
+              name="system"
+              value={formData.system}
+              onChange={handleInputChange}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.system ? 'border-red-500' : 'border-gray-300'
+              }`}
+            >
+              <option value="">Selecione o sistema</option>
+              {TRIBUNAL_SYSTEMS.map(system => (
+                <option key={system} value={system}>{system}</option>
+              ))}
+            </select>
+            {errors.system && (
+              <p className="mt-1 text-sm text-red-600 flex items-center">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                {errors.system}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              O sistema é identificado automaticamente com base no número do processo CNJ
+            </p>
+          </div>
         </div>
 
         <div>
           <label htmlFor="court" className="block text-sm font-medium text-gray-700 mb-2">
-            Tribunal *
+            Tribunal {!isDistribution && '*'}
           </label>
           <select
             id="court"
@@ -368,7 +482,7 @@ export function ProtocolForm() {
 
         <div>
           <label htmlFor="petitionType" className="block text-sm font-medium text-gray-700 mb-2">
-            Tipo de Petição *
+            Tipo de Petição {!isDistribution && '*'}
           </label>
           <select
             id="petitionType"
@@ -390,11 +504,61 @@ export function ProtocolForm() {
               {errors.petitionType}
             </p>
           )}
+          
+          {/* Campo para especificar "Outros" */}
+          {formData.petitionType === 'Outros' && (
+            <div className="mt-3">
+              <label htmlFor="customPetitionType" className="block text-sm font-medium text-gray-700 mb-2">
+                Especificar Tipo de Petição *
+              </label>
+              <input
+                type="text"
+                id="customPetitionType"
+                value={customPetitionType}
+                onChange={(e) => setCustomPetitionType(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.customPetitionType ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Digite o tipo de petição"
+              />
+              {errors.customPetitionType && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  {errors.customPetitionType}
+                </p>
+              )}
+            </div>
+          )}
+          
+          {/* Campo para especificar "Outros" */}
+          {formData.petitionType === 'Outros (especificar)' && (
+            <div className="mt-3">
+              <label htmlFor="customPetitionType" className="block text-sm font-medium text-gray-700 mb-2">
+                Especificar Tipo de Petição *
+              </label>
+              <input
+                type="text"
+                id="customPetitionType"
+                value={customPetitionType}
+                onChange={(e) => setCustomPetitionType(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.customPetitionType ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Digite o tipo de petição"
+              />
+              {errors.customPetitionType && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  {errors.customPetitionType}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Checkboxes */}
         <div className="space-y-4">
-        {/* Checkbox Fatal */}
+          {/* Checkbox Fatal */}
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -425,6 +589,155 @@ export function ProtocolForm() {
               Necessita de procuração?
             </label>
           </div>
+
+          {/* Campo Tipo de Procuração (condicional) */}
+          {formData.needsProcuration && (
+            <div className="ml-6 space-y-3">
+              <div>
+                <label htmlFor="procurationType" className="block text-sm font-medium text-gray-700 mb-2">
+                  Tipo de Procuração *
+                </label>
+                <select
+                  id="procurationType"
+                  name="procurationType"
+                  value={formData.procurationType}
+                  onChange={handleInputChange}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    errors.procurationType ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Selecione o tipo de procuração</option>
+                  {PROCURATION_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+                {errors.procurationType && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    {errors.procurationType}
+                  </p>
+                )}
+              </div>
+
+              {/* Campo para especificar "Outros" */}
+              {formData.procurationType === 'Outros (especificar)' && (
+                <div>
+                  <label htmlFor="customProcuration" className="block text-sm font-medium text-gray-700 mb-2">
+                    Especificar Procuração *
+                  </label>
+                  <input
+                    type="text"
+                    id="customProcuration"
+                    value={customProcuration}
+                    onChange={(e) => setCustomProcuration(e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.customProcuration ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Digite o tipo de procuração"
+                  />
+                  {errors.customProcuration && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      {errors.customProcuration}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Checkbox Guia (apenas para ESAJ e TJRJ) */}
+          {shouldShowGuiaFields && (
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="needsGuia"
+                name="needsGuia"
+                checked={formData.needsGuia}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+              />
+              <label htmlFor="needsGuia" className="ml-2 flex items-center text-sm font-medium text-gray-700">
+                <FileText className="h-4 w-4 text-green-500 mr-1" />
+                Cadastrar guia de recolhimento?
+              </label>
+            </div>
+          )}
+
+          {/* Campos de Guias (condicional) */}
+          {formData.needsGuia && shouldShowGuiaFields && (
+            <div className="ml-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700">
+                  Guias de Recolhimento *
+                </label>
+                <button
+                  type="button"
+                  onClick={addGuia}
+                  className="flex items-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Adicionar Guia
+                </button>
+              </div>
+
+              {guias.length === 0 && (
+                <p className="text-sm text-gray-500 italic">
+                  Clique em "Adicionar Guia" para cadastrar uma guia de recolhimento
+                </p>
+              )}
+
+              {guias.map((guia, index) => (
+                <div key={guia.id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-green-800">
+                      Guia #{index + 1} - {guia.system}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeGuia(guia.id)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={guia.number}
+                      onChange={(e) => updateGuia(guia.id, e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder={
+                        guia.system === 'ESAJ' 
+                          ? 'Ex: 250590176268310-0001' 
+                          : 'Ex: 61832908243-08'
+                      }
+                    />
+                    <p className="mt-1 text-xs text-gray-600">
+                      Formato {guia.system}: {
+                        guia.system === 'ESAJ' 
+                          ? '15 dígitos + hífen + 4 dígitos' 
+                          : '11 dígitos + hífen + 2 dígitos'
+                      }
+                    </p>
+                    {guia.number && !validateGuiaFormat(guia.number, guia.system) && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        Formato inválido para {guia.system}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {errors.guias && (
+                <p className="text-sm text-red-600 flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  {errors.guias}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div>
@@ -454,8 +767,9 @@ export function ProtocolForm() {
           <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-xs text-blue-800">
               <strong>Direcionamento automático:</strong> {(() => {
-                const assignment = determineQueueAssignment(formData);
+                const assignment = determineQueueAssignment(formData, isDistribution);
                 if (assignment === 'Carlos') {
+                  if (isDistribution) return 'Fila do Carlos (distribuição)';
                   if (formData.observations.trim()) return 'Fila do Carlos (tem observações)';
                   if (formData.jurisdiction === '2º Grau') return 'Fila do Carlos (2º grau)';
                   if (formData.system && formData.court && !checkRobotEligibility(formData.system, formData.court)) {
@@ -597,6 +911,138 @@ export function ProtocolForm() {
           </button>
         </div>
       </form>
+
+      {/* Modal de Confirmação */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Confirmar Envio do Protocolo
+              </h3>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                <p className="text-sm text-blue-800 mb-2">
+                  <strong>Por favor, confirme as informações do protocolo:</strong>
+                </p>
+              </div>
+
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Número do Processo</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{formData.processNumber}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Grau da Jurisdição</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{formData.jurisdiction}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Tipo de Processo</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {formData.processType === 'civel' ? 'Cível' : formData.processType === 'trabalhista' ? 'Trabalhista' : formData.processType}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Tribunal</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{formData.court}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Sistema</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{formData.system}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700">Tipo de Petição</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {formData.petitionType === 'Outros' ? customPetitionType : formData.petitionType}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex space-x-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Fatal</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {formData.isFatal ? 'Sim' : 'Não'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Procuração</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {formData.needsProcuration ? 'Sim' : 'Não'}
+                    </p>
+                  </div>
+                </div>
+
+                {formData.needsProcuration && formData.procurationType && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Tipo de Procuração</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                      {formData.procurationType === 'Outros (especificar)' ? customProcuration : formData.procurationType}
+                    </p>
+                  </div>
+                )}
+
+                {formData.observations && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Observações</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{formData.observations}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Documentos</label>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <p className="text-sm text-gray-900">
+                      {petitionDocuments.length} arquivo(s) de petição
+                    </p>
+                    {complementaryDocuments.length > 0 && (
+                      <p className="text-sm text-gray-900">
+                        {complementaryDocuments.length} documento(s) complementar(es)
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Indicador de direcionamento */}
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <p className="text-sm text-blue-800">
+                    <strong>Será direcionado para:</strong> {(() => {
+                      const assignment = determineQueueAssignment(formData, isDistribution);
+                      if (assignment === 'Carlos') {
+                        if (isDistribution) return 'Fila do Carlos (distribuição)';
+                        if (formData.observations.trim()) return 'Fila do Carlos (tem observações)';
+                        if (formData.jurisdiction === '2º Grau') return 'Fila do Carlos (2º grau)';
+                        if (formData.system && formData.court && !checkRobotEligibility(formData.system, formData.court)) {
+                          return 'Fila do Carlos (sistema não suportado pelo robô)';
+                        }
+                        return 'Fila do Carlos';
+                      }
+                      return 'Fila do Robô (automática)';
+                    })()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmSubmit}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Enviando...' : 'Confirmar e Enviar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

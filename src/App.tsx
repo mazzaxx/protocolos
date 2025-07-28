@@ -12,7 +12,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { ReturnedQueue } from './components/ReturnedQueue';
 
 function Dashboard() {
-  const { hasPermission, canAccessQueues } = useAuth();
+  const { hasPermission, canAccessQueues, canAccessSpecificQueue, canMoveToQueue, user } = useAuth();
   type Tab = 'send' | 'robot' | 'carlos' | 'deyse' | 'tracking' | 'returned' | 'admin';
 
   const [activeTab, setActiveTab] = useState<Tab>('send');
@@ -32,11 +32,13 @@ function Dashboard() {
     if (tab.id === 'send') return hasPermission('canSendProtocols');
     if (tab.id === 'tracking') return hasPermission('canViewTracking');
     if (tab.id === 'returned') return hasPermission('canSendProtocols'); // Todos que podem enviar podem ver devolvidos
-    if (['robot', 'carlos', 'deyse'].includes(tab.id)) return canAccessQueues;
-    if (tab.id === 'admin') return hasPermission('canAccessAllQueues'); // Admin e mod podem acessar
+    if (tab.id === 'robot') return canAccessSpecificQueue('robot');
+    if (tab.id === 'carlos') return canAccessSpecificQueue('carlos');
+    if (tab.id === 'deyse') return canAccessSpecificQueue('deyse');
+    if (tab.id === 'admin') return hasPermission('canAccessAllQueues');
     return false;
   });
-
+  
   // Se o usuário não tem acesso à aba atual, redirecionar para a primeira disponível
   React.useEffect(() => {
     if (tabs.length > 0 && !tabs.find(tab => tab.id === activeTab)) {
