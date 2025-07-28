@@ -81,7 +81,7 @@ router.get('/protocolos', (req, res) => {
 router.post('/protocolos', (req, res) => {
   console.log('📝 POST /protocolos chamado');
   console.log('📍 Origin:', req.headers.origin);
-  console.log('📦 Dados recebidos:', JSON.stringify(req.body, null, 2));
+  console.log('📦 Tamanho dos dados recebidos:', JSON.stringify(req.body).length, 'bytes');
   
   const {
     processNumber,
@@ -112,6 +112,16 @@ router.post('/protocolos', (req, res) => {
       message: 'ID do usuário criador é obrigatório'
     });
   }
+  
+  // Validar tamanho dos dados
+  const dataSize = JSON.stringify(req.body).length;
+  if (dataSize > 50 * 1024 * 1024) { // 50MB limit
+    console.error('❌ Dados muito grandes:', dataSize, 'bytes');
+    return res.status(413).json({
+      success: false,
+      message: 'Dados muito grandes. Reduza o tamanho dos arquivos anexados.'
+    });
+  }
 
   const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
   const now = new Date().toISOString();
@@ -127,14 +137,16 @@ router.post('/protocolos', (req, res) => {
 
   console.log('💾 Tentando inserir protocolo:');
   console.log('🆔 ID:', id);
-  console.log('📋 Dados principais:', {
+  console.log('📋 Resumo dos dados:', {
     processNumber: processNumber || 'N/A',
     court: court || 'N/A',
     system: system || 'N/A',
     status: status || 'Aguardando',
     assignedTo: assignedTo || 'null',
     createdBy,
-    isDistribution: Boolean(isDistribution)
+    isDistribution: Boolean(isDistribution),
+    documentsCount: documents ? documents.length : 0,
+    guiasCount: guias ? guias.length : 0
   });
 
   // Preparar dados para inserção
@@ -163,15 +175,7 @@ router.post('/protocolos', (req, res) => {
     JSON.stringify(initialLog)
   ];
 
-  console.log('📊 Dados preparados para inserção:', insertData.map((item, index) => {
-    const fields = [
-      'id', 'processNumber', 'court', 'system', 'jurisdiction', 'processType',
-      'isFatal', 'needsProcuration', 'procurationType', 'needsGuia', 'guias',
-      'petitionType', 'observations', 'documents', 'status', 'assignedTo',
-      'createdBy', 'isDistribution', 'createdAt', 'updatedAt', 'queuePosition', 'activityLog'
-    ];
-    return `${fields[index]}: ${item}`;
-  }));
+  console.log('📊 Dados preparados para inserção (campos principais)');
 
   db.run(`
     INSERT INTO protocolos (
@@ -184,7 +188,7 @@ router.post('/protocolos', (req, res) => {
     if (err) {
       console.error('❌ ERRO CRÍTICO ao inserir protocolo:', err);
       console.error('📋 SQL Error details:', err.message);
-      console.error('📊 Dados que causaram erro:', insertData);
+      console.error('📊 Erro na inserção do protocolo ID:', id);
       return res.status(500).json({ 
         success: false, 
         message: 'Erro ao criar protocolo: ' + err.message,
@@ -196,7 +200,6 @@ router.post('/protocolos', (req, res) => {
     console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
     console.log('🆔 ID do protocolo:', id);
     console.log('📊 Linhas afetadas:', this.changes);
-    console.log('📍 LastID:', this.lastID);
     
     // Verificar se foi realmente inserido
     db.get('SELECT COUNT(*) as count FROM protocolos WHERE id = ?', [id], (countErr, countRow) => {

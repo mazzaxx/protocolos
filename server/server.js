@@ -166,7 +166,9 @@ app.get('/health', (req, res) => {
       memory: process.memoryUsage(),
       version: '1.0.0',
       environment: process.env.NODE_ENV || 'development',
-      message: 'Sistema funcionando - Dados sincronizados entre todos os usuários'
+      message: 'Sistema funcionando - Servidor online e operacional',
+      cors: 'Configurado',
+      routes: 'Ativas'
     });
   }).catch(err => {
     console.error('❌ Erro no health check:', err);
@@ -176,7 +178,7 @@ app.get('/health', (req, res) => {
       timestamp: new Date().toISOString(),
       error: err.message,
       uptime: process.uptime(),
-      message: 'Erro no servidor - Sincronização pode estar comprometida'
+      message: 'Erro no servidor - Sistema temporariamente indisponível'
     });
   });
 });

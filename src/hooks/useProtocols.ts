@@ -195,6 +195,10 @@ export function useProtocols() {
       console.log('📡 Enviando protocolo para:', url);
       console.log('📦 Dados enviados:', JSON.stringify(protocolData, null, 2));
       
+      // Configurar timeout e retry
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -202,17 +206,40 @@ export function useProtocols() {
         },
         credentials: 'include',
         body: JSON.stringify(protocolData),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       console.log('📡 Status da resposta:', response.status);
       
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText = 'Erro desconhecido';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          errorText = `HTTP ${response.status} - ${response.statusText}`;
+        }
         console.error('❌ Erro na resposta do servidor:', response.status, errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        
+        if (response.status >= 500) {
+          throw new Error('Erro interno do servidor. Tente novamente em alguns minutos.');
+        } else if (response.status === 404) {
+          throw new Error('Serviço não encontrado. Verifique a configuração do sistema.');
+        } else if (response.status === 403) {
+          throw new Error('Acesso negado. Verifique suas permissões.');
+        } else {
+          throw new Error(`Erro do servidor (${response.status}): ${errorText}`);
+        }
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error('Resposta inválida do servidor. Tente novamente.');
+      }
+      
       console.log('📦 Resposta do servidor:', data);
       
       if (data.success) {
@@ -233,14 +260,18 @@ export function useProtocols() {
     } catch (error) {
       console.error('❌ ERRO CRÍTICO: Falha ao adicionar protocolo ao servidor:', error);
       
-      // REMOVIDO: Fallback para localStorage - isso causava inconsistência
-      // Agora sempre falha se não conseguir salvar no servidor
-      
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        throw new Error('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.');
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('Timeout: O servidor demorou muito para responder. Tente novamente.');
+        } else if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+          throw new Error('Erro de conexão: Não foi possível conectar ao servidor.\n\nVerifique sua conexão com a internet e tente novamente.');
+        } else {
+          // Re-throw erros específicos que já foram tratados
+          throw error;
+        }
+      } else {
+        throw new Error('Erro desconhecido ao conectar com o servidor.');
       }
-      
-      throw error;
     }
   };
 
