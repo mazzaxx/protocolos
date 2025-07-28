@@ -29,10 +29,9 @@ function ConnectivityStatus() {
     const checkBackend = async () => {
       setLastCheck(new Date());
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-        
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
         
         const response = await fetch(`${apiBaseUrl}/health`, { 
           method: 'GET',
@@ -45,46 +44,52 @@ function ConnectivityStatus() {
         
         if (response.ok) {
           const data = await response.json();
-          console.log('🏥 Health check:', data);
+          console.log('🏥 Health check OK:', data.status);
           setBackendStatus('online');
-          setRetryCount(0); // Reset retry count on success
+          setRetryCount(0);
         } else {
-          console.error('❌ Health check failed:', response.status);
+          console.error('❌ Health check failed - Status:', response.status);
           setBackendStatus('offline');
           setRetryCount(prev => prev + 1);
         }
       } catch (error) {
-        clearTimeout(timeoutId);
-        console.error('❌ Health check error:', error);
+        console.error('❌ Health check error:', error instanceof Error ? error.message : 'Unknown error');
         setBackendStatus('offline');
         setRetryCount(prev => prev + 1);
       }
     };
 
     checkBackend();
-    // Intervalo adaptativo: mais frequente quando offline
-    const intervalTime = backendStatus === 'offline' ? 5000 : 15000;
-    const interval = setInterval(checkBackend, intervalTime);
+    // Verificar mais frequentemente se offline, menos se online
+    const interval = setInterval(checkBackend, backendStatus === 'offline' ? 5000 : 15000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, []);
+  }, [backendStatus]);
 
   if (!isOnline || backendStatus === 'offline') {
     return (
-      <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
+      <div className="bg-red-500 text-white px-4 py-3 text-sm">
         <div className="flex items-center justify-center space-x-2">
-          <span>
+          <div className="flex items-center space-x-2">
+            <div className="animate-pulse w-2 h-2 bg-white rounded-full"></div>
+            <span className="font-medium">
             {!isOnline 
-              ? '🔴 Sem conexão com a internet' 
-              : `🔴 Servidor indisponível - Dados podem não estar sincronizados ${retryCount > 0 ? `(tentativa ${retryCount})` : ''}`
+              ? '🌐 Sem conexão com a internet' 
+              : `🔴 Servidor temporariamente indisponível`
             }
-          </span>
-          <span className="text-xs opacity-75">
-            (última verificação: {lastCheck.toLocaleTimeString()})
+            </span>
+          </div>
+        </div>
+        <div className="text-center mt-1">
+          <span className="text-xs opacity-90">
+            {!isOnline 
+              ? 'Verifique sua conexão e recarregue a página'
+              : `Tentativa ${retryCount} - Reconectando automaticamente...`
+            }
           </span>
         </div>
       </div>
@@ -104,8 +109,11 @@ function ConnectivityStatus() {
 
   // Mostrar status online brevemente
   return (
-    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
-      🟢 Servidor conectado - Sistema funcionando normalmente
+    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center opacity-90">
+      <div className="flex items-center justify-center space-x-1">
+        <div className="w-2 h-2 bg-white rounded-full"></div>
+        <span>Sistema online - Sincronização ativa</span>
+      </div>
     </div>
   );
 }

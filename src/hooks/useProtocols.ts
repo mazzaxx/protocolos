@@ -107,8 +107,6 @@ export function useProtocols() {
     } catch (error) {
       console.error('❌ Erro ao buscar protocolos:', error);
       
-      // REMOVIDO: Fallback para localStorage - isso causava o problema de sincronização
-      // Agora sempre mostra erro quando não consegue conectar ao servidor
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
         console.error('🚨 ERRO CRÍTICO: Não foi possível conectar ao servidor');
         console.error('🔧 Verifique se o servidor backend está rodando');
@@ -129,11 +127,11 @@ export function useProtocols() {
     console.log('🚀 useProtocols: Iniciando fetch inicial...');
     fetchProtocols(true); // Forçar refresh inicial
     
-    // Configurar polling para atualizar a cada 3 segundos (mais frequente para melhor sincronização)
+    // Configurar polling para atualizar a cada 2 segundos (mais frequente para melhor sincronização)
     const interval = setInterval(() => {
       console.log('🔄 Polling: Atualizando protocolos automaticamente...');
       fetchProtocols(false);
-    }, 3000); // 3 segundos
+    }, 2000); // 2 segundos
     
     return () => {
       console.log('🛑 useProtocols: Limpando interval');
@@ -186,60 +184,86 @@ export function useProtocols() {
       // Buscar email do usuário para o log
       const userEmail = await getUserEmailById(protocol.createdBy);
       
+      // Validar dados antes de enviar
+      if (!protocol.createdBy || typeof protocol.createdBy !== 'number') {
+        throw new Error('ID do usuário é obrigatório e deve ser um número válido');
+      }
+      
+      // Garantir que documents e guias são arrays
+      const safeDocuments = Array.isArray(protocol.documents) ? protocol.documents : [];
+      const safeGuias = Array.isArray(protocol.guias) ? protocol.guias : [];
+      
       const protocolData = {
         ...protocol,
-        createdByEmail: userEmail
+        documents: safeDocuments,
+        guias: safeGuias,
+        createdByEmail: userEmail,
+        // Garantir que campos obrigatórios existem
+        processNumber: protocol.processNumber || '',
+        court: protocol.court || '',
+        system: protocol.system || '',
+        jurisdiction: protocol.jurisdiction || '',
+        processType: protocol.processType || 'civel',
+        petitionType: protocol.petitionType || '',
+        observations: protocol.observations || ''
       };
       
       const url = `${apiBaseUrl}/api/protocolos`;
       console.log('📡 Enviando protocolo para:', url);
-      console.log('📦 Dados enviados:', JSON.stringify(protocolData, null, 2));
-      
-      // Configurar timeout e retry
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos
+      console.log('📦 Dados enviados (resumo):', {
+        processNumber: protocolData.processNumber,
+        court: protocolData.court,
+        createdBy: protocolData.createdBy,
+        documentsCount: protocolData.documents.length,
+        guiasCount: protocolData.guias.length
+      });
       
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         credentials: 'include',
         body: JSON.stringify(protocolData),
-        signal: controller.signal
       });
-      
-      clearTimeout(timeoutId);
 
       console.log('📡 Status da resposta:', response.status);
+      console.log('📡 Headers da resposta:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
-        let errorText = 'Erro desconhecido';
-        try {
-          errorText = await response.text();
-        } catch (e) {
-          errorText = `HTTP ${response.status} - ${response.statusText}`;
-        }
-        console.error('❌ Erro na resposta do servidor:', response.status, errorText);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorDetails = '';
         
-        if (response.status >= 500) {
-          throw new Error('Erro interno do servidor. Tente novamente em alguns minutos.');
-        } else if (response.status === 404) {
-          throw new Error('Serviço não encontrado. Verifique a configuração do sistema.');
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          errorDetails = errorData.error || '';
+          console.error('❌ Erro JSON do servidor:', errorData);
+        } catch {
+          const errorText = await response.text();
+          console.error('❌ Erro texto do servidor:', errorText);
+          errorMessage = errorText || errorMessage;
+        }
+        
+        // Mensagens de erro mais específicas
+        if (response.status === 400) {
+          throw new Error(`Dados inválidos: ${errorMessage}`);
+        } else if (response.status === 401) {
+          throw new Error('Não autorizado. Faça login novamente.');
         } else if (response.status === 403) {
           throw new Error('Acesso negado. Verifique suas permissões.');
+        } else if (response.status === 500) {
+          if (errorDetails.includes('FOREIGN KEY')) {
+            throw new Error('Usuário não encontrado. Faça login novamente.');
+          }
+          throw new Error(`Erro interno do servidor: ${errorMessage}`);
         } else {
-          throw new Error(`Erro do servidor (${response.status}): ${errorText}`);
+          throw new Error(`Erro ${response.status}: ${errorMessage}`);
         }
       }
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (e) {
-        throw new Error('Resposta inválida do servidor. Tente novamente.');
-      }
-      
+      const data = await response.json();
       console.log('📦 Resposta do servidor:', data);
       
       if (data.success) {
@@ -250,7 +274,7 @@ export function useProtocols() {
         setTimeout(() => {
           console.log('🔄 Forçando refresh após criação...');
           forceRefresh();
-        }, 500);
+        }, 100); // Reduzir delay para resposta mais rápida
         
         return data.protocolo;
       } else {
@@ -260,18 +284,16 @@ export function useProtocols() {
     } catch (error) {
       console.error('❌ ERRO CRÍTICO: Falha ao adicionar protocolo ao servidor:', error);
       
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new Error('Timeout: O servidor demorou muito para responder. Tente novamente.');
-        } else if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
-          throw new Error('Erro de conexão: Não foi possível conectar ao servidor.\n\nVerifique sua conexão com a internet e tente novamente.');
-        } else {
-          // Re-throw erros específicos que já foram tratados
-          throw error;
-        }
-      } else {
-        throw new Error('Erro desconhecido ao conectar com o servidor.');
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        throw new Error('ERRO DE CONEXÃO: Não foi possível conectar ao servidor.\n\nVerifique:\n• Se o servidor está rodando\n• Sua conexão com a internet\n• Se não há bloqueios de firewall');
       }
+      
+      if (error instanceof Error) {
+        // Se já é um erro com mensagem específica, manter a mensagem
+        throw error;
+      }
+      
+      throw new Error('Erro desconhecido ao salvar protocolo. Tente novamente.');
     }
   };
 
@@ -317,7 +339,7 @@ export function useProtocols() {
         setTimeout(() => {
           console.log('🔄 Forçando refresh após atualização...');
           forceRefresh();
-        }, 500);
+        }, 100);
         
         return true;
       } else {
@@ -325,10 +347,6 @@ export function useProtocols() {
       }
     } catch (error) {
       console.error('❌ ERRO CRÍTICO: Falha ao atualizar protocolo no servidor:', error);
-      
-      // REMOVIDO: Fallback para localStorage
-      // Agora sempre falha se não conseguir atualizar no servidor
-      
       return false;
     }
   };
