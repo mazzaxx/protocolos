@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db, { initializeDb } from './db.js';
+import db, { initializeDb, testConnection, getDatabaseStats } from './db.js';
 import authRoutes from './auth.js';
 import adminRoutes from './admin.js';
 import protocolRoutes from './protocols.js';
@@ -72,6 +72,14 @@ console.log('Inicializando banco de dados...');
 try {
   await initializeDb();
   console.log('Banco de dados inicializado com sucesso!');
+  
+  // Testar conectividade
+  await testConnection();
+  
+  // Obter estatísticas iniciais
+  const stats = await getDatabaseStats();
+  console.log('📊 Estatísticas do banco:', stats);
+  
 } catch (error) {
   console.error('Erro ao inicializar banco de dados:', error);
   process.exit(1);
@@ -146,27 +154,27 @@ app.get('/api/test', (req, res) => {
 app.get('/health', (req, res) => {
   console.log('🏥 Health check solicitado');
   
-  // Verificar se o banco está funcionando
-  db.get("SELECT COUNT(*) as count FROM funcionarios", (err, row) => {
-    if (err) {
-      console.error('❌ Erro no health check:', err);
-      return res.status(500).json({
-        status: 'unhealthy',
-        database: 'error',
-        timestamp: new Date().toISOString(),
-        error: err.message
-      });
-    }
-    
-    console.log('✅ Health check OK');
+  // Verificar se o banco está funcionando e obter estatísticas completas
+  getDatabaseStats().then(stats => {
+    console.log('✅ Health check OK - Stats:', stats);
     res.json({
       status: 'healthy',
       database: 'connected',
-      users: row.count,
+      stats,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       memory: process.memoryUsage(),
-      version: '1.0.0'
+      version: '1.0.0',
+      environment: process.env.NODE_ENV || 'development'
+    });
+  }).catch(err => {
+    console.error('❌ Erro no health check:', err);
+    res.status(500).json({
+      status: 'unhealthy',
+      database: 'error',
+      timestamp: new Date().toISOString(),
+      error: err.message,
+      uptime: process.uptime()
     });
   });
 });

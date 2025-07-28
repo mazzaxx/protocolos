@@ -15,6 +15,7 @@ import { ReturnedQueue } from './components/ReturnedQueue';
 function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
+  const [lastCheck, setLastCheck] = React.useState<Date>(new Date());
 
   React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -25,20 +26,31 @@ function ConnectivityStatus() {
 
     // Verificar status do backend
     const checkBackend = async () => {
+      setLastCheck(new Date());
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-        const response = await fetch(`${apiBaseUrl}/`, { 
+        const response = await fetch(`${apiBaseUrl}/health`, { 
           method: 'GET',
-          credentials: 'include'
+          credentials: 'include',
+          cache: 'no-cache'
         });
-        setBackendStatus(response.ok ? 'online' : 'offline');
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('🏥 Health check:', data);
+          setBackendStatus('online');
+        } else {
+          console.error('❌ Health check failed:', response.status);
+          setBackendStatus('offline');
+        }
       } catch {
+        console.error('❌ Health check error');
         setBackendStatus('offline');
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 30000); // Verificar a cada 30 segundos
+    const interval = setInterval(checkBackend, 15000); // Verificar a cada 15 segundos
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -50,7 +62,10 @@ function ConnectivityStatus() {
   if (!isOnline || backendStatus === 'offline') {
     return (
       <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
-        {!isOnline ? '🔴 Sem conexão com a internet' : '🔴 Servidor temporariamente indisponível'}
+        {!isOnline 
+          ? '🔴 Sem conexão com a internet' 
+          : `🔴 Servidor temporariamente indisponível (última verificação: ${lastCheck.toLocaleTimeString()})`
+        }
       </div>
     );
   }

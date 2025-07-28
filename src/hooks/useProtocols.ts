@@ -34,10 +34,30 @@ export function useProtocols() {
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [userEmails, setUserEmails] = useState<Record<number, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0);
 
   // Função para buscar protocolos do servidor
-  const fetchProtocols = async () => {
+  const fetchProtocols = async (forceRefresh = false) => {
+    // Evitar múltiplas requisições simultâneas
+    const now = Date.now();
+    if (!forceRefresh && isLoading) {
+      console.log('🔄 Requisição já em andamento, ignorando...');
+      return;
+    }
+
+    // Throttle: evitar requisições muito frequentes (mínimo 1 segundo)
+    if (!forceRefresh && (now - lastFetchTime) < 1000) {
+      console.log('⏱️ Throttle ativo, aguardando...');
+      return;
+    }
+
+    setIsLoading(true);
+    setLastFetchTime(now);
+    
     console.log('🔄 Buscando protocolos do servidor...');
+    console.log('🌐 Modo:', forceRefresh ? 'Forçado' : 'Normal');
+    
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const url = `${apiBaseUrl}/api/protocolos`;
@@ -47,9 +67,13 @@ export function useProtocols() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=0',
         },
         credentials: 'include'
       });
+      
+      console.log('📡 Status da resposta:', response.status);
+      console.log('📡 Headers da resposta:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         console.error('❌ Erro na resposta:', response.status, response.statusText);
@@ -57,48 +81,88 @@ export function useProtocols() {
       }
       
       const data = await response.json();
-      console.log('📦 Dados recebidos:', data);
+      console.log('📦 Dados recebidos do servidor:');
+      console.log('✅ Success:', data.success);
+      console.log('📊 Total de protocolos:', data.total || data.protocolos?.length || 0);
+      console.log('⏰ Timestamp do servidor:', data.timestamp);
       
-      if (data.success) {
+      if (data.success && Array.isArray(data.protocolos)) {
         const protocolsWithDates = data.protocolos.map((p: any) => ({
           ...p,
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt),
         }));
+        
         console.log('✅ Protocolos processados:', protocolsWithDates.length);
+        console.log('📋 Últimos 3 protocolos:', protocolsWithDates.slice(0, 3).map(p => ({
+          id: p.id,
+          processNumber: p.processNumber,
+          status: p.status,
+          assignedTo: p.assignedTo,
+          createdBy: p.createdBy,
+          createdAt: p.createdAt
+        })));
+        
         setProtocols(protocolsWithDates);
+        
+        // Salvar no localStorage como backup
+        localStorage.setItem('protocols', JSON.stringify(protocolsWithDates));
+        localStorage.setItem('protocols_timestamp', now.toString());
+        
       } else {
-        console.error('❌ Resposta sem sucesso:', data);
+        console.error('❌ Resposta inválida do servidor:', data);
+        throw new Error('Resposta inválida do servidor');
       }
     } catch (error) {
       console.error('❌ Erro ao buscar protocolos:', error);
       
       // Em caso de erro, tentar carregar do localStorage como fallback
       const stored = localStorage.getItem('protocols');
+      const storedTimestamp = localStorage.getItem('protocols_timestamp');
+      
       if (stored) {
         console.log('📂 Carregando do localStorage como fallback');
-        const parsed = JSON.parse(stored);
-        setProtocols(parsed.map((p: any) => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt),
-        })));
+        try {
+          const parsed = JSON.parse(stored);
+          const protocolsWithDates = parsed.map((p: any) => ({
+            ...p,
+            createdAt: new Date(p.createdAt),
+            updatedAt: new Date(p.updatedAt),
+          }));
+          setProtocols(protocolsWithDates);
+          
+          console.log('📂 Dados do localStorage carregados:', protocolsWithDates.length, 'protocolos');
+          console.log('⏰ Timestamp do localStorage:', storedTimestamp ? new Date(parseInt(storedTimestamp)).toISOString() : 'N/A');
+        } catch (parseError) {
+          console.error('❌ Erro ao parsear dados do localStorage:', parseError);
+          setProtocols([]);
+        }
       } else {
         console.log('❌ Nenhum dado no localStorage');
+        setProtocols([]);
       }
+      
+      // Re-throw o erro para que o componente possa lidar com ele se necessário
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProtocols();
+    console.log('🚀 useProtocols: Iniciando fetch inicial...');
+    fetchProtocols(true); // Forçar refresh inicial
     
-    // Configurar polling para atualizar a cada 10 segundos
+    // Configurar polling para atualizar a cada 5 segundos (reduzido de 10)
     const interval = setInterval(() => {
-      console.log('🔄 Atualizando protocolos automaticamente...');
-      fetchProtocols();
-    }, 10000); // 10 segundos
+      console.log('🔄 Polling: Atualizando protocolos automaticamente...');
+      fetchProtocols(false);
+    }, 5000); // 5 segundos
     
-    return () => clearInterval(interval);
+    return () => {
+      console.log('🛑 useProtocols: Limpando interval');
+      clearInterval(interval);
+    };
   }, [updateTrigger]);
 
   // Carregar emails dos usuários quando os protocolos mudarem
@@ -133,11 +197,13 @@ export function useProtocols() {
   }, [protocols]);
 
   const forceRefresh = () => {
+    console.log('🔄 Forçando refresh dos protocolos...');
     setUpdateTrigger(prev => prev + 1);
   };
 
   const addProtocol = async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
     console.log('➕ Adicionando novo protocolo:', protocol);
+    
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       
@@ -150,8 +216,8 @@ export function useProtocols() {
       };
       
       const url = `${apiBaseUrl}/api/protocolos`;
-      console.log('📡 Enviando para:', url);
-      console.log('📦 Dados enviados:', protocolData);
+      console.log('📡 Enviando protocolo para:', url);
+      console.log('📦 Dados enviados:', JSON.stringify(protocolData, null, 2));
       
       const response = await fetch(url, {
         method: 'POST',
@@ -166,21 +232,27 @@ export function useProtocols() {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Erro na resposta:', response.status, errorText);
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.error('❌ Erro na resposta do servidor:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('📦 Resposta recebida:', data);
+      console.log('📦 Resposta do servidor:', data);
       
       if (data.success) {
         console.log('✅ Protocolo criado com sucesso no servidor!');
-        // Atualizar lista local
-        forceRefresh();
+        console.log('🆔 ID do protocolo criado:', data.protocolo?.id);
+        
+        // Forçar atualização imediata da lista
+        setTimeout(() => {
+          console.log('🔄 Forçando refresh após criação...');
+          forceRefresh();
+        }, 500);
+        
         return data.protocolo;
       } else {
-        console.error('❌ Resposta sem sucesso:', data);
-        throw new Error(data.message || 'Erro ao criar protocolo');
+        console.error('❌ Resposta sem sucesso do servidor:', data);
+        throw new Error(data.message || 'Erro ao criar protocolo no servidor');
       }
     } catch (error) {
       console.error('❌ Erro ao adicionar protocolo:', error);
@@ -189,7 +261,7 @@ export function useProtocols() {
       console.log('💾 Salvando no localStorage como fallback');
       const newProtocol: Protocol = {
         ...protocol,
-        id: Date.now().toString(),
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         needsGuia: protocol.needsGuia || false,
         guias: protocol.guias || [],
         processType: protocol.processType || 'civel',
@@ -197,10 +269,10 @@ export function useProtocols() {
         updatedAt: new Date(),
         queuePosition: protocols.filter(p => p.status === 'Aguardando').length + 1,
         activityLog: [{
-          id: Date.now().toString(),
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           timestamp: new Date(),
           action: 'created',
-          description: 'Protocolo criado',
+          description: 'Protocolo criado (offline)',
           performedBy: userEmails[protocol.createdBy] || 'Usuário'
         }]
       };
@@ -208,6 +280,13 @@ export function useProtocols() {
       const newProtocols = [...protocols, newProtocol];
       localStorage.setItem('protocols', JSON.stringify(newProtocols));
       setProtocols(newProtocols);
+      
+      // Tentar sincronizar com servidor em background
+      setTimeout(() => {
+        console.log('🔄 Tentando sincronizar com servidor...');
+        fetchProtocols(true);
+      }, 2000);
+      
       return newProtocol;
     }
   };
@@ -227,6 +306,9 @@ export function useProtocols() {
         };
       }
       
+      console.log('🔄 Atualizando protocolo no servidor:', id);
+      console.log('📦 Dados de atualização:', updateData);
+      
       const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
         method: 'PUT',
         headers: {
@@ -237,14 +319,22 @@ export function useProtocols() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Erro ao atualizar no servidor:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
       
       if (data.success) {
         console.log('✅ Protocolo atualizado no servidor');
-        forceRefresh();
+        
+        // Forçar atualização imediata da lista
+        setTimeout(() => {
+          console.log('🔄 Forçando refresh após atualização...');
+          forceRefresh();
+        }, 500);
+        
         return true;
       } else {
         throw new Error(data.message || 'Erro ao atualizar protocolo');
@@ -502,6 +592,7 @@ export function useProtocols() {
     protocols,
     userEmails,
     updateTrigger,
+    isLoading,
     forceRefresh,
     addProtocol,
     updateProtocolStatus,
