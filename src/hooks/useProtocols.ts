@@ -21,10 +21,6 @@ const getUserEmailById = async (userId: number): Promise<string> => {
     }
     return 'Email não disponível';
   } catch (error) {
-    if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      console.error('Erro: Não foi possível conectar ao servidor');
-      return 'Servidor offline';
-    }
     console.error('Erro ao buscar email do usuário:', error);
     return 'Email não disponível';
   }
@@ -73,7 +69,6 @@ export function useProtocols() {
       });
       
       console.log('📡 Status da resposta:', response.status);
-      console.log('📡 Headers da resposta:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         console.error('❌ Erro na resposta:', response.status, response.statusText);
@@ -105,10 +100,6 @@ export function useProtocols() {
         
         setProtocols(protocolsWithDates);
         
-        // Salvar no localStorage como backup
-        localStorage.setItem('protocols', JSON.stringify(protocolsWithDates));
-        localStorage.setItem('protocols_timestamp', now.toString());
-        
       } else {
         console.error('❌ Resposta inválida do servidor:', data);
         throw new Error('Resposta inválida do servidor');
@@ -116,31 +107,16 @@ export function useProtocols() {
     } catch (error) {
       console.error('❌ Erro ao buscar protocolos:', error);
       
-      // Em caso de erro, tentar carregar do localStorage como fallback
-      const stored = localStorage.getItem('protocols');
-      const storedTimestamp = localStorage.getItem('protocols_timestamp');
-      
-      if (stored) {
-        console.log('📂 Carregando do localStorage como fallback');
-        try {
-          const parsed = JSON.parse(stored);
-          const protocolsWithDates = parsed.map((p: any) => ({
-            ...p,
-            createdAt: new Date(p.createdAt),
-            updatedAt: new Date(p.updatedAt),
-          }));
-          setProtocols(protocolsWithDates);
-          
-          console.log('📂 Dados do localStorage carregados:', protocolsWithDates.length, 'protocolos');
-          console.log('⏰ Timestamp do localStorage:', storedTimestamp ? new Date(parseInt(storedTimestamp)).toISOString() : 'N/A');
-        } catch (parseError) {
-          console.error('❌ Erro ao parsear dados do localStorage:', parseError);
-          setProtocols([]);
-        }
-      } else {
-        console.log('❌ Nenhum dado no localStorage');
-        setProtocols([]);
+      // REMOVIDO: Fallback para localStorage - isso causava o problema de sincronização
+      // Agora sempre mostra erro quando não consegue conectar ao servidor
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        console.error('🚨 ERRO CRÍTICO: Não foi possível conectar ao servidor');
+        console.error('🔧 Verifique se o servidor backend está rodando');
+        console.error('🌐 URL tentada:', import.meta.env.VITE_API_BASE_URL || 'localhost');
       }
+      
+      // Manter lista vazia se não conseguir conectar
+      setProtocols([]);
       
       // Re-throw o erro para que o componente possa lidar com ele se necessário
       throw error;
@@ -153,11 +129,11 @@ export function useProtocols() {
     console.log('🚀 useProtocols: Iniciando fetch inicial...');
     fetchProtocols(true); // Forçar refresh inicial
     
-    // Configurar polling para atualizar a cada 5 segundos (reduzido de 10)
+    // Configurar polling para atualizar a cada 3 segundos (mais frequente para melhor sincronização)
     const interval = setInterval(() => {
       console.log('🔄 Polling: Atualizando protocolos automaticamente...');
       fetchProtocols(false);
-    }, 5000); // 5 segundos
+    }, 3000); // 3 segundos
     
     return () => {
       console.log('🛑 useProtocols: Limpando interval');
@@ -255,39 +231,16 @@ export function useProtocols() {
         throw new Error(data.message || 'Erro ao criar protocolo no servidor');
       }
     } catch (error) {
-      console.error('❌ Erro ao adicionar protocolo:', error);
+      console.error('❌ ERRO CRÍTICO: Falha ao adicionar protocolo ao servidor:', error);
       
-      // Fallback: salvar no localStorage
-      console.log('💾 Salvando no localStorage como fallback');
-      const newProtocol: Protocol = {
-        ...protocol,
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        needsGuia: protocol.needsGuia || false,
-        guias: protocol.guias || [],
-        processType: protocol.processType || 'civel',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        queuePosition: protocols.filter(p => p.status === 'Aguardando').length + 1,
-        activityLog: [{
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          timestamp: new Date(),
-          action: 'created',
-          description: 'Protocolo criado (offline)',
-          performedBy: userEmails[protocol.createdBy] || 'Usuário'
-        }]
-      };
+      // REMOVIDO: Fallback para localStorage - isso causava inconsistência
+      // Agora sempre falha se não conseguir salvar no servidor
       
-      const newProtocols = [...protocols, newProtocol];
-      localStorage.setItem('protocols', JSON.stringify(newProtocols));
-      setProtocols(newProtocols);
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        throw new Error('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.');
+      }
       
-      // Tentar sincronizar com servidor em background
-      setTimeout(() => {
-        console.log('🔄 Tentando sincronizar com servidor...');
-        fetchProtocols(true);
-      }, 2000);
-      
-      return newProtocol;
+      throw error;
     }
   };
 
@@ -340,7 +293,11 @@ export function useProtocols() {
         throw new Error(data.message || 'Erro ao atualizar protocolo');
       }
     } catch (error) {
-      console.error('❌ Erro ao atualizar protocolo no servidor:', error);
+      console.error('❌ ERRO CRÍTICO: Falha ao atualizar protocolo no servidor:', error);
+      
+      // REMOVIDO: Fallback para localStorage
+      // Agora sempre falha se não conseguir atualizar no servidor
+      
       return false;
     }
   };
@@ -349,32 +306,15 @@ export function useProtocols() {
     const success = await updateProtocolInServer(id, { status }, performedBy);
     
     if (!success) {
-      // Fallback: atualizar localStorage
-      const newProtocols = protocols.map(p => 
-        p.id === id ? {
-          ...p,
-          status,
-          updatedAt: new Date(),
-          activityLog: [
-            ...(p.activityLog || []),
-            {
-              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-              timestamp: new Date(),
-              action: 'status_changed',
-              description: `Status alterado para: ${status}`,
-              performedBy: performedBy || 'Sistema'
-            }
-          ]
-        } : p
-      );
-      localStorage.setItem('protocols', JSON.stringify(newProtocols));
-      setProtocols(newProtocols);
+      throw new Error('Falha ao atualizar status no servidor');
     }
   };
 
   const returnProtocol = async (id: string, returnReason: string, performedBy?: string) => {
     const foundProtocol = protocols.find(p => p.id === id);
-    if (!foundProtocol) return;
+    if (!foundProtocol) {
+      throw new Error('Protocolo não encontrado');
+    }
     
     let updates: any = {};
     
@@ -411,20 +351,7 @@ export function useProtocols() {
     const success = await updateProtocolInServer(id, updates);
     
     if (!success) {
-      // Fallback: atualizar localStorage
-      const newProtocols = protocols.map(p => 
-        p.id === id ? {
-          ...p,
-          ...updates,
-          updatedAt: new Date(),
-          activityLog: [
-            ...(p.activityLog || []),
-            updates.newLogEntry
-          ]
-        } : p
-      );
-      localStorage.setItem('protocols', JSON.stringify(newProtocols));
-      setProtocols(newProtocols);
+      throw new Error('Falha ao devolver protocolo no servidor');
     }
 
     // Fazer o ícone do navegador piscar quando protocolo é devolvido
@@ -502,20 +429,7 @@ export function useProtocols() {
     const success = await updateProtocolInServer(id, updates);
     
     if (!success) {
-      // Fallback: atualizar localStorage
-      const newProtocols = protocols.map(p => 
-        p.id === id ? {
-          ...p,
-          assignedTo,
-          updatedAt: new Date(),
-          activityLog: [
-            ...(p.activityLog || []),
-            updates.newLogEntry
-          ]
-        } : p
-      );
-      localStorage.setItem('protocols', JSON.stringify(newProtocols));
-      setProtocols(newProtocols);
+      throw new Error('Falha ao mover protocolo no servidor');
     }
   };
 
@@ -540,20 +454,7 @@ export function useProtocols() {
     const success = await updateProtocolInServer(id, updates);
     
     if (!success) {
-      // Fallback: atualizar localStorage
-      const newProtocols = protocols.map(p => 
-        p.id === id ? {
-          ...p,
-          status: 'Cancelado' as const,
-          updatedAt: new Date(),
-          activityLog: [
-            ...(p.activityLog || []),
-            updates.newLogEntry
-          ]
-        } : p
-      );
-      localStorage.setItem('protocols', JSON.stringify(newProtocols));
-      setProtocols(newProtocols);
+      throw new Error('Falha ao cancelar protocolo no servidor');
     }
   };
 
@@ -571,20 +472,7 @@ export function useProtocols() {
     const success = await updateProtocolInServer(id, updateData);
     
     if (!success) {
-      // Fallback: atualizar localStorage
-      const newProtocols = protocols.map(p => 
-        p.id === id ? {
-          ...p,
-          ...updates,
-          updatedAt: new Date(),
-          activityLog: [
-            ...(p.activityLog || []),
-            updateData.newLogEntry
-          ]
-        } : p
-      );
-      localStorage.setItem('protocols', JSON.stringify(newProtocols));
-      setProtocols(newProtocols);
+      throw new Error('Falha ao atualizar protocolo no servidor');
     }
   };
 

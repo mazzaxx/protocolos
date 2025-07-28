@@ -50,7 +50,7 @@ function ConnectivityStatus() {
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 15000); // Verificar a cada 15 segundos
+    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -62,10 +62,17 @@ function ConnectivityStatus() {
   if (!isOnline || backendStatus === 'offline') {
     return (
       <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
-        {!isOnline 
-          ? '🔴 Sem conexão com a internet' 
-          : `🔴 Servidor temporariamente indisponível (última verificação: ${lastCheck.toLocaleTimeString()})`
-        }
+        <div className="flex items-center justify-center space-x-2">
+          <span>
+            {!isOnline 
+              ? '🔴 Sem conexão com a internet' 
+              : `🔴 Servidor indisponível - Dados podem não estar sincronizados`
+            }
+          </span>
+          <span className="text-xs opacity-75">
+            (última verificação: {lastCheck.toLocaleTimeString()})
+          </span>
+        </div>
       </div>
     );
   }
@@ -73,12 +80,20 @@ function ConnectivityStatus() {
   if (backendStatus === 'checking') {
     return (
       <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
-        🟡 Verificando conexão com o servidor...
+        <div className="flex items-center justify-center space-x-2">
+          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+          <span>🟡 Verificando sincronização com o servidor...</span>
+        </div>
       </div>
     );
   }
 
-  return null;
+  // Mostrar status online brevemente
+  return (
+    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
+      🟢 Sistema sincronizado - Dados atualizados em tempo real
+    </div>
+  );
 }
 
 function Dashboard() {

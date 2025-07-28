@@ -254,6 +254,10 @@ export function ProtocolForm() {
       console.log('✅ Protocolo adicionado:', result);
 
       setSubmitSuccess(true);
+      
+      // Mostrar mensagem de sucesso com informação sobre sincronização
+      console.log('🌐 Protocolo salvo no servidor e sincronizado com todos os usuários');
+      
       setFormData({
         processNumber: '',
         court: '',
@@ -277,7 +281,7 @@ export function ProtocolForm() {
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
       console.error('❌ Erro ao enviar protocolo:', error);
-      alert('Erro ao enviar protocolo. Verifique a conexão e tente novamente.');
+      alert('ERRO CRÍTICO: Não foi possível salvar o protocolo no servidor.\n\nIsso significa que o protocolo NÃO será visível para outros usuários.\n\nVerifique sua conexão com a internet e tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

@@ -165,7 +165,8 @@ app.get('/health', (req, res) => {
       uptime: process.uptime(),
       memory: process.memoryUsage(),
       version: '1.0.0',
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'development',
+      message: 'Sistema funcionando - Dados sincronizados entre todos os usuários'
     });
   }).catch(err => {
     console.error('❌ Erro no health check:', err);
@@ -174,7 +175,8 @@ app.get('/health', (req, res) => {
       database: 'error',
       timestamp: new Date().toISOString(),
       error: err.message,
-      uptime: process.uptime()
+      uptime: process.uptime(),
+      message: 'Erro no servidor - Sincronização pode estar comprometida'
     });
   });
 });

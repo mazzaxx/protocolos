@@ -100,6 +100,22 @@ npm run build
 npm run preview:production
 ```
 
+## 🔄 Sincronização de Dados
+
+**IMPORTANTE:** Este sistema funciona com sincronização em tempo real entre todos os usuários.
+
+### Como funciona:
+- Todos os protocolos são salvos no servidor (Railway)
+- Dados são sincronizados automaticamente a cada 3 segundos
+- Mudanças feitas por qualquer usuário aparecem para todos
+- **NÃO há armazenamento local** - tudo depende do servidor
+
+### Se os dados não estão sincronizando:
+1. Verifique se o servidor backend está online
+2. Teste a URL: https://sistema-protocolos-juridicos-production.up.railway.app
+3. Verifique o console do navegador (F12) para erros
+4. Certifique-se de que a variável `VITE_API_BASE_URL` está configurada corretamente
+
 ## Acesso ao sistema
 
 - **URL de desenvolvimento:** http://localhost:5173
