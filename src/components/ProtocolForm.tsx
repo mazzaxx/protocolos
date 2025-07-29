@@ -194,15 +194,8 @@ export function ProtocolForm() {
 
     setIsSubmitting(true);
     console.log('🚀 Iniciando envio do protocolo...');
-    console.log('👤 Usuário atual:', user);
     
     try {
-      // Validação adicional antes do envio
-      if (!user || !user.id) {
-        throw new Error('Usuário não está logado corretamente. Faça login novamente.');
-      }
-      
-      console.log('📋 Convertendo arquivos para base64...');
       // Converter arquivos de petição para base64
       const petitionProtocolDocuments = await Promise.all(
         petitionDocuments.map(async (file) => ({
@@ -229,7 +222,6 @@ export function ProtocolForm() {
 
       // Combinar todos os documentos
       const allDocuments = [...petitionProtocolDocuments, ...complementaryProtocolDocuments];
-      console.log('📎 Total de documentos processados:', allDocuments.length);
 
       // Lógica de direcionamento automático
       const assignedTo = determineQueueAssignment(formData, isDistribution);
@@ -244,7 +236,6 @@ export function ProtocolForm() {
         ? customPetitionType.trim()
         : formData.petitionType;
 
-      console.log('📋 Preparando dados do protocolo...');
       const protocolData = {
         ...formData,
         petitionType: finalPetitionType,
@@ -257,16 +248,8 @@ export function ProtocolForm() {
         isDistribution,
       };
       
-      console.log('📋 Dados do protocolo preparados (resumo):', {
-        processNumber: protocolData.processNumber,
-        court: protocolData.court,
-        createdBy: protocolData.createdBy,
-        documentsCount: protocolData.documents.length,
-        assignedTo: protocolData.assignedTo,
-        dataSize: JSON.stringify(protocolData).length + ' bytes'
-      });
+      console.log('📋 Dados do protocolo preparados:', protocolData);
       
-      console.log('📡 Enviando protocolo para o servidor...');
       const result = await addProtocol(protocolData);
       console.log('✅ Protocolo adicionado:', result);
 
@@ -275,7 +258,6 @@ export function ProtocolForm() {
       // Mostrar mensagem de sucesso com informação sobre sincronização
       console.log('🌐 Protocolo salvo no servidor e sincronizado com todos os usuários');
       
-      // Limpar formulário
       setFormData({
         processNumber: '',
         court: '',
@@ -299,44 +281,7 @@ export function ProtocolForm() {
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
       console.error('❌ Erro ao enviar protocolo:', error);
-      
-      // Mostrar erro mais específico baseado no tipo de erro
-      let errorMessage = 'ERRO: Não foi possível salvar o protocolo.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('ERRO DE CONEXÃO') || error.message.includes('Failed to fetch')) {
-          errorMessage = '🔌 ERRO DE CONEXÃO\n\n' +
-                       'Não foi possível conectar ao servidor.\n\n' +
-                       '✅ Soluções:\n' +
-                       '• Verifique sua conexão com a internet\n' +
-                       '• Aguarde alguns segundos e tente novamente\n' +
-                       '• Se o problema persistir, contate o suporte\n\n' +
-                       '⚠️ Seus dados não foram perdidos - tente reenviar.';
-        } else if (error.message.includes('Usuário não encontrado') || error.message.includes('login') || error.message.includes('Não autorizado')) {
-          errorMessage = '🔐 SESSÃO EXPIRADA\n\n' +
-                       'Sua sessão expirou por segurança.\n\n' +
-                       '✅ Solução:\n' +
-                       '• Faça login novamente\n' +
-                       '• Seus dados do formulário serão mantidos\n' +
-                       '• Após o login, tente enviar novamente';
-        } else if (error.message.includes('Dados inválidos') || error.message.includes('obrigatório')) {
-          errorMessage = '📋 DADOS INVÁLIDOS\n\n' +
-                       'Alguns dados do protocolo estão incorretos.\n\n' +
-                       '✅ Solução:\n' +
-                       '• Verifique todos os campos obrigatórios\n' +
-                       '• Certifique-se de que os arquivos são válidos\n' +
-                       '• Tente enviar novamente\n\n' +
-                       `Detalhes: ${error.message}`;
-        } else {
-          errorMessage = `❌ ERRO INESPERADO\n\n${error.message}\n\n` +
-                       '✅ Soluções:\n' +
-                       '• Tente novamente em alguns segundos\n' +
-                       '• Se persistir, recarregue a página\n' +
-                       '• Contate o suporte se necessário';
-        }
-      }
-      
-      alert(errorMessage);
+      alert('ERRO CRÍTICO: Não foi possível salvar o protocolo no servidor.\n\nIsso significa que o protocolo NÃO será visível para outros usuários.\n\nVerifique sua conexão com a internet e tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

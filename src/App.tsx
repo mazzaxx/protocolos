@@ -16,7 +16,6 @@ function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
   const [lastCheck, setLastCheck] = React.useState<Date>(new Date());
-  const [retryCount, setRetryCount] = React.useState(0);
 
   React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -29,67 +28,49 @@ function ConnectivityStatus() {
     const checkBackend = async () => {
       setLastCheck(new Date());
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
-        
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
         const response = await fetch(`${apiBaseUrl}/health`, { 
           method: 'GET',
           credentials: 'include',
-          cache: 'no-cache',
-          signal: controller.signal
+          cache: 'no-cache'
         });
-        
-        clearTimeout(timeoutId);
         
         if (response.ok) {
           const data = await response.json();
-          console.log('🏥 Health check OK:', data.status);
+          console.log('🏥 Health check:', data);
           setBackendStatus('online');
-          setRetryCount(0);
         } else {
-          console.error('❌ Health check failed - Status:', response.status);
+          console.error('❌ Health check failed:', response.status);
           setBackendStatus('offline');
-          setRetryCount(prev => prev + 1);
         }
-      } catch (error) {
-        console.error('❌ Health check error:', error instanceof Error ? error.message : 'Unknown error');
+      } catch {
+        console.error('❌ Health check error');
         setBackendStatus('offline');
-        setRetryCount(prev => prev + 1);
       }
     };
 
     checkBackend();
-    // Verificar mais frequentemente se offline, menos se online
-    const interval = setInterval(checkBackend, backendStatus === 'offline' ? 5000 : 15000);
+    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, [backendStatus]);
+  }, []);
 
   if (!isOnline || backendStatus === 'offline') {
     return (
-      <div className="bg-red-500 text-white px-4 py-3 text-sm">
+      <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
-          <div className="flex items-center space-x-2">
-            <div className="animate-pulse w-2 h-2 bg-white rounded-full"></div>
-            <span className="font-medium">
+          <span>
             {!isOnline 
-              ? '🌐 Sem conexão com a internet' 
-              : `🔴 Servidor temporariamente indisponível`
+              ? '🔴 Sem conexão com a internet' 
+              : `🔴 Servidor indisponível - Dados podem não estar sincronizados`
             }
-            </span>
-          </div>
-        </div>
-        <div className="text-center mt-1">
-          <span className="text-xs opacity-90">
-            {!isOnline 
-              ? 'Verifique sua conexão e recarregue a página'
-              : `Tentativa ${retryCount} - Reconectando automaticamente...`
-            }
+          </span>
+          <span className="text-xs opacity-75">
+            (última verificação: {lastCheck.toLocaleTimeString()})
           </span>
         </div>
       </div>
@@ -101,7 +82,7 @@ function ConnectivityStatus() {
       <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-          <span>🟡 Verificando conexão com o servidor...</span>
+          <span>🟡 Verificando sincronização com o servidor...</span>
         </div>
       </div>
     );
@@ -109,11 +90,8 @@ function ConnectivityStatus() {
 
   // Mostrar status online brevemente
   return (
-    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center opacity-90">
-      <div className="flex items-center justify-center space-x-1">
-        <div className="w-2 h-2 bg-white rounded-full"></div>
-        <span>Sistema online - Sincronização ativa</span>
-      </div>
+    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
+      🟢 Sistema sincronizado - Dados atualizados em tempo real
     </div>
   );
 }

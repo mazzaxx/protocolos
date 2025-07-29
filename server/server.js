@@ -7,19 +7,6 @@ import authRoutes from './auth.js';
 import adminRoutes from './admin.js';
 import protocolRoutes from './protocols.js';
 
-// Middleware para simular autenticação (desenvolvimento)
-app.use((req, res, next) => {
-  // Para desenvolvimento, simular usuário logado
-  if (!req.user) {
-    req.user = {
-      id: 1,
-      email: 'admin@escritorio.com',
-      permissao: 'admin'
-    };
-  }
-  next();
-});
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -34,8 +21,6 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:4173',
-  'https://localhost:5173',
-  'https://127.0.0.1:5173',
   // URL real do Netlify
   'https://ncasistemaprotocolos.netlify.app',
   // URLs alternativas do Netlify (caso mude)
@@ -44,11 +29,6 @@ const allowedOrigins = [
   // URLs de deploy preview do Netlify
   /https:\/\/.*--ncasistemaprotocolos\.netlify\.app$/,
   /https:\/\/deploy-preview-.*--ncasistemaprotocolos\.netlify\.app$/,
-  // Permitir qualquer localhost para desenvolvimento
-  /^http:\/\/localhost:\d+$/,
-  /^http:\/\/127\.0\.0\.1:\d+$/,
-  /^https:\/\/localhost:\d+$/,
-  /^https:\/\/127\.0\.0\.1:\d+$/,
 ];
 
 // Middlewares
@@ -72,7 +52,7 @@ app.use(cors({
     } else {
       console.log('CORS warning - origin not in allowedOrigins:', origin);
       // Em desenvolvimento, permitir qualquer origem localhost ou netlify
-      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('netlify.app') || origin.includes('bolt.new')) {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('netlify.app')) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -82,47 +62,9 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  optionsSuccessStatus: 200,
-  preflightContinue: false
+  optionsSuccessStatus: 200
 }));
-
-// Middleware adicional para garantir CORS em todas as respostas
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  next();
-});
-
-// Middleware para parsing JSON com limite maior e tratamento de erro
-app.use(express.json({ 
-  limit: '50mb',
-  verify: (req, res, buf, encoding) => {
-    try {
-      JSON.parse(buf);
-    } catch (err) {
-      console.error('❌ Erro ao parsear JSON:', err.message);
-      res.status(400).json({
-        success: false,
-        message: 'JSON inválido na requisição',
-        error: 'INVALID_JSON'
-      });
-      return;
-    }
-  }
-}));
-
-// Middleware para parsing URL encoded
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json());
 
 // Inicializar o banco de dados antes de configurar as rotas
 console.log('Inicializando banco de dados...');
@@ -148,54 +90,23 @@ app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   console.log(`\n🌐 ${req.method} ${req.path} - ${timestamp}`);
   console.log('📍 Origin:', req.headers.origin);
+  console.log('🔧 User-Agent:', req.headers['user-agent']?.substring(0, 50) + '...');
   
-  // Log apenas para requisições importantes (não health checks)
-  if (!req.path.includes('/health') && !req.path.includes('/test')) {
-    console.log('🔧 User-Agent:', req.headers['user-agent']?.substring(0, 50) + '...');
-    
-    // Log apenas headers importantes para reduzir ruído
-    const importantHeaders = {
-      'content-type': req.headers['content-type'],
-      'content-length': req.headers['content-length'],
-      'authorization': req.headers.authorization ? '[PRESENTE]' : '[AUSENTE]',
-    };
-    console.log('📋 Headers importantes:', importantHeaders);
-  }
-  
+  // Log apenas headers importantes para reduzir ruído
+  const importantHeaders = {
+    'content-type': req.headers['content-type'],
+    'authorization': req.headers.authorization ? '[PRESENTE]' : '[AUSENTE]',
+    'x-forwarded-for': req.headers['x-forwarded-for'],
+    'referer': req.headers.referer
+  };
+  console.log('📋 Headers importantes:', importantHeaders);
   next();
-});
-
-// Middleware de tratamento de erros global
-app.use((err, req, res, next) => {
-  console.error('❌ ERRO GLOBAL:', err);
-  
-  if (err.type === 'entity.parse.failed') {
-    return res.status(400).json({
-      success: false,
-      message: 'Dados JSON inválidos',
-      error: 'INVALID_JSON_FORMAT'
-    });
-  }
-  
-  if (err.type === 'entity.too.large') {
-    return res.status(413).json({
-      success: false,
-      message: 'Dados muito grandes',
-      error: 'PAYLOAD_TOO_LARGE'
-    });
-  }
-  
-  res.status(500).json({
-    success: false,
-    message: 'Erro interno do servidor',
-    error: 'INTERNAL_SERVER_ERROR'
-  });
 });
 
 // Rotas
 app.use('/api', authRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/protocolos', protocolRoutes);
+app.use('/api', protocolRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
@@ -242,7 +153,6 @@ app.get('/api/test', (req, res) => {
 // Rota de health check
 app.get('/health', (req, res) => {
   console.log('🏥 Health check solicitado');
-  console.log('📍 Origin do health check:', req.headers.origin);
   
   // Verificar se o banco está funcionando e obter estatísticas completas
   getDatabaseStats().then(stats => {
@@ -256,9 +166,7 @@ app.get('/health', (req, res) => {
       memory: process.memoryUsage(),
       version: '1.0.0',
       environment: process.env.NODE_ENV || 'development',
-      message: 'Sistema funcionando - Dados sincronizados entre todos os usuários',
-      cors: 'Configurado e funcionando',
-      port: PORT
+      message: 'Sistema funcionando - Dados sincronizados entre todos os usuários'
     });
   }).catch(err => {
     console.error('❌ Erro no health check:', err);
@@ -268,8 +176,7 @@ app.get('/health', (req, res) => {
       timestamp: new Date().toISOString(),
       error: err.message,
       uptime: process.uptime(),
-      message: 'Erro no servidor - Sincronização pode estar comprometida',
-      cors: 'Pode estar com problemas'
+      message: 'Erro no servidor - Sincronização pode estar comprometida'
     });
   });
 });
@@ -284,11 +191,10 @@ app.get('/api/protocolos/test', (req, res) => {
 
 // Middleware de erro 404
 app.use('*', (req, res) => {
-  console.log(`❌ Rota não encontrada: ${req.method} ${req.originalUrl}`);
+  console.log(`Rota não encontrada: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ 
     success: false, 
-    message: `Rota não encontrada: ${req.method} ${req.originalUrl}`,
-    error: 'ROUTE_NOT_FOUND'
+    message: `Rota não encontrada: ${req.method} ${req.originalUrl}` 
   });
 });
 
@@ -300,8 +206,6 @@ app.listen(PORT, () => {
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🗄️  Banco: SQLite inicializado`);
   console.log(`🔐 CORS: Configurado para Netlify`);
-  console.log(`📦 JSON Limit: 50MB`);
-  console.log(`🔄 Sincronização: Tempo real ativada`);
   if (process.env.NODE_ENV !== 'production') {
     console.log(`🔗 Local: http://localhost:${PORT}`);
   }

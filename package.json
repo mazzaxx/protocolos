@@ -17,10 +17,9 @@
     "preview:production": "npm run build && npm run start",
     "lint": "eslint .",
     "postinstall": "echo 'Railway deploy complete'",
-    "test:server": "node debug-connection.js",
+    "test:server": "curl http://localhost:3002 || echo 'Servidor não está rodando'",
     "debug": "concurrently \"npm run server\" \"npm run dev\" --kill-others-on-fail",
-    "test:connectivity": "node debug-connection.js",
-    "fix:permissions": "chmod +x debug-connection.js"
+    "test:connectivity": "node server/test-connectivity.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
