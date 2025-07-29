@@ -27,13 +27,23 @@ function ConnectivityStatus() {
     // Verificar status do backend
     const checkBackend = async () => {
       setLastCheck(new Date());
+      console.log('🏥 Iniciando health check...');
+      console.log('🌐 API Base URL:', import.meta.env.VITE_API_BASE_URL);
+      console.log('🔗 Window location:', window.location.href);
+      
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-        const response = await fetch(`${apiBaseUrl}/health`, { 
+        const healthUrl = `${apiBaseUrl}/health`;
+        console.log('📡 Health check URL:', healthUrl);
+        
+        const response = await fetch(healthUrl, { 
           method: 'GET',
           credentials: 'include',
-          cache: 'no-cache'
+          cache: 'no-cache',
+          mode: 'cors'
         });
+        
+        console.log('📡 Health check response status:', response.status);
         
         if (response.ok) {
           const data = await response.json();
@@ -43,8 +53,13 @@ function ConnectivityStatus() {
           console.error('❌ Health check failed:', response.status);
           setBackendStatus('offline');
         }
-      } catch {
-        console.error('❌ Health check error');
+      } catch (error) {
+        console.error('❌ Health check error:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
         setBackendStatus('offline');
       }
     };

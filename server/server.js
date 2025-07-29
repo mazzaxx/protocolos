@@ -26,9 +26,16 @@ const allowedOrigins = [
   // URLs alternativas do Netlify (caso mude)
   'https://sistema-juridico.netlify.app',
   'https://sistema-protocolos.netlify.app',
+  // Adicionar mais domínios Netlify possíveis
+  'https://sistema-protocolos-juridicos.netlify.app',
+  'https://protocolos-juridicos.netlify.app',
+  'https://painel-juridico.netlify.app',
   // URLs de deploy preview do Netlify
   /https:\/\/.*--ncasistemaprotocolos\.netlify\.app$/,
   /https:\/\/deploy-preview-.*--ncasistemaprotocolos\.netlify\.app$/,
+  // Padrões mais amplos para Netlify
+  /https:\/\/.*\.netlify\.app$/,
+  /https:\/\/.*--.*\.netlify\.app$/,
 ];
 
 // Middlewares
@@ -36,6 +43,8 @@ app.use(cors({
   origin: function (origin, callback) {
     // Permitir requisições sem origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
+    
+    console.log('🌐 CORS Check - Origin recebida:', origin);
     
     // Verificar se a origem está na lista ou corresponde a um padrão regex
     const isAllowed = allowedOrigins.some(allowedOrigin => {
@@ -47,14 +56,19 @@ app.use(cors({
       return false;
     });
     
+    console.log('🔐 CORS Check - Origem permitida:', isAllowed);
+    
     if (isAllowed) {
+      console.log('✅ CORS - Origem aprovada:', origin);
       callback(null, true);
     } else {
-      console.log('CORS warning - origin not in allowedOrigins:', origin);
+      console.log('❌ CORS - Origem rejeitada:', origin);
       // Em desenvolvimento, permitir qualquer origem localhost ou netlify
       if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('netlify.app')) {
+        console.log('🔧 CORS - Permitindo origem de desenvolvimento/netlify:', origin);
         callback(null, true);
       } else {
+        console.log('🚫 CORS - Bloqueando origem:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     }
@@ -90,6 +104,8 @@ app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   console.log(`\n🌐 ${req.method} ${req.path} - ${timestamp}`);
   console.log('📍 Origin:', req.headers.origin);
+  console.log('🔗 Referer:', req.headers.referer);
+  console.log('🌍 Host:', req.headers.host);
   console.log('🔧 User-Agent:', req.headers['user-agent']?.substring(0, 50) + '...');
   
   // Log apenas headers importantes para reduzir ruído
@@ -97,7 +113,9 @@ app.use((req, res, next) => {
     'content-type': req.headers['content-type'],
     'authorization': req.headers.authorization ? '[PRESENTE]' : '[AUSENTE]',
     'x-forwarded-for': req.headers['x-forwarded-for'],
-    'referer': req.headers.referer
+    'referer': req.headers.referer,
+    'x-forwarded-proto': req.headers['x-forwarded-proto'],
+    'x-forwarded-host': req.headers['x-forwarded-host']
   };
   console.log('📋 Headers importantes:', importantHeaders);
   next();

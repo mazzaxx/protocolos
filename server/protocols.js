@@ -81,6 +81,12 @@ router.get('/protocolos', (req, res) => {
 router.post('/protocolos', (req, res) => {
   console.log('📝 POST /protocolos chamado');
   console.log('📍 Origin:', req.headers.origin);
+  console.log('🔗 Referer:', req.headers.referer);
+  console.log('🌍 Host:', req.headers.host);
+  console.log('🔐 Headers de CORS:', {
+    'access-control-request-method': req.headers['access-control-request-method'],
+    'access-control-request-headers': req.headers['access-control-request-headers']
+  });
   console.log('📦 Dados recebidos:', JSON.stringify(req.body, null, 2));
   
   const {

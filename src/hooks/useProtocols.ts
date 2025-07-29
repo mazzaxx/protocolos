@@ -53,6 +53,8 @@ export function useProtocols() {
     
     console.log('🔄 Buscando protocolos do servidor...');
     console.log('🌐 Modo:', forceRefresh ? 'Forçado' : 'Normal');
+    console.log('🌐 API Base URL:', import.meta.env.VITE_API_BASE_URL);
+    console.log('🔗 Window location:', window.location.href);
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
@@ -65,7 +67,8 @@ export function useProtocols() {
           'Content-Type': 'application/json',
           'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=0',
         },
-        credentials: 'include'
+        credentials: 'include',
+        mode: 'cors'
       });
       
       console.log('📡 Status da resposta:', response.status);
@@ -179,6 +182,8 @@ export function useProtocols() {
 
   const addProtocol = async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
     console.log('➕ Adicionando novo protocolo:', protocol);
+    console.log('🌐 API Base URL:', import.meta.env.VITE_API_BASE_URL);
+    console.log('🔗 Window location:', window.location.href);
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
@@ -193,6 +198,14 @@ export function useProtocols() {
       
       const url = `${apiBaseUrl}/api/protocolos`;
       console.log('📡 Enviando protocolo para:', url);
+      console.log('🔧 Configurações da requisição:', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        mode: 'cors'
+      });
       console.log('📦 Dados enviados:', JSON.stringify(protocolData, null, 2));
       
       const response = await fetch(url, {
@@ -201,6 +214,7 @@ export function useProtocols() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
+        mode: 'cors',
         body: JSON.stringify(protocolData),
       });
 
