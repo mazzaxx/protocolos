@@ -5,9 +5,8 @@ const router = express.Router();
 
 // Listar todos os protocolos
 router.get('/protocolos', (req, res) => {
-  console.log('🔍 GET /protocolos chamado');
-  console.log('📍 Origin:', req.headers.origin);
-  console.log('🔧 User-Agent:', req.headers['user-agent']?.substring(0, 50) + '...');
+  console.log('🔍 SINCRONIZAÇÃO: Listando protocolos para', req.headers.origin);
+  console.log('🔄 Modo:', req.headers['x-sync-mode'] || 'normal');
   
   db.all(`
     SELECT p.*, f.email as createdByEmail 
@@ -16,7 +15,7 @@ router.get('/protocolos', (req, res) => {
     ORDER BY p.createdAt DESC
   `, (err, rows) => {
     if (err) {
-      console.error('❌ Erro ao buscar protocolos:', err);
+      console.error('❌ ERRO DE SINCRONIZAÇÃO:', err);
       return res.status(500).json({ 
         success: false, 
         message: 'Erro interno do servidor',
@@ -24,7 +23,7 @@ router.get('/protocolos', (req, res) => {
       });
     }
 
-    console.log(`📊 Total de protocolos encontrados no banco: ${rows.length}`);
+    console.log(`📊 SINCRONIZANDO ${rows.length} protocolos`);
 
     // Converter strings JSON de volta para objetos
     const protocolos = rows.map(row => {
@@ -42,7 +41,7 @@ router.get('/protocolos', (req, res) => {
           isDistribution: Boolean(row.isDistribution)
         };
       } catch (parseError) {
-        console.error('❌ Erro ao parsear protocolo:', row.id, parseError);
+        console.error('❌ Erro ao parsear protocolo:', row.id);
         return {
           ...row,
           documents: [],
@@ -58,21 +57,15 @@ router.get('/protocolos', (req, res) => {
       }
     });
 
-    console.log('✅ Protocolos processados com sucesso');
-    console.log(`📋 Últimos 3 protocolos:`, protocolos.slice(0, 3).map(p => ({
-      id: p.id,
-      processNumber: p.processNumber,
-      status: p.status,
-      assignedTo: p.assignedTo,
-      createdBy: p.createdBy,
-      createdAt: p.createdAt
-    })));
+    console.log('✅ SINCRONIZAÇÃO COMPLETA');
+    console.log(`🎯 Filas: Robô(${protocolos.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolos.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolos.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
     
     res.json({
       success: true,
       protocolos,
       total: protocolos.length,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      syncStatus: 'success'
     });
   });
 });
@@ -203,6 +196,13 @@ router.post('/protocolos', (req, res) => {
     console.log('🆔 ID do protocolo:', id);
     console.log('📊 Linhas afetadas:', this.changes);
     console.log('📍 LastID:', this.lastID);
+    console.log('🎯 Protocolo direcionado para:', assignedTo || 'Fila do Robô');
+    console.log('📋 Dados do protocolo criado:', {
+      processNumber: processNumber || 'N/A',
+      court: court || 'N/A',
+      status: status || 'Aguardando',
+      assignedTo: assignedTo || null
+    });
     
     // Verificar se foi realmente inserido
     db.get('SELECT COUNT(*) as count FROM protocolos WHERE id = ?', [id], (countErr, countRow) => {
@@ -210,6 +210,13 @@ router.post('/protocolos', (req, res) => {
         console.error('❌ Erro ao verificar inserção:', countErr);
       } else {
         console.log('✅ Verificação: protocolo existe no banco:', countRow.count > 0);
+        
+        // Verificar contagem total após inserção
+        db.get('SELECT COUNT(*) as total FROM protocolos', (totalErr, totalRow) => {
+          if (!totalErr) {
+            console.log('📊 Total de protocolos no banco após inserção:', totalRow.total);
+          }
+        });
       }
     });
 

@@ -42,8 +42,8 @@ export function useProtocols() {
       return;
     }
 
-    // Throttle: evitar requisições muito frequentes (mínimo 1 segundo)
-    if (!forceRefresh && (now - lastFetchTime) < 1000) {
+    // Throttle reduzido: evitar requisições muito frequentes (mínimo 500ms)
+    if (!forceRefresh && (now - lastFetchTime) < 500) {
       console.log('⏱️ Throttle ativo, aguardando...');
       return;
     }
@@ -59,13 +59,15 @@ export function useProtocols() {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const url = `${apiBaseUrl}/api/protocolos`;
-      console.log('📡 URL da requisição:', url);
+      console.log('📡 Buscando protocolos de:', url);
+      console.log('🌐 Modo de sincronização:', forceRefresh ? 'FORÇADO' : 'AUTOMÁTICO');
       
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=0',
+          'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
         },
         credentials: 'include',
         mode: 'cors'
@@ -91,15 +93,18 @@ export function useProtocols() {
           updatedAt: new Date(p.updatedAt),
         }));
         
-        console.log('✅ Protocolos processados:', protocolsWithDates.length);
-        console.log('📋 Últimos 3 protocolos:', protocolsWithDates.slice(0, 3).map(p => ({
-          id: p.id,
-          processNumber: p.processNumber,
-          status: p.status,
-          assignedTo: p.assignedTo,
-          createdBy: p.createdBy,
-          createdAt: p.createdAt
-        })));
+        console.log('✅ SINCRONIZAÇÃO COMPLETA:', protocolsWithDates.length, 'protocolos');
+        console.log('📊 Status dos protocolos:', {
+          aguardando: protocolsWithDates.filter(p => p.status === 'Aguardando').length,
+          execucao: protocolsWithDates.filter(p => p.status === 'Em Execução').length,
+          peticionado: protocolsWithDates.filter(p => p.status === 'Peticionado').length,
+          devolvido: protocolsWithDates.filter(p => p.status === 'Devolvido').length,
+        });
+        console.log('🎯 Filas:', {
+          robo: protocolsWithDates.filter(p => !p.assignedTo && p.status === 'Aguardando').length,
+          carlos: protocolsWithDates.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length,
+          deyse: protocolsWithDates.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length,
+        });
         
         setProtocols(protocolsWithDates);
         
@@ -110,18 +115,16 @@ export function useProtocols() {
     } catch (error) {
       console.error('❌ Erro ao buscar protocolos:', error);
       
-      // REMOVIDO: Fallback para localStorage - isso causava o problema de sincronização
-      // Agora sempre mostra erro quando não consegue conectar ao servidor
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        console.error('🚨 ERRO CRÍTICO: Não foi possível conectar ao servidor');
-        console.error('🔧 Verifique se o servidor backend está rodando');
-        console.error('🌐 URL tentada:', import.meta.env.VITE_API_BASE_URL || 'localhost');
+        console.error('🚨 ERRO CRÍTICO DE SINCRONIZAÇÃO!');
+        console.error('🌐 Backend Railway:', import.meta.env.VITE_API_BASE_URL);
+        console.error('🔧 Verifique se https://sistema-protocolos-juridicos-production.up.railway.app está online');
+        console.error('⚠️ DADOS NÃO SINCRONIZADOS - Outros usuários não verão as mudanças!');
       }
       
       // Manter lista vazia se não conseguir conectar
       setProtocols([]);
       
-      // Re-throw o erro para que o componente possa lidar com ele se necessário
       throw error;
     } finally {
       setIsLoading(false);
@@ -130,13 +133,14 @@ export function useProtocols() {
 
   useEffect(() => {
     console.log('🚀 useProtocols: Iniciando fetch inicial...');
+    console.log('🌐 Backend configurado:', import.meta.env.VITE_API_BASE_URL || 'PROXY LOCAL');
     fetchProtocols(true); // Forçar refresh inicial
     
-    // Configurar polling para atualizar a cada 3 segundos (mais frequente para melhor sincronização)
+    // Configurar polling para atualizar a cada 2 segundos (sincronização em tempo real)
     const interval = setInterval(() => {
-      console.log('🔄 Polling: Atualizando protocolos automaticamente...');
+      console.log('🔄 SINCRONIZAÇÃO AUTOMÁTICA: Verificando novos protocolos...');
       fetchProtocols(false);
-    }, 3000); // 3 segundos
+    }, 2000); // 2 segundos para sincronização mais rápida
     
     return () => {
       console.log('🛑 useProtocols: Limpando interval');
@@ -181,9 +185,15 @@ export function useProtocols() {
   };
 
   const addProtocol = async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
-    console.log('➕ Adicionando novo protocolo:', protocol);
-    console.log('🌐 API Base URL:', import.meta.env.VITE_API_BASE_URL);
-    console.log('🔗 Window location:', window.location.href);
+    console.log('🚀 CRIANDO NOVO PROTOCOLO - SINCRONIZAÇÃO INICIADA');
+    console.log('📋 Dados do protocolo:', {
+      processNumber: protocol.processNumber,
+      court: protocol.court,
+      petitionType: protocol.petitionType,
+      assignedTo: protocol.assignedTo,
+      createdBy: protocol.createdBy
+    });
+    console.log('🌐 Backend Railway:', import.meta.env.VITE_API_BASE_URL);
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
@@ -197,61 +207,65 @@ export function useProtocols() {
       };
       
       const url = `${apiBaseUrl}/api/protocolos`;
-      console.log('📡 Enviando protocolo para:', url);
-      console.log('🔧 Configurações da requisição:', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        mode: 'cors'
-      });
-      console.log('📦 Dados enviados:', JSON.stringify(protocolData, null, 2));
+      console.log('📡 Enviando para Railway:', url);
       
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Sync-Action': 'create-protocol',
         },
         credentials: 'include',
         mode: 'cors',
         body: JSON.stringify(protocolData),
       });
 
-      console.log('📡 Status da resposta:', response.status);
+      console.log('📡 Railway respondeu:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Erro na resposta do servidor:', response.status, errorText);
+        console.error('❌ ERRO NO RAILWAY:', response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('📦 Resposta do servidor:', data);
+      console.log('📦 Railway confirmou:', data.success);
       
       if (data.success) {
-        console.log('✅ Protocolo criado com sucesso no servidor!');
-        console.log('🆔 ID do protocolo criado:', data.protocolo?.id);
+        console.log('🎉 PROTOCOLO CRIADO COM SUCESSO NO RAILWAY!');
+        console.log('🆔 ID:', data.protocolo?.id);
+        console.log('🎯 Fila:', data.protocolo?.assignedTo ? `${data.protocolo.assignedTo}` : 'Robô');
         
-        // Forçar atualização imediata da lista
+        // Forçar sincronização imediata para todos os usuários
         setTimeout(() => {
-          console.log('🔄 Forçando refresh após criação...');
+          console.log('🔄 FORÇANDO SINCRONIZAÇÃO IMEDIATA...');
+          forceRefresh();
+        }, 100); // Mais rápido
+        
+        // Segunda sincronização para garantir
+        setTimeout(() => {
+          console.log('🔄 SEGUNDA SINCRONIZAÇÃO (garantia)...');
           forceRefresh();
         }, 500);
         
+        // Terceira sincronização para garantir que todos vejam
+        setTimeout(() => {
+          console.log('🔄 TERCEIRA SINCRONIZAÇÃO (garantia total)...');
+          forceRefresh();
+        }, 1500);
+        
         return data.protocolo;
       } else {
-        console.error('❌ Resposta sem sucesso do servidor:', data);
+        console.error('❌ Railway rejeitou:', data);
         throw new Error(data.message || 'Erro ao criar protocolo no servidor');
       }
     } catch (error) {
-      console.error('❌ ERRO CRÍTICO: Falha ao adicionar protocolo ao servidor:', error);
-      
-      // REMOVIDO: Fallback para localStorage - isso causava inconsistência
-      // Agora sempre falha se não conseguir salvar no servidor
+      console.error('🚨 ERRO CRÍTICO DE SINCRONIZAÇÃO:', error);
+      console.error('⚠️ PROTOCOLO NÃO FOI SALVO NO RAILWAY!');
+      console.error('⚠️ OUTROS USUÁRIOS NÃO VERÃO ESTE PROTOCOLO!');
       
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        throw new Error('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.');
+        throw new Error('ERRO DE CONEXÃO: Não foi possível conectar ao Railway. O protocolo NÃO foi salvo e NÃO será visível para outros usuários do escritório. Verifique sua conexão e tente novamente.');
       }
       
       throw error;
@@ -273,13 +287,13 @@ export function useProtocols() {
         };
       }
       
-      console.log('🔄 Atualizando protocolo no servidor:', id);
-      console.log('📦 Dados de atualização:', updateData);
+      console.log('🔄 SINCRONIZANDO ATUALIZAÇÃO NO RAILWAY:', id);
       
       const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'X-Sync-Action': 'update-protocol',
         },
         credentials: 'include',
         body: JSON.stringify(updateData),
@@ -287,30 +301,28 @@ export function useProtocols() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Erro ao atualizar no servidor:', response.status, errorText);
+        console.error('❌ Railway rejeitou atualização:', response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
       
       if (data.success) {
-        console.log('✅ Protocolo atualizado no servidor');
+        console.log('✅ PROTOCOLO ATUALIZADO NO RAILWAY - SINCRONIZADO!');
         
-        // Forçar atualização imediata da lista
+        // Forçar sincronização imediata
         setTimeout(() => {
-          console.log('🔄 Forçando refresh após atualização...');
+          console.log('🔄 SINCRONIZANDO MUDANÇAS...');
           forceRefresh();
-        }, 500);
+        }, 200);
         
         return true;
       } else {
         throw new Error(data.message || 'Erro ao atualizar protocolo');
       }
     } catch (error) {
-      console.error('❌ ERRO CRÍTICO: Falha ao atualizar protocolo no servidor:', error);
-      
-      // REMOVIDO: Fallback para localStorage
-      // Agora sempre falha se não conseguir atualizar no servidor
+      console.error('🚨 ERRO DE SINCRONIZAÇÃO:', error);
+      console.error('⚠️ MUDANÇAS NÃO FORAM SALVAS NO RAILWAY!');
       
       return false;
     }

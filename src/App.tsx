@@ -27,14 +27,12 @@ function ConnectivityStatus() {
     // Verificar status do backend
     const checkBackend = async () => {
       setLastCheck(new Date());
-      console.log('🏥 Iniciando health check...');
-      console.log('🌐 API Base URL:', import.meta.env.VITE_API_BASE_URL);
-      console.log('🔗 Window location:', window.location.href);
+      console.log('🏥 Verificando Railway...');
       
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
         const healthUrl = `${apiBaseUrl}/health`;
-        console.log('📡 Health check URL:', healthUrl);
+        console.log('📡 Testando:', healthUrl);
         
         const response = await fetch(healthUrl, { 
           method: 'GET',
@@ -43,29 +41,24 @@ function ConnectivityStatus() {
           mode: 'cors'
         });
         
-        console.log('📡 Health check response status:', response.status);
+        console.log('📡 Railway status:', response.status);
         
         if (response.ok) {
           const data = await response.json();
-          console.log('🏥 Health check:', data);
+          console.log('✅ Railway online:', data.message);
           setBackendStatus('online');
         } else {
-          console.error('❌ Health check failed:', response.status);
+          console.error('❌ Railway offline:', response.status);
           setBackendStatus('offline');
         }
       } catch (error) {
-        console.error('❌ Health check error:', error);
-        console.error('❌ Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack
-        });
+        console.error('❌ Erro de conexão com Railway:', error.message);
         setBackendStatus('offline');
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos
+    const interval = setInterval(checkBackend, 5000); // Verificar a cada 5 segundos
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -80,8 +73,8 @@ function ConnectivityStatus() {
         <div className="flex items-center justify-center space-x-2">
           <span>
             {!isOnline 
-              ? '🔴 Sem conexão com a internet' 
-              : `🔴 Servidor indisponível - Dados podem não estar sincronizados`
+              ? '🔴 SEM INTERNET - Dados não sincronizados' 
+              : `🔴 RAILWAY OFFLINE - Sincronização interrompida para todo o escritório`
             }
           </span>
           <span className="text-xs opacity-75">
@@ -97,7 +90,7 @@ function ConnectivityStatus() {
       <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-          <span>🟡 Verificando sincronização com o servidor...</span>
+          <span>🟡 Conectando ao Railway...</span>
         </div>
       </div>
     );
@@ -106,7 +99,7 @@ function ConnectivityStatus() {
   // Mostrar status online brevemente
   return (
     <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
-      🟢 Sistema sincronizado - Dados atualizados em tempo real
+      🟢 RAILWAY ONLINE - Dados sincronizados em tempo real para todo o escritório (última verificação: {lastCheck.toLocaleTimeString()})
     </div>
   );
 }

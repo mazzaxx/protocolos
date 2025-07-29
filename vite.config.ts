@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -21,15 +21,16 @@ export default defineConfig({
             console.log('Sending Request to the Target:', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from Target:', proxyRes.statusCode, req.url);
           });
         },
       },
       '/health': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
       },
-    },
+    }
   },
   build: {
     outDir: 'dist',
