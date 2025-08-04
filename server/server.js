@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
+import { initializeDb, testConnection, getDatabaseStats, closeConnection, query } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
@@ -96,11 +96,12 @@ app.use((req, res, next) => {
 // Rota de health check
 app.get('/', (req, res) => {
   console.log('🏥 Health check solicitado');
-  res.json({ 
+  res.status(200).json({ 
     message: 'Servidor de autenticação funcionando!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    port: PORT
+    port: PORT,
+    status: 'healthy'
   });
 });
 
@@ -108,29 +109,40 @@ app.get('/', (req, res) => {
 app.get('/health', async (req, res) => {
   console.log('🏥 Health check detalhado solicitado');
   
+  // Resposta rápida para evitar timeout
+  const startTime = Date.now();
+  
   try {
-    // Testar conexão com banco
-    await testConnection();
+    // Teste básico de conectividade (mais rápido)
+    const basicTest = await Promise.race([
+      query("SELECT 1 as test", [], 1),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Database timeout')), 3000))
+    ]);
     
-    // Obter estatísticas
-    const stats = await getDatabaseStats();
+    const responseTime = Date.now() - startTime;
     
-    res.json({
+    res.status(200).json({
       status: 'healthy',
       message: 'Servidor funcionando perfeitamente',
       timestamp: new Date().toISOString(),
       database: 'connected',
-      stats: stats,
+      responseTime: `${responseTime}ms`,
       environment: process.env.NODE_ENV || 'development',
-      port: PORT
+      port: PORT,
+      uptime: process.uptime()
     });
   } catch (error) {
     console.error('❌ Health check falhou:', error);
+    const responseTime = Date.now() - startTime;
+    
     res.status(500).json({
       status: 'unhealthy',
       message: 'Problemas de conectividade',
       error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      responseTime: `${responseTime}ms`,
+      environment: process.env.NODE_ENV || 'development',
+      port: PORT
     });
   }
 });
@@ -173,15 +185,166 @@ app.use('*', (req, res) => {
 // Inicializar banco de dados e servidor
 async function startServer() {
   try {
-    console.log('🗄️ Inicializando banco de dados com retry...');
+    console.log('🚀 Iniciando servidor Railway...');
+    console.log('🌐 PORT:', PORT);
+    console.log('🗄️ DATABASE_URL presente:', !!process.env.DATABASE_URL);
     
-    // Tentar inicializar o banco com retry
-    let dbInitialized = false;
-    let attempts = 0;
-    const maxAttempts = 10;
+    // Iniciar servidor PRIMEIRO (para responder ao healthcheck)
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log('🎉 SERVIDOR RAILWAY INICIADO!');
+      console.log('=' .repeat(50));
+      console.log(`🌐 Servidor rodando na porta: ${PORT}`);
+      console.log(`🔗 URL Railway: https://sistema-protocolos-juridicos-production.up.railway.app`);
+      console.log(`🏥 Health check: https://sistema-protocolos-juridicos-production.up.railway.app/health`);
+      console.log('=' .repeat(50));
+    });
     
-    while (!dbInitialized && attempts < maxAttempts) {
-      attempts++;
+    // Inicializar banco em background (não bloquear o servidor)
+    console.log('🗄️ Inicializando banco de dados em background...');
+    
+    // Tentar inicializar o banco com retry em background
+    const initializeDatabase = async () => {
+      let dbInitialized = false;
+      let attempts = 0;
+      const maxAttempts = 5; // Reduzir tentativas
+      
+      while (!dbInitialized && attempts < maxAttempts) {
+        attempts++;
+        try {
+          console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de inicialização do banco...`);
+          await initializeDb();
+          dbInitialized = true;
+          console.log('✅ Banco de dados inicializado com sucesso!');
+          
+          // Health check periódico após inicialização
+          setInterval(async () => {
+            try {
+              await query("SELECT 1 as test", [], 1);
+              console.log('✅ Health check do banco: OK');
+            } catch (error) {
+              console.error('❌ Health check do banco: FALHA', error.message);
+            }
+          }, 60000); // A cada 1 minuto
+          
+        } catch (error) {
+          console.error(`❌ Tentativa ${attempts}/${maxAttempts} falhou:`, error.message);
+          
+          if (attempts < maxAttempts) {
+            const delay = Math.min(2000 * attempts, 10000); // Delay menor
+            console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            console.error('❌ AVISO: Não foi possível inicializar o banco após todas as tentativas');
+            console.error('⚠️ Servidor continuará rodando, mas funcionalidades do banco podem não funcionar');
+          }
+        }
+      }
+    };
+    
+    // Executar inicialização do banco em background
+    initializeDatabase().catch(error => {
+      console.error('❌ Erro na inicialização do banco:', error);
+    });
+    
+    // Configurar graceful shutdown
+    const gracefulShutdown = () => {
+      console.log('🛑 Recebido sinal de shutdown, encerrando servidor graciosamente...');
+      server.close(() => {
+        console.log('🔒 Servidor HTTP fechado');
+        closeConnection().then(() => {
+          console.log('🔒 Conexões do banco fechadas');
+          process.exit(0);
+        });
+      });
+    };
+    
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+    
+  } catch (error) {
+    console.error('❌ ERRO CRÍTICO ao iniciar servidor:', error);
+    process.exit(1);
+  }
+}
+
+// Rota adicional para teste rápido
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
+// Rota para verificar variáveis de ambiente (sem expor dados sensíveis)
+app.get('/env-check', (req, res) => {
+  res.status(200).json({
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    PORT: PORT,
+    HAS_DATABASE_URL: !!process.env.DATABASE_URL,
+    RAILWAY_ENVIRONMENT: process.env.RAILWAY_ENVIRONMENT || 'unknown',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Middleware de tratamento de erros melhorado
+app.use((err, req, res, next) => {
+  console.error('❌ Erro no servidor:', err);
+  
+  if (err.message === 'Não permitido pelo CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'Acesso negado por política CORS',
+      origin: req.headers.origin
+    });
+  }
+  
+  // Não expor detalhes do erro em produção
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
+  res.status(500).json({
+    success: false,
+    message: 'Erro interno do servidor',
+    error: isDevelopment ? err.message : 'Erro interno',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Middleware para rotas não encontradas melhorado
+app.use('*', (req, res) => {
+  console.log('❌ Rota não encontrada:', req.method, req.originalUrl);
+  res.status(404).json({
+    success: false,
+    message: 'Rota não encontrada',
+    path: req.originalUrl,
+    method: req.method,
+    availableRoutes: [
+      'GET /',
+      'GET /health',
+      'GET /ping',
+      'POST /api/login',
+      'GET /api/protocolos',
+      'POST /api/protocolos'
+    ]
+  });
+});
+
+// Tratamento de exceções não capturadas
+process.on('uncaughtException', (error) => {
+  console.error('❌ ERRO NÃO CAPTURADO:', error);
+  // Não encerrar o processo em produção para manter o servidor rodando
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ PROMISE REJEITADA NÃO TRATADA:', reason);
+  console.error('Promise:', promise);
+  // Não encerrar o processo em produção para manter o servidor rodando
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
+// Iniciar o servidor
+startServer();
       try {
         console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de inicialização do banco...`);
         await initializeDb();

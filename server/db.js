@@ -55,7 +55,13 @@ const query = async (sql, params = [], retries = 3) => {
   
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const client = await db.connect();
+      const client = await Promise.race([
+        db.connect(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 5000)
+        )
+      ]);
+      
       try {
         const result = await client.query(sql, params);
         return result;
@@ -64,10 +70,10 @@ const query = async (sql, params = [], retries = 3) => {
       }
     } catch (error) {
       lastError = error;
-      console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
+      console.error(`❌ Query tentativa ${attempt}/${retries} falhou:`, error.message);
       
       if (attempt < retries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Backoff exponencial
+        const delay = Math.min(500 * attempt, 2000); // Delay menor
         console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -218,7 +224,12 @@ export const testConnection = async (retries = 5) => {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       console.log(`🔍 Teste de conectividade - Tentativa ${attempt}/${retries}`);
-      const result = await query("SELECT 1 as test", [], 1); // Sem retry interno
+      const result = await Promise.race([
+        query("SELECT 1 as test", [], 1),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Test timeout')), 3000)
+        )
+      ]);
       console.log('✅ Teste de conectividade PostgreSQL bem-sucedido');
       return result;
     } catch (error) {
@@ -226,7 +237,7 @@ export const testConnection = async (retries = 5) => {
       console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
       
       if (attempt < retries) {
-        const delay = Math.min(2000 * attempt, 10000); // Delay progressivo
+        const delay = Math.min(1000 * attempt, 5000); // Delay menor
         console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }

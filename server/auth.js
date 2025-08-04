@@ -16,10 +16,15 @@ router.post('/login', async (req, res) => {
 
   // Buscar usuário no banco
   try {
-    const result = await query(
+    const result = await Promise.race([
+      query(
       "SELECT * FROM funcionarios WHERE email = $1 AND senha = $2", 
       [email, senha]
-    );
+      ),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Login timeout')), 5000)
+      )
+    ]);
 
     const user = result.rows && result.rows.length > 0 ? result.rows[0] : null;
 

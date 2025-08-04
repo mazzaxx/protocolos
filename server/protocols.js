@@ -9,12 +9,17 @@ router.get('/protocolos', async (req, res) => {
   console.log('🔄 Modo:', req.headers['x-sync-mode'] || 'normal');
   
   try {
-    const result = await query(`
+    const result = await Promise.race([
+      query(`
       SELECT p.*, f.email as createdByEmail 
       FROM protocolos p 
       LEFT JOIN funcionarios f ON p.createdBy = f.id 
       ORDER BY p.createdAt DESC
-    `);
+      `),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout')), 10000)
+      )
+    ]);
 
     const rows = result.rows || [];
     console.log(`📊 SINCRONIZANDO ${rows.length} protocolos`);

@@ -12,7 +12,7 @@
     "start": "node server/server.js",
     "start:production": "node server/server.js",
     "start:server": "cross-env PORT=3002 node server/server.js",
-    "railway:start": "NODE_ENV=production node server/server.js",
+    "railway:start": "node server/server.js",
     "build": "vite build",
     "preview": "vite preview",
     "preview:production": "npm run build && npm run start",
