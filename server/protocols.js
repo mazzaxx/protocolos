@@ -3,90 +3,142 @@ import { query } from './db.js';
 
 const router = express.Router();
 
-// Listar todos os protocolos
+// Cache para protocolos (performance)
+let protocolsCache = null;
+let cacheExpiry = 0;
+const CACHE_DURATION = 2000; // 2 segundos
+
+// Função para converter snake_case para camelCase
+const toCamelCase = (obj) => {
+  if (Array.isArray(obj)) {
+    return obj.map(toCamelCase);
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((result, key) => {
+      const camelKey = key.replace(/_([a-z])/g, (match, letter) => letter.toUpperCase());
+      result[camelKey] = toCamelCase(obj[key]);
+      return result;
+    }, {});
+  }
+  return obj;
+};
+
+// Função para converter camelCase para snake_case
+const toSnakeCase = (obj) => {
+  if (Array.isArray(obj)) {
+    return obj.map(toSnakeCase);
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((result, key) => {
+      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      result[snakeKey] = toSnakeCase(obj[key]);
+      return result;
+    }, {});
+  }
+  return obj;
+};
+
+// Listar todos os protocolos (otimizado)
 router.get('/protocolos', async (req, res) => {
-  console.log('🔍 SINCRONIZAÇÃO: Listando protocolos para', req.headers.origin);
-  console.log('🔄 Modo:', req.headers['x-sync-mode'] || 'normal');
+  const startTime = Date.now();
+  console.log('🔍 Buscando protocolos...');
   
   try {
+    // Verificar cache
+    const now = Date.now();
+    if (protocolsCache && now < cacheExpiry) {
+      console.log(`✅ Protocolos from cache (${Date.now() - startTime}ms)`);
+      return res.json({
+        success: true,
+        protocolos: protocolsCache,
+        total: protocolsCache.length,
+        timestamp: new Date().toISOString(),
+        cached: true,
+        duration: `${Date.now() - startTime}ms`
+      });
+    }
+
+    // Buscar do banco com JOIN otimizado
     const result = await Promise.race([
       query(`
-      SELECT p.*, f.email as createdByEmail 
-      FROM protocolos p 
-      LEFT JOIN funcionarios f ON p.createdBy = f.id 
-      ORDER BY p.createdAt DESC
+        SELECT 
+          p.*,
+          f.email as created_by_email
+        FROM protocolos p 
+        LEFT JOIN funcionarios f ON p.created_by = f.id 
+        ORDER BY p.created_at DESC
+        LIMIT 1000
       `),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout')), 15000)
+        setTimeout(() => reject(new Error('Query timeout')), 8000)
       )
     ]);
 
     const rows = result.rows || [];
-    console.log(`📊 SINCRONIZANDO ${rows.length} protocolos`);
+    console.log(`📊 Found ${rows.length} protocolos`);
 
-    // Converter strings JSON de volta para objetos
+    // Converter e processar dados
     const protocolos = rows.map(row => {
       try {
-        return {
-          ...row,
-          documents: JSON.parse(row.documents || '[]'),
-          guias: JSON.parse(row.guias || '[]'),
-          activityLog: JSON.parse(row.activityLog || '[]'),
-          createdAt: new Date(row.createdAt),
-          updatedAt: new Date(row.updatedAt),
-          isFatal: Boolean(row.isFatal),
-          needsProcuration: Boolean(row.needsProcuration),
-          needsGuia: Boolean(row.needsGuia),
-          isDistribution: Boolean(row.isDistribution)
-        };
-      } catch (parseError) {
-        console.error('❌ Erro ao parsear protocolo:', row.id);
-        return {
-          ...row,
-          documents: [],
-          guias: [],
-          activityLog: [],
-          createdAt: new Date(row.createdAt),
-          updatedAt: new Date(row.updatedAt),
-          isFatal: Boolean(row.isFatal),
-          needsProcuration: Boolean(row.needsProcuration),
-          needsGuia: Boolean(row.needsGuia),
-          isDistribution: Boolean(row.isDistribution)
-        };
-      }
-    });
+        const protocol = toCamelCase(row);
+        
+        // Processar campos JSON
+        protocol.documents = typeof protocol.documents === 'string' 
+          ? JSON.parse(protocol.documents) 
+          : protocol.documents || [];
+        protocol.guias = typeof protocol.guias === 'string' 
+          ? JSON.parse(protocol.guias) 
+          : protocol.guias || [];
+        protocol.activityLog = typeof protocol.activityLog === 'string' 
+          ? JSON.parse(protocol.activityLog) 
+          : protocol.activityLog || [];
 
-    console.log('✅ SINCRONIZAÇÃO COMPLETA');
-    console.log(`🎯 Filas: Robô(${protocolos.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolos.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolos.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
+        // Converter datas
+        protocol.createdAt = new Date(protocol.createdAt);
+        protocol.updatedAt = new Date(protocol.updatedAt);
+
+        // Converter booleans
+        protocol.isFatal = Boolean(protocol.isFatal);
+        protocol.needsProcuration = Boolean(protocol.needsProcuration);
+        protocol.needsGuia = Boolean(protocol.needsGuia);
+        protocol.isDistribution = Boolean(protocol.isDistribution);
+
+        return protocol;
+      } catch (parseError) {
+        console.error('❌ Erro ao processar protocolo:', row.id, parseError);
+        return null;
+      }
+    }).filter(Boolean);
+
+    // Atualizar cache
+    protocolsCache = protocolos;
+    cacheExpiry = now + CACHE_DURATION;
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ Protocolos loaded (${duration}ms)`);
     
     res.json({
       success: true,
       protocolos,
       total: protocolos.length,
       timestamp: new Date().toISOString(),
-      syncStatus: 'success'
+      duration: `${duration}ms`
     });
   } catch (error) {
-    console.error('❌ ERRO DE SINCRONIZAÇÃO:', error);
+    const duration = Date.now() - startTime;
+    console.error(`❌ Erro ao buscar protocolos (${duration}ms):`, error);
+    
     return res.status(500).json({ 
       success: false, 
       message: 'Erro interno do servidor',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      duration: `${duration}ms`
     });
   }
 });
 
-// Criar novo protocolo
+// Criar novo protocolo (otimizado)
 router.post('/protocolos', async (req, res) => {
-  console.log('📝 POST /protocolos chamado');
-  console.log('📍 Origin:', req.headers.origin);
-  console.log('🔗 Referer:', req.headers.referer);
-  console.log('🌍 Host:', req.headers.host);
-  console.log('🔐 Headers de CORS:', {
-    'access-control-request-method': req.headers['access-control-request-method'],
-    'access-control-request-headers': req.headers['access-control-request-headers']
-  });
-  console.log('📦 Dados recebidos:', JSON.stringify(req.body, null, 2));
+  const startTime = Date.now();
+  console.log('📝 Criando protocolo...');
   
   const {
     processNumber,
@@ -109,9 +161,7 @@ router.post('/protocolos', async (req, res) => {
     createdByEmail
   } = req.body;
 
-  // Validações básicas
   if (!createdBy) {
-    console.error('❌ createdBy é obrigatório');
     return res.status(400).json({
       success: false,
       message: 'ID do usuário criador é obrigatório'
@@ -129,18 +179,6 @@ router.post('/protocolos', async (req, res) => {
     description: 'Protocolo criado',
     performedBy: createdByEmail || 'Usuário'
   }];
-
-  console.log('💾 Tentando inserir protocolo:');
-  console.log('🆔 ID:', id);
-  console.log('📋 Dados principais:', {
-    processNumber: processNumber || 'N/A',
-    court: court || 'N/A',
-    system: system || 'N/A',
-    status: status || 'Aguardando',
-    assignedTo: assignedTo || 'null',
-    createdBy,
-    isDistribution: Boolean(isDistribution)
-  });
 
   try {
     // Preparar dados para inserção
@@ -165,133 +203,107 @@ router.post('/protocolos', async (req, res) => {
       Boolean(isDistribution),
       now,
       now,
-      1, // queuePosition padrão
+      1,
       JSON.stringify(initialLog)
     ];
 
-    console.log('📊 Dados preparados para inserção:', insertData.map((item, index) => {
-      const fields = [
-        'id', 'processNumber', 'court', 'system', 'jurisdiction', 'processType',
-        'isFatal', 'needsProcuration', 'procurationType', 'needsGuia', 'guias',
-        'petitionType', 'observations', 'documents', 'status', 'assignedTo',
-        'createdBy', 'isDistribution', 'createdAt', 'updatedAt', 'queuePosition', 'activityLog'
-      ];
-      return `${fields[index]}: ${item}`;
-    }));
+    const result = await Promise.race([
+      query(`
+        INSERT INTO protocolos (
+          id, process_number, court, system, jurisdiction, process_type,
+          is_fatal, needs_procuration, procuration_type, needs_guia, guias,
+          petition_type, observations, documents, status, assigned_to,
+          created_by, is_distribution, created_at, updated_at, queue_position, activity_log
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        RETURNING id
+      `, insertData),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Insert timeout')), 10000)
+      )
+    ]);
 
-    const result = await query(`
-      INSERT INTO protocolos (
-        id, processNumber, court, system, jurisdiction, processType,
-        isFatal, needsProcuration, procurationType, needsGuia, guias,
-        petitionType, observations, documents, status, assignedTo,
-        createdBy, isDistribution, createdAt, updatedAt, queuePosition, activityLog
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-    `, insertData);
+    // Invalidar cache
+    protocolsCache = null;
+    cacheExpiry = 0;
 
-    console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
-    console.log('🆔 ID do protocolo:', id);
-    console.log('📊 Linhas afetadas:', result.rowCount || 1);
-    console.log('🎯 Protocolo direcionado para:', assignedTo || 'Fila do Robô');
-    console.log('📋 Dados do protocolo criado:', {
-      processNumber: processNumber || 'N/A',
-      court: court || 'N/A',
-      status: status || 'Aguardando',
-      assignedTo: assignedTo || null
-    });
+    const duration = Date.now() - startTime;
+    console.log(`🎉 Protocolo criado: ${id} (${duration}ms)`);
     
-    // Verificar se foi realmente inserido
-    try {
-      const countResult = await query('SELECT COUNT(*) as count FROM protocolos WHERE id = $1', [id]);
-      const count = countResult.rows[0].count;
-      console.log('✅ Verificação: protocolo existe no banco:', count > 0);
-        
-      // Verificar contagem total após inserção
-      const totalResult = await query('SELECT COUNT(*) as total FROM protocolos');
-      const total = totalResult.rows[0].total;
-      console.log('📊 Total de protocolos no banco após inserção:', total);
-    } catch (countErr) {
-      console.error('❌ Erro ao verificar inserção:', countErr);
-    }
-
     // Retornar protocolo criado
-    const createdProtocol = {
+    const createdProtocol = toCamelCase({
       id,
-      processNumber: processNumber || '',
+      process_number: processNumber || '',
       court: court || '',
       system: system || '',
       jurisdiction: jurisdiction || '',
-      processType: processType || 'civel',
-      isFatal: Boolean(isFatal),
-      needsProcuration: Boolean(needsProcuration),
-      procurationType: procurationType || '',
-      needsGuia: Boolean(needsGuia),
+      process_type: processType || 'civel',
+      is_fatal: Boolean(isFatal),
+      needs_procuration: Boolean(needsProcuration),
+      procuration_type: procurationType || '',
+      needs_guia: Boolean(needsGuia),
       guias: guias || [],
-      petitionType: petitionType || '',
+      petition_type: petitionType || '',
       observations: observations || '',
       documents: documents || [],
       status: status || 'Aguardando',
-      assignedTo: assignedTo || null,
-      createdBy,
-      isDistribution: Boolean(isDistribution),
-      createdAt: new Date(now),
-      updatedAt: new Date(now),
-      queuePosition: 1,
-      activityLog: initialLog
-    };
+      assigned_to: assignedTo || null,
+      created_by: createdBy,
+      is_distribution: Boolean(isDistribution),
+      created_at: new Date(now),
+      updated_at: new Date(now),
+      queue_position: 1,
+      activity_log: initialLog
+    });
     
     res.json({
       success: true,
       message: 'Protocolo criado com sucesso',
       protocolo: createdProtocol,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      duration: `${duration}ms`
     });
   } catch (err) {
-    console.error('❌ ERRO CRÍTICO ao inserir protocolo:', err);
-    console.error('📋 SQL Error details:', err.message);
+    const duration = Date.now() - startTime;
+    console.error(`❌ Erro ao criar protocolo (${duration}ms):`, err);
+    
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao criar protocolo: ' + err.message,
-      error: err.message,
-      sqlError: true
+      message: 'Erro ao criar protocolo',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      duration: `${duration}ms`
     });
   }
 });
 
-// Atualizar protocolo
+// Atualizar protocolo (otimizado)
 router.put('/protocolos/:id', async (req, res) => {
-  console.log('🔄 PUT /protocolos/:id chamado');
-  console.log('🆔 ID:', req.params.id);
-  console.log('📦 Updates:', JSON.stringify(req.body, null, 2));
-  
+  const startTime = Date.now();
   const { id } = req.params;
   const updates = req.body;
   const now = new Date().toISOString();
 
-  try {
-    // Primeiro, buscar o protocolo atual para manter o log
-    const result = await query('SELECT * FROM protocolos WHERE id = $1', [id]);
-    const row = result.rows && result.rows.length > 0 ? result.rows[0] : null;
+  console.log(`🔄 Atualizando protocolo: ${id}`);
 
-    if (!row) {
-      console.error('❌ Protocolo não encontrado para atualização:', id);
+  try {
+    // Buscar protocolo atual
+    const currentResult = await query('SELECT * FROM protocolos WHERE id = $1', [id]);
+    const currentRow = currentResult.rows && currentResult.rows.length > 0 ? currentResult.rows[0] : null;
+
+    if (!currentRow) {
       return res.status(404).json({ 
         success: false, 
         message: 'Protocolo não encontrado' 
       });
     }
 
-    console.log('📋 Protocolo encontrado para atualização:', {
-      id: row.id,
-      processNumber: row.processNumber,
-      status: row.status
-    });
-
-    // Manter log existente e adicionar nova entrada se fornecida
+    // Processar log de atividades
     let currentLog = [];
     try {
-      currentLog = JSON.parse(row.activityLog || '[]');
+      currentLog = typeof currentRow.activity_log === 'string' 
+        ? JSON.parse(currentRow.activity_log) 
+        : currentRow.activity_log || [];
     } catch (parseError) {
-      console.error('❌ Erro ao parsear log existente:', parseError);
+      console.error('❌ Erro ao parsear log:', parseError);
       currentLog = [];
     }
 
@@ -302,17 +314,17 @@ router.put('/protocolos/:id', async (req, res) => {
         id: updates.newLogEntry.id || (Date.now().toString() + Math.random().toString(36).substr(2, 9))
       };
       currentLog.push(newEntry);
-      console.log('📝 Nova entrada de log adicionada:', newEntry);
     }
 
-    // Construir query de atualização dinamicamente
+    // Construir query de atualização
     const fields = [];
     const values = [];
     let paramIndex = 1;
 
     Object.keys(updates).forEach(key => {
       if (key !== 'newLogEntry' && key !== 'id') {
-        fields.push(`${key} = $${paramIndex}`);
+        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+        fields.push(`${snakeKey} = $${paramIndex}`);
         paramIndex++;
         
         if (key === 'documents' || key === 'guias') {
@@ -325,111 +337,171 @@ router.put('/protocolos/:id', async (req, res) => {
       }
     });
 
-    // Sempre atualizar updatedAt e activityLog
-    fields.push(`updatedAt = $${paramIndex}`, `activityLog = $${paramIndex + 1}`);
+    // Sempre atualizar updated_at e activity_log
+    fields.push(`updated_at = $${paramIndex}`, `activity_log = $${paramIndex + 1}`);
     values.push(now, JSON.stringify(currentLog));
-    values.push(id); // WHERE clause parameter
+    values.push(id);
 
     const updateQuery = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = $${values.length}`;
     
-    console.log('🔄 Query de atualização:', updateQuery);
-    console.log('📊 Valores:', values);
+    const updateResult = await Promise.race([
+      query(updateQuery, values),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Update timeout')), 8000)
+      )
+    ]);
 
-    const updateResult = await query(updateQuery, values);
     const changes = updateResult.rowCount || 0;
 
     if (changes === 0) {
-      console.error('❌ Nenhuma linha foi atualizada');
       return res.status(404).json({ 
         success: false, 
         message: 'Protocolo não encontrado ou nenhuma alteração feita' 
       });
     }
 
-    console.log('✅ Protocolo atualizado com sucesso');
-    console.log('📊 Linhas afetadas:', changes);
+    // Invalidar cache
+    protocolsCache = null;
+    cacheExpiry = 0;
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ Protocolo atualizado: ${id} (${duration}ms)`);
       
     res.json({
       success: true,
       message: 'Protocolo atualizado com sucesso',
       changes: changes,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      duration: `${duration}ms`
     });
   } catch (err) {
-    console.error('❌ Erro ao atualizar protocolo:', err);
+    const duration = Date.now() - startTime;
+    console.error(`❌ Erro ao atualizar protocolo (${duration}ms):`, err);
+    
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao atualizar protocolo',
-      error: err.message
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      duration: `${duration}ms`
     });
   }
 });
 
-// Deletar protocolo
+// Deletar protocolo (otimizado)
 router.delete('/protocolos/:id', async (req, res) => {
-  console.log('🗑️ DELETE /protocolos/:id chamado');
-  console.log('🆔 ID:', req.params.id);
-  
+  const startTime = Date.now();
   const { id } = req.params;
 
+  console.log(`🗑️ Deletando protocolo: ${id}`);
+  
   try {
-    const result = await query('DELETE FROM protocolos WHERE id = $1', [id]);
+    const result = await Promise.race([
+      query('DELETE FROM protocolos WHERE id = $1', [id]),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Delete timeout')), 5000)
+      )
+    ]);
+
     const changes = result.rowCount || 0;
 
     if (changes === 0) {
-      console.error('❌ Protocolo não encontrado para deleção:', id);
       return res.status(404).json({ 
         success: false, 
         message: 'Protocolo não encontrado' 
       });
     }
 
-    console.log('✅ Protocolo deletado com sucesso');
-    console.log('📊 Linhas afetadas:', changes);
+    // Invalidar cache
+    protocolsCache = null;
+    cacheExpiry = 0;
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ Protocolo deletado: ${id} (${duration}ms)`);
     
     res.json({
       success: true,
       message: 'Protocolo deletado com sucesso',
       changes: changes,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      duration: `${duration}ms`
     });
   } catch (err) {
-    console.error('❌ Erro ao deletar protocolo:', err);
+    const duration = Date.now() - startTime;
+    console.error(`❌ Erro ao deletar protocolo (${duration}ms):`, err);
+    
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao deletar protocolo',
-      error: err.message
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      duration: `${duration}ms`
     });
   }
 });
 
-// Rota de teste para verificar conectividade
+// Rota de teste otimizada
 router.get('/protocolos/test', async (req, res) => {
-  console.log('🧪 GET /protocolos/test chamado');
+  const startTime = Date.now();
+  console.log('🧪 Teste de conectividade...');
   
   try {
-    // Testar conexão com banco
-    const result = await query('SELECT COUNT(*) as count FROM protocolos');
+    const result = await Promise.race([
+      query('SELECT COUNT(*) as count FROM protocolos'),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Test timeout')), 3000)
+      )
+    ]);
+
     const count = result.rows[0].count;
+    const duration = Date.now() - startTime;
     
-    console.log('✅ Teste de conectividade bem-sucedido');
+    console.log(`✅ Teste OK (${duration}ms)`);
+    
     res.json({
       success: true,
       message: 'Conectividade com protocolos funcionando',
       totalProtocols: count,
       timestamp: new Date().toISOString(),
       database: 'PostgreSQL conectado',
-      server: 'Express rodando'
+      server: 'Express rodando',
+      duration: `${duration}ms`
     });
   } catch (err) {
-    console.error('❌ Erro no teste de conectividade:', err);
+    const duration = Date.now() - startTime;
+    console.error(`❌ Teste falhou (${duration}ms):`, err);
+    
     return res.status(500).json({
       success: false,
       message: 'Erro de conectividade com banco de dados',
-      error: err.message,
-      timestamp: new Date().toISOString()
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      timestamp: new Date().toISOString(),
+      duration: `${duration}ms`
     });
   }
+});
+
+// Endpoint para limpar cache
+router.post('/protocolos/clear-cache', (req, res) => {
+  protocolsCache = null;
+  cacheExpiry = 0;
+  
+  res.json({
+    success: true,
+    message: 'Cache limpo com sucesso',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Endpoint para estatísticas de cache
+router.get('/protocolos/cache-stats', (req, res) => {
+  res.json({
+    success: true,
+    stats: {
+      cached: !!protocolsCache,
+      cacheSize: protocolsCache ? protocolsCache.length : 0,
+      cacheExpiry: new Date(cacheExpiry).toISOString(),
+      cacheValid: Date.now() < cacheExpiry
+    }
+  });
 });
 
 export default router;
