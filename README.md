@@ -81,13 +81,14 @@ npm install
 
 ### 2. Configurar Banco de Dados
 
-#### Desenvolvimento Local (SQLite):
-- O sistema usa SQLite automaticamente em desenvolvimento
-- Nenhuma configuração adicional necessária
+#### Desenvolvimento Local (PostgreSQL):
+- Instale PostgreSQL localmente
+- Crie um banco de dados chamado `protocolos_juridicos`
+- Configure as variáveis de ambiente no arquivo `.env`
 
 #### Produção (PostgreSQL):
 - Railway fornece automaticamente a variável `DATABASE_URL`
-- O sistema detecta automaticamente e usa PostgreSQL
+- O sistema usa PostgreSQL exclusivamente
 
 ### 2. Executar em desenvolvimento
 ```bash
@@ -155,8 +156,8 @@ npm run preview:production
 - Acompanhamento de status
 
 ### Banco de Dados
-- SQLite no Railway (produção)
-- SQLite local (desenvolvimento)
+- PostgreSQL no Railway (produção)
+- PostgreSQL local (desenvolvimento)
 - Tabela de funcionários
 - Tabela de protocolos
 - Usuário de teste pré-criado

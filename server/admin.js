@@ -56,7 +56,7 @@ router.post('/funcionarios', async (req, res) => {
       [email, senha, permissao]
     );
 
-    const newId = result.rows && result.rows[0] ? result.rows[0].id : result.insertId;
+    const newId = result.rows && result.rows[0] ? result.rows[0].id : null;
     
     console.log('Funcionário criado com ID:', newId);
     res.json({
@@ -113,8 +113,7 @@ router.put('/funcionarios/:id', async (req, res) => {
     }
 
     const result = await query(updateQuery, params);
-
-    const changes = result.rowCount || result.changes || 0;
+    const changes = result.rowCount || 0;
 
     if (changes === 0) {
       return res.status(404).json({ 
@@ -144,7 +143,7 @@ router.delete('/funcionarios/:id', async (req, res) => {
 
   try {
     const result = await query("DELETE FROM funcionarios WHERE id = $1", [id]);
-    const changes = result.rowCount || result.changes || 0;
+    const changes = result.rowCount || 0;
 
     if (changes === 0) {
       return res.status(404).json({ 

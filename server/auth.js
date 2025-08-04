@@ -4,7 +4,7 @@ import { query } from './db.js';
 const router = express.Router();
 
 // Endpoint de login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, senha } = req.body;
 
   if (!email || !senha) {

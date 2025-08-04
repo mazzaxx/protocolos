@@ -1,5 +1,5 @@
 import express from 'express';
-import { query, isPostgreSQL } from './db.js';
+import { query } from './db.js';
 
 const router = express.Router();
 
@@ -29,10 +29,10 @@ router.get('/protocolos', async (req, res) => {
           activityLog: JSON.parse(row.activityLog || '[]'),
           createdAt: new Date(row.createdAt),
           updatedAt: new Date(row.updatedAt),
-          isFatal: isPostgreSQL ? row.isFatal : Boolean(row.isFatal),
-          needsProcuration: isPostgreSQL ? row.needsProcuration : Boolean(row.needsProcuration),
-          needsGuia: isPostgreSQL ? row.needsGuia : Boolean(row.needsGuia),
-          isDistribution: isPostgreSQL ? row.isDistribution : Boolean(row.isDistribution)
+          isFatal: Boolean(row.isFatal),
+          needsProcuration: Boolean(row.needsProcuration),
+          needsGuia: Boolean(row.needsGuia),
+          isDistribution: Boolean(row.isDistribution)
         };
       } catch (parseError) {
         console.error('❌ Erro ao parsear protocolo:', row.id);
@@ -43,10 +43,10 @@ router.get('/protocolos', async (req, res) => {
           activityLog: [],
           createdAt: new Date(row.createdAt),
           updatedAt: new Date(row.updatedAt),
-          isFatal: isPostgreSQL ? row.isFatal : Boolean(row.isFatal),
-          needsProcuration: isPostgreSQL ? row.needsProcuration : Boolean(row.needsProcuration),
-          needsGuia: isPostgreSQL ? row.needsGuia : Boolean(row.needsGuia),
-          isDistribution: isPostgreSQL ? row.isDistribution : Boolean(row.isDistribution)
+          isFatal: Boolean(row.isFatal),
+          needsProcuration: Boolean(row.needsProcuration),
+          needsGuia: Boolean(row.needsGuia),
+          isDistribution: Boolean(row.isDistribution)
         };
       }
     });
@@ -146,10 +146,10 @@ router.post('/protocolos', async (req, res) => {
       system || '',
       jurisdiction || '',
       processType || 'civel',
-      isPostgreSQL ? Boolean(isFatal) : (isFatal ? 1 : 0),
-      isPostgreSQL ? Boolean(needsProcuration) : (needsProcuration ? 1 : 0),
+      Boolean(isFatal),
+      Boolean(needsProcuration),
       procurationType || '',
-      isPostgreSQL ? Boolean(needsGuia) : (needsGuia ? 1 : 0),
+      Boolean(needsGuia),
       JSON.stringify(guias || []),
       petitionType || '',
       observations || '',
@@ -157,7 +157,7 @@ router.post('/protocolos', async (req, res) => {
       status || 'Aguardando',
       assignedTo || null,
       createdBy,
-      isPostgreSQL ? Boolean(isDistribution) : (isDistribution ? 1 : 0),
+      Boolean(isDistribution),
       now,
       now,
       1, // queuePosition padrão
@@ -174,23 +174,18 @@ router.post('/protocolos', async (req, res) => {
       return `${fields[index]}: ${item}`;
     }));
 
-    // Usar placeholders corretos para PostgreSQL ($1, $2, etc.) ou SQLite (?, ?, etc.)
-    const placeholders = isPostgreSQL 
-      ? insertData.map((_, i) => `$${i + 1}`).join(', ')
-      : insertData.map(() => '?').join(', ');
-
     const result = await query(`
       INSERT INTO protocolos (
         id, processNumber, court, system, jurisdiction, processType,
         isFatal, needsProcuration, procurationType, needsGuia, guias,
         petitionType, observations, documents, status, assignedTo,
         createdBy, isDistribution, createdAt, updatedAt, queuePosition, activityLog
-      ) VALUES (${placeholders})
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
     `, insertData);
 
     console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
     console.log('🆔 ID do protocolo:', id);
-    console.log('📊 Linhas afetadas:', result.rowCount || result.changes || 1);
+    console.log('📊 Linhas afetadas:', result.rowCount || 1);
     console.log('🎯 Protocolo direcionado para:', assignedTo || 'Fila do Robô');
     console.log('📋 Dados do protocolo criado:', {
       processNumber: processNumber || 'N/A',
@@ -202,12 +197,12 @@ router.post('/protocolos', async (req, res) => {
     // Verificar se foi realmente inserido
     try {
       const countResult = await query('SELECT COUNT(*) as count FROM protocolos WHERE id = $1', [id]);
-      const count = isPostgreSQL ? countResult.rows[0].count : countResult.rows[0].count;
+      const count = countResult.rows[0].count;
       console.log('✅ Verificação: protocolo existe no banco:', count > 0);
         
       // Verificar contagem total após inserção
       const totalResult = await query('SELECT COUNT(*) as total FROM protocolos');
-      const total = isPostgreSQL ? totalResult.rows[0].total : totalResult.rows[0].total;
+      const total = totalResult.rows[0].total;
       console.log('📊 Total de protocolos no banco após inserção:', total);
     } catch (countErr) {
       console.error('❌ Erro ao verificar inserção:', countErr);
@@ -312,13 +307,13 @@ router.put('/protocolos/:id', async (req, res) => {
 
     Object.keys(updates).forEach(key => {
       if (key !== 'newLogEntry' && key !== 'id') {
-        fields.push(`${key} = ${isPostgreSQL ? `$${paramIndex}` : '?'}`);
+        fields.push(`${key} = $${paramIndex}`);
         paramIndex++;
         
         if (key === 'documents' || key === 'guias') {
           values.push(JSON.stringify(updates[key]));
         } else if (key === 'isFatal' || key === 'needsProcuration' || key === 'needsGuia' || key === 'isDistribution') {
-          values.push(isPostgreSQL ? Boolean(updates[key]) : (updates[key] ? 1 : 0));
+          values.push(Boolean(updates[key]));
         } else {
           values.push(updates[key]);
         }
@@ -326,17 +321,17 @@ router.put('/protocolos/:id', async (req, res) => {
     });
 
     // Sempre atualizar updatedAt e activityLog
-    fields.push(`updatedAt = ${isPostgreSQL ? `$${paramIndex}` : '?'}`, `activityLog = ${isPostgreSQL ? `$${paramIndex + 1}` : '?'}`);
+    fields.push(`updatedAt = $${paramIndex}`, `activityLog = $${paramIndex + 1}`);
     values.push(now, JSON.stringify(currentLog));
     values.push(id); // WHERE clause parameter
 
-    const updateQuery = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = ${isPostgreSQL ? `$${values.length}` : '?'}`;
+    const updateQuery = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = $${values.length}`;
     
     console.log('🔄 Query de atualização:', updateQuery);
     console.log('📊 Valores:', values);
 
     const updateResult = await query(updateQuery, values);
-    const changes = updateResult.rowCount || updateResult.changes || 0;
+    const changes = updateResult.rowCount || 0;
 
     if (changes === 0) {
       console.error('❌ Nenhuma linha foi atualizada');
@@ -374,7 +369,7 @@ router.delete('/protocolos/:id', async (req, res) => {
 
   try {
     const result = await query('DELETE FROM protocolos WHERE id = $1', [id]);
-    const changes = result.rowCount || result.changes || 0;
+    const changes = result.rowCount || 0;
 
     if (changes === 0) {
       console.error('❌ Protocolo não encontrado para deleção:', id);
@@ -410,7 +405,7 @@ router.get('/protocolos/test', async (req, res) => {
   try {
     // Testar conexão com banco
     const result = await query('SELECT COUNT(*) as count FROM protocolos');
-    const count = isPostgreSQL ? result.rows[0].count : result.rows[0].count;
+    const count = result.rows[0].count;
     
     console.log('✅ Teste de conectividade bem-sucedido');
     res.json({
@@ -418,7 +413,7 @@ router.get('/protocolos/test', async (req, res) => {
       message: 'Conectividade com protocolos funcionando',
       totalProtocols: count,
       timestamp: new Date().toISOString(),
-      database: isPostgreSQL ? 'PostgreSQL conectado' : 'SQLite conectado',
+      database: 'PostgreSQL conectado',
       server: 'Express rodando'
     });
   } catch (err) {
