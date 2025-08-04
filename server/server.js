@@ -173,9 +173,33 @@ app.use('*', (req, res) => {
 // Inicializar banco de dados e servidor
 async function startServer() {
   try {
-    console.log('🗄️ Inicializando banco de dados...');
-    await initializeDb();
-    console.log('✅ Banco de dados inicializado com sucesso!');
+    console.log('🗄️ Inicializando banco de dados com retry...');
+    
+    // Tentar inicializar o banco com retry
+    let dbInitialized = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (!dbInitialized && attempts < maxAttempts) {
+      attempts++;
+      try {
+        console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de inicialização do banco...`);
+        await initializeDb();
+        dbInitialized = true;
+        console.log('✅ Banco de dados inicializado com sucesso!');
+      } catch (error) {
+        console.error(`❌ Tentativa ${attempts}/${maxAttempts} falhou:`, error.message);
+        
+        if (attempts < maxAttempts) {
+          const delay = Math.min(5000 * attempts, 30000); // Delay progressivo até 30s
+          console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error('❌ FALHA CRÍTICA: Não foi possível inicializar o banco após todas as tentativas');
+          throw error;
+        }
+      }
+    }
     
     app.listen(PORT, '0.0.0.0', () => {
       console.log('🎉 SERVIDOR INICIADO COM SUCESSO!');
@@ -196,14 +220,20 @@ async function startServer() {
       console.log('=' .repeat(50));
       console.log('🔄 Sistema pronto para receber requisições!');
       
-      // Teste de conectividade inicial
-      testConnection()
-        .then(() => console.log('✅ Teste de conectividade inicial: SUCESSO'))
-        .catch(err => console.error('❌ Teste de conectividade inicial: FALHA', err.message));
+      // Teste de conectividade periódico
+      setInterval(async () => {
+        try {
+          await testConnection();
+          console.log('✅ Health check do banco: OK');
+        } catch (error) {
+          console.error('❌ Health check do banco: FALHA', error.message);
+        }
+      }, 60000); // A cada 1 minuto
     });
   } catch (error) {
     console.error('❌ ERRO CRÍTICO ao iniciar servidor:', error);
-    console.error('💡 Verifique se o banco de dados está acessível');
+    console.error('💡 Verifique se o Railway PostgreSQL está acessível');
+    console.error('🔗 DATABASE_URL:', process.env.DATABASE_URL ? 'Presente' : 'AUSENTE');
     process.exit(1);
   }
 }

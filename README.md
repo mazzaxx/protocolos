@@ -4,6 +4,15 @@ Sistema completo para gerenciamento de protocolos jurídicos com autenticação 
 
 ## 🚀 Deploy Rápido (Gratuito)
 
+### ⚠️ IMPORTANTE: Configuração do Banco PostgreSQL no Railway
+
+**ANTES DE FAZER O DEPLOY:**
+1. No Railway, vá em seu projeto
+2. Clique em "Variables" 
+3. Certifique-se de que `DATABASE_URL` está configurada automaticamente
+4. Se não estiver, adicione um PostgreSQL database ao projeto
+5. O Railway irá gerar automaticamente a `DATABASE_URL`
+
 ### Passo a Passo Completo para Deploy
 
 #### 1. Deploy do Backend no Railway
@@ -11,7 +20,10 @@ Sistema completo para gerenciamento de protocolos jurídicos com autenticação 
 2. Clique em "New Project" → "Deploy from GitHub repo"
 3. Selecione este repositório
 4. O Railway detectará automaticamente o Node.js
-5. Anote a URL gerada (ex: `https://seu-projeto-railway.up.railway.app`)
+5. **CRÍTICO:** Adicione um PostgreSQL database:
+   - Clique em "Add Service" → "Database" → "PostgreSQL"
+   - O Railway irá automaticamente configurar a `DATABASE_URL`
+6. Anote a URL gerada (ex: `https://seu-projeto-railway.up.railway.app`)
 
 #### 2. Configurar Frontend para Produção
 1. Edite o arquivo `.env` e coloque a URL do Railway:
@@ -34,6 +46,19 @@ Sistema completo para gerenciamento de protocolos jurídicos com autenticação 
 #### 4. Verificar CORS no Backend
 Certifique-se de que o backend está configurado para aceitar requisições do seu domínio Netlify.
 
+### 🔧 Solução de Problemas do Banco
+
+**Se o erro `ECONNREFUSED ::1:5432` aparecer:**
+1. Verifique se o PostgreSQL foi adicionado ao projeto Railway
+2. Confirme que a variável `DATABASE_URL` existe
+3. Redeploy o projeto no Railway
+4. Aguarde alguns minutos para o banco inicializar
+
+**Logs para verificar:**
+- `🔗 DATABASE_URL presente: true` ✅ (deve ser true)
+- `🐘 Usando PostgreSQL com DATABASE_URL do Railway` ✅
+- `✅ Teste de conectividade PostgreSQL bem-sucedido` ✅
+
 ### Railway (Recomendado)
 1. Fork este repositório
 2. Acesse [railway.app](https://railway.app)
@@ -47,6 +72,19 @@ Certifique-se de que o backend está configurado para aceitar requisições do s
 2. Acesse [render.com](https://render.com)
 3. "New Web Service" → Conecte GitHub
 4. Configure: `npm run start:production`
+
+## 🗄️ Banco de Dados
+
+### Produção (Railway)
+- **Banco:** PostgreSQL (fornecido automaticamente pelo Railway)
+- **Configuração:** Automática via `DATABASE_URL`
+- **Backup:** Gerenciado pelo Railway
+- **Conexões:** Pool de até 20 conexões simultâneas
+
+### Desenvolvimento Local
+- **Banco:** PostgreSQL local
+- **Configuração:** Via variáveis de ambiente no `.env`
+- **Instalação:** `brew install postgresql` (Mac) ou `apt install postgresql` (Ubuntu)
 
 ## Como executar o projeto
 
@@ -82,13 +120,29 @@ npm install
 ### 2. Configurar Banco de Dados
 
 #### Desenvolvimento Local (PostgreSQL):
-- Instale PostgreSQL localmente
-- Crie um banco de dados chamado `protocolos_juridicos`
-- Configure as variáveis de ambiente no arquivo `.env`
+```bash
+# Instalar PostgreSQL
+brew install postgresql  # Mac
+# ou
+sudo apt install postgresql postgresql-contrib  # Ubuntu
+
+# Iniciar serviço
+brew services start postgresql  # Mac
+# ou  
+sudo systemctl start postgresql  # Ubuntu
+
+# Criar banco
+createdb protocolos_juridicos
+
+# Configurar .env
+cp .env.example .env
+# Editar .env com suas configurações locais
+```
 
 #### Produção (PostgreSQL):
-- Railway fornece automaticamente a variável `DATABASE_URL`
-- O sistema usa PostgreSQL exclusivamente
+- Railway fornece automaticamente PostgreSQL
+- Variável `DATABASE_URL` é configurada automaticamente
+- Não requer configuração manual
 
 ### 2. Executar em desenvolvimento
 ```bash
@@ -111,6 +165,22 @@ npm run build
 npm run preview:production
 ```
 
+## 🔍 Monitoramento e Logs
+
+### Railway Logs
+```bash
+# Ver logs em tempo real
+railway logs --follow
+
+# Ver logs específicos do banco
+railway logs --filter="PostgreSQL"
+```
+
+### Health Checks
+- **URL:** `https://seu-projeto.up.railway.app/health`
+- **Frequência:** A cada 1 minuto
+- **Inclui:** Status do banco, estatísticas, conectividade
+
 ## 🔄 Sincronização de Dados
 
 **IMPORTANTE:** Este sistema funciona com sincronização em tempo real entre todos os usuários.
@@ -124,6 +194,7 @@ npm run preview:production
 ### Se os dados não estão sincronizando:
 1. Verifique se o servidor backend está online
 2. Teste a URL: https://sistema-protocolos-juridicos-production.up.railway.app
+3. Verifique o health check: https://sistema-protocolos-juridicos-production.up.railway.app/health
 3. Verifique o console do navegador (F12) para erros
 4. Certifique-se de que a variável `VITE_API_BASE_URL` está configurada corretamente
 
@@ -156,11 +227,13 @@ npm run preview:production
 - Acompanhamento de status
 
 ### Banco de Dados
-- PostgreSQL no Railway (produção)
-- PostgreSQL local (desenvolvimento)
+- **Produção:** PostgreSQL no Railway com backup automático
+- **Desenvolvimento:** PostgreSQL local
 - Tabela de funcionários
 - Tabela de protocolos
 - Usuário de teste pré-criado
+- Pool de conexões com retry automático
+- Health checks periódicos
 
 ## Estrutura do Projeto
 
@@ -180,14 +253,16 @@ server/
 ├── auth.js                # Rotas de autenticação  
 ├── protocols.js           # Rotas de protocolos
 ├── admin.js               # Rotas administrativas
-├── db.js                  # Configuração de banco (SQLite/PostgreSQL)
-└── database.sqlite        # Banco SQLite (desenvolvimento)
+├── db.js                  # Configuração PostgreSQL com retry
+└── test-connectivity.js  # Testes de conectividade
 ```
 
 ## Tecnologias Utilizadas
 
 - **Frontend:** React, TypeScript, Tailwind CSS
 - **Backend:** Node.js, Express
-- **Banco:** SQLite3 (desenvolvimento), PostgreSQL (produção)
+- **Banco:** PostgreSQL (produção e desenvolvimento)
 - **Autenticação:** Context API + localStorage
 - **Deploy:** Railway (backend) + Netlify (frontend)
+- **Monitoramento:** Health checks automáticos
+- **Retry Logic:** Conexões com retry automático

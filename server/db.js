@@ -12,15 +12,20 @@ let dbConfig;
 
 if (process.env.DATABASE_URL) {
   // Railway PostgreSQL (produção e desenvolvimento)
-  console.log('🐘 Usando PostgreSQL com DATABASE_URL');
+  console.log('🐘 Usando PostgreSQL com DATABASE_URL do Railway');
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
     ssl: isProduction ? {
       rejectUnauthorized: false
     } : false,
-    max: 10, // máximo de conexões no pool
+    max: 20, // máximo de conexões no pool
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000, // Aumentar timeout
+    acquireTimeoutMillis: 60000, // Timeout para adquirir conexão
+    createTimeoutMillis: 30000,
+    destroyTimeoutMillis: 5000,
+    reapIntervalMillis: 1000,
+    createRetryIntervalMillis: 200,
   };
 } else {
   // PostgreSQL local (desenvolvimento sem Railway)
@@ -30,11 +35,11 @@ if (process.env.DATABASE_URL) {
     host: process.env.DB_HOST || 'localhost',
     database: process.env.DB_NAME || 'protocolos_juridicos',
     password: process.env.DB_PASSWORD || 'postgres',
-    port: process.env.DB_PORT || 5432,
+    port: parseInt(process.env.DB_PORT || '5432'),
     ssl: false,
     max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 5000,
   };
 }
 
@@ -44,15 +49,32 @@ const db = new Pool(dbConfig);
 console.log('✅ Pool PostgreSQL configurado');
 console.log('🔗 Max connections:', dbConfig.max);
 
-// Função para executar queries
-const query = async (sql, params = []) => {
-  const client = await db.connect();
-  try {
-    const result = await client.query(sql, params);
-    return result;
-  } finally {
-    client.release();
+// Função para executar queries com retry automático
+const query = async (sql, params = [], retries = 3) => {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const client = await db.connect();
+      try {
+        const result = await client.query(sql, params);
+        return result;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
+      
+      if (attempt < retries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Backoff exponencial
+        console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
   }
+  
+  throw lastError;
 };
 
 // Função para inicializar o banco de dados
@@ -60,8 +82,19 @@ export const initializeDb = async () => {
   console.log('🚀 Inicializando banco de dados PostgreSQL...');
   console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
   
+  // Verificar conectividade primeiro
+  try {
+    console.log('🔍 Testando conectividade com o banco...');
+    await testConnection();
+    console.log('✅ Conectividade confirmada!');
+  } catch (error) {
+    console.error('❌ Falha na conectividade inicial:', error.message);
+    throw error;
+  }
+  
   try {
     // Criar tabela funcionarios
+    console.log('📋 Criando tabela funcionarios...');
     await query(`
       CREATE TABLE IF NOT EXISTS funcionarios (
         id SERIAL PRIMARY KEY,
@@ -73,6 +106,7 @@ export const initializeDb = async () => {
     console.log('✅ Tabela funcionarios criada/verificada');
 
     // Criar tabela protocolos
+    console.log('📋 Criando tabela protocolos...');
     await query(`
       CREATE TABLE IF NOT EXISTS protocolos (
         id VARCHAR(255) PRIMARY KEY,
@@ -177,16 +211,30 @@ const createTestUsers = async () => {
   }
 };
 
-// Função para testar conectividade
-export const testConnection = async () => {
-  try {
-    const result = await query("SELECT 1 as test");
-    console.log('✅ Teste de conectividade PostgreSQL bem-sucedido');
-    return result;
-  } catch (error) {
-    console.error('❌ Teste de conectividade PostgreSQL falhou:', error);
-    throw error;
+// Função para testar conectividade com retry
+export const testConnection = async (retries = 5) => {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`🔍 Teste de conectividade - Tentativa ${attempt}/${retries}`);
+      const result = await query("SELECT 1 as test", [], 1); // Sem retry interno
+      console.log('✅ Teste de conectividade PostgreSQL bem-sucedido');
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
+      
+      if (attempt < retries) {
+        const delay = Math.min(2000 * attempt, 10000); // Delay progressivo
+        console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
   }
+  
+  console.error('❌ Todas as tentativas de conectividade falharam');
+  throw lastError;
 };
 
 // Função para obter estatísticas do banco
@@ -201,7 +249,8 @@ export const getDatabaseStats = async () => {
       protocolos: protocolosResult.rows[0].count,
       protocolosAguardando: aguardandoResult.rows[0].count,
       databaseType: 'PostgreSQL',
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'development',
+      connectionString: process.env.DATABASE_URL ? 'Railway PostgreSQL' : 'Local PostgreSQL'
     };
     
     return stats;
@@ -213,9 +262,26 @@ export const getDatabaseStats = async () => {
 
 // Função para fechar conexões (cleanup)
 export const closeConnection = async () => {
-  await db.end();
-  console.log('🔒 Pool PostgreSQL fechado');
+  try {
+    await db.end();
+    console.log('🔒 Pool PostgreSQL fechado');
+  } catch (error) {
+    console.error('❌ Erro ao fechar pool:', error);
+  }
 };
+
+// Event listeners para cleanup
+process.on('SIGINT', async () => {
+  console.log('🛑 SIGINT recebido, fechando pool PostgreSQL...');
+  await closeConnection();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM recebido, fechando pool PostgreSQL...');
+  await closeConnection();
+  process.exit(0);
+});
 
 // Exportar query function e informações do banco
 export { query };
