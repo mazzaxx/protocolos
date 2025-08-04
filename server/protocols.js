@@ -17,7 +17,7 @@ router.get('/protocolos', async (req, res) => {
       ORDER BY p.createdAt DESC
       `),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout')), 10000)
+        setTimeout(() => reject(new Error('Query timeout')), 15000)
       )
     ]);
 

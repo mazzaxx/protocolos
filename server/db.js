@@ -18,14 +18,14 @@ if (process.env.DATABASE_URL) {
     ssl: isProduction ? {
       rejectUnauthorized: false
     } : false,
-    max: 20, // máximo de conexões no pool
+    max: 10, // Reduzir conexões para Railway
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000, // Aumentar timeout
-    acquireTimeoutMillis: 60000, // Timeout para adquirir conexão
-    createTimeoutMillis: 30000,
+    connectionTimeoutMillis: 20000, // Aumentar timeout
+    acquireTimeoutMillis: 30000,
+    createTimeoutMillis: 20000,
     destroyTimeoutMillis: 5000,
     reapIntervalMillis: 1000,
-    createRetryIntervalMillis: 200,
+    createRetryIntervalMillis: 500,
   };
 } else {
   // PostgreSQL local (desenvolvimento sem Railway)
@@ -37,9 +37,9 @@ if (process.env.DATABASE_URL) {
     password: process.env.DB_PASSWORD || 'postgres',
     port: parseInt(process.env.DB_PORT || '5432'),
     ssl: false,
-    max: 10,
+    max: 5,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
   };
 }
 
@@ -50,7 +50,7 @@ console.log('✅ Pool PostgreSQL configurado');
 console.log('🔗 Max connections:', dbConfig.max);
 
 // Função para executar queries com retry automático
-const query = async (sql, params = [], retries = 3) => {
+const query = async (sql, params = [], retries = 2) => {
   let lastError;
   
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -58,7 +58,7 @@ const query = async (sql, params = [], retries = 3) => {
       const client = await Promise.race([
         db.connect(),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), 5000)
+          setTimeout(() => reject(new Error('Connection timeout')), 10000)
         )
       ]);
       
@@ -73,7 +73,7 @@ const query = async (sql, params = [], retries = 3) => {
       console.error(`❌ Query tentativa ${attempt}/${retries} falhou:`, error.message);
       
       if (attempt < retries) {
-        const delay = Math.min(500 * attempt, 2000); // Delay menor
+        const delay = Math.min(1000 * attempt, 3000);
         console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -87,6 +87,12 @@ const query = async (sql, params = [], retries = 3) => {
 export const initializeDb = async () => {
   console.log('🚀 Inicializando banco de dados PostgreSQL...');
   console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
+  
+  // Aguardar um pouco para o banco estar pronto
+  if (isProduction) {
+    console.log('⏳ Aguardando banco PostgreSQL ficar pronto...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
   
   // Verificar conectividade primeiro
   try {
@@ -142,19 +148,6 @@ export const initializeDb = async () => {
       )
     `);
     console.log('✅ Tabela protocolos criada/verificada');
-
-    // Verificar estrutura das tabelas
-    const funcionariosInfo = await query(`
-      SELECT column_name, data_type, is_nullable, column_default 
-      FROM information_schema.columns 
-      WHERE table_name = 'funcionarios'
-      ORDER BY ordinal_position
-    `);
-    
-    console.log('📋 Estrutura da tabela funcionarios:');
-    funcionariosInfo.rows.forEach(col => {
-      console.log(`  - ${col.column_name}: ${col.data_type} ${col.is_nullable === 'NO' ? 'NOT NULL' : ''} ${col.column_default ? `DEFAULT ${col.column_default}` : ''}`);
-    });
 
     // Criar usuários de teste
     await createTestUsers();
@@ -218,7 +211,7 @@ const createTestUsers = async () => {
 };
 
 // Função para testar conectividade com retry
-export const testConnection = async (retries = 5) => {
+export const testConnection = async (retries = 3) => {
   let lastError;
   
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -227,7 +220,7 @@ export const testConnection = async (retries = 5) => {
       const result = await Promise.race([
         query("SELECT 1 as test", [], 1),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Test timeout')), 3000)
+          setTimeout(() => reject(new Error('Test timeout')), 5000)
         )
       ]);
       console.log('✅ Teste de conectividade PostgreSQL bem-sucedido');
@@ -237,7 +230,7 @@ export const testConnection = async (retries = 5) => {
       console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
       
       if (attempt < retries) {
-        const delay = Math.min(1000 * attempt, 5000); // Delay menor
+        const delay = Math.min(2000 * attempt, 5000);
         console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }

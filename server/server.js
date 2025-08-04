@@ -93,9 +93,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rota de health check
+// Rota de health check básica
 app.get('/', (req, res) => {
-  console.log('🏥 Health check solicitado');
+  console.log('🏥 Health check básico solicitado');
   res.status(200).json({ 
     message: 'Servidor de autenticação funcionando!',
     timestamp: new Date().toISOString(),
@@ -105,21 +105,22 @@ app.get('/', (req, res) => {
   });
 });
 
-// Rota de health check específica
+// Rota de health check específica (Railway usa esta)
 app.get('/health', async (req, res) => {
   console.log('🏥 Health check detalhado solicitado');
   
-  // Resposta rápida para evitar timeout
   const startTime = Date.now();
   
   try {
     // Teste básico de conectividade (mais rápido)
     const basicTest = await Promise.race([
       query("SELECT 1 as test", [], 1),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Database timeout')), 3000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Database timeout')), 8000))
     ]);
     
     const responseTime = Date.now() - startTime;
+    
+    console.log('✅ Health check passou - banco conectado');
     
     res.status(200).json({
       status: 'healthy',
@@ -135,9 +136,9 @@ app.get('/health', async (req, res) => {
     console.error('❌ Health check falhou:', error);
     const responseTime = Date.now() - startTime;
     
-    res.status(500).json({
+    res.status(503).json({
       status: 'unhealthy',
-      message: 'Problemas de conectividade',
+      message: 'Problemas de conectividade com banco',
       error: error.message,
       timestamp: new Date().toISOString(),
       responseTime: `${responseTime}ms`,
@@ -206,7 +207,7 @@ async function startServer() {
     const initializeDatabase = async () => {
       let dbInitialized = false;
       let attempts = 0;
-      const maxAttempts = 5; // Reduzir tentativas
+      const maxAttempts = 3; // Reduzir tentativas
       
       while (!dbInitialized && attempts < maxAttempts) {
         attempts++;
@@ -230,7 +231,7 @@ async function startServer() {
           console.error(`❌ Tentativa ${attempts}/${maxAttempts} falhou:`, error.message);
           
           if (attempts < maxAttempts) {
-            const delay = Math.min(2000 * attempts, 10000); // Delay menor
+            const delay = Math.min(5000 * attempts, 15000); // Delay maior
             console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
@@ -283,48 +284,6 @@ app.get('/env-check', (req, res) => {
   });
 });
 
-// Middleware de tratamento de erros melhorado
-app.use((err, req, res, next) => {
-  console.error('❌ Erro no servidor:', err);
-  
-  if (err.message === 'Não permitido pelo CORS') {
-    return res.status(403).json({
-      success: false,
-      message: 'Acesso negado por política CORS',
-      origin: req.headers.origin
-    });
-  }
-  
-  // Não expor detalhes do erro em produção
-  const isDevelopment = process.env.NODE_ENV !== 'production';
-  
-  res.status(500).json({
-    success: false,
-    message: 'Erro interno do servidor',
-    error: isDevelopment ? err.message : 'Erro interno',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Middleware para rotas não encontradas melhorado
-app.use('*', (req, res) => {
-  console.log('❌ Rota não encontrada:', req.method, req.originalUrl);
-  res.status(404).json({
-    success: false,
-    message: 'Rota não encontrada',
-    path: req.originalUrl,
-    method: req.method,
-    availableRoutes: [
-      'GET /',
-      'GET /health',
-      'GET /ping',
-      'POST /api/login',
-      'GET /api/protocolos',
-      'POST /api/protocolos'
-    ]
-  });
-});
-
 // Tratamento de exceções não capturadas
 process.on('uncaughtException', (error) => {
   console.error('❌ ERRO NÃO CAPTURADO:', error);
@@ -341,94 +300,6 @@ process.on('unhandledRejection', (reason, promise) => {
   if (process.env.NODE_ENV !== 'production') {
     process.exit(1);
   }
-});
-
-// Iniciar o servidor
-startServer();
-      try {
-        console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de inicialização do banco...`);
-        await initializeDb();
-        dbInitialized = true;
-        console.log('✅ Banco de dados inicializado com sucesso!');
-      } catch (error) {
-        console.error(`❌ Tentativa ${attempts}/${maxAttempts} falhou:`, error.message);
-        
-        if (attempts < maxAttempts) {
-          const delay = Math.min(5000 * attempts, 30000); // Delay progressivo até 30s
-          console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        } else {
-          console.error('❌ FALHA CRÍTICA: Não foi possível inicializar o banco após todas as tentativas');
-          throw error;
-        }
-      }
-    }
-    
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log('🎉 SERVIDOR INICIADO COM SUCESSO!');
-      console.log('=' .repeat(50));
-      console.log(`🌐 Servidor rodando na porta: ${PORT}`);
-      console.log(`🔗 URL local: http://localhost:${PORT}`);
-      console.log(`🌍 URL Railway: https://sistema-protocolos-juridicos-production.up.railway.app`);
-      console.log(`🎯 Frontend Netlify: https://ncasistemaprotocolos.netlify.app`);
-      console.log('=' .repeat(50));
-      console.log('📋 Rotas disponíveis:');
-      console.log('  GET  / - Health check básico');
-      console.log('  GET  /health - Health check detalhado');
-      console.log('  POST /api/login - Login de usuários');
-      console.log('  GET  /api/protocolos - Listar protocolos');
-      console.log('  POST /api/protocolos - Criar protocolo');
-      console.log('  PUT  /api/protocolos/:id - Atualizar protocolo');
-      console.log('  GET  /api/admin/funcionarios - Listar funcionários');
-      console.log('=' .repeat(50));
-      console.log('🔄 Sistema pronto para receber requisições!');
-      
-      // Teste de conectividade periódico
-      setInterval(async () => {
-        try {
-          await testConnection();
-          console.log('✅ Health check do banco: OK');
-        } catch (error) {
-          console.error('❌ Health check do banco: FALHA', error.message);
-        }
-      }, 60000); // A cada 1 minuto
-    });
-  } catch (error) {
-    console.error('❌ ERRO CRÍTICO ao iniciar servidor:', error);
-    console.error('💡 Verifique se o Railway PostgreSQL está acessível');
-    console.error('🔗 DATABASE_URL:', process.env.DATABASE_URL ? 'Presente' : 'AUSENTE');
-    process.exit(1);
-  }
-}
-
-// Tratamento de sinais do sistema
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM recebido, encerrando servidor graciosamente...');
-  closeConnection().then(() => {
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('🛑 SIGINT recebido, encerrando servidor graciosamente...');
-  closeConnection().then(() => {
-    process.exit(0);
-  });
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('❌ ERRO NÃO CAPTURADO:', error);
-  closeConnection().then(() => {
-    process.exit(1);
-  });
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ PROMISE REJEITADA NÃO TRATADA:', reason);
-  console.error('Promise:', promise);
-  closeConnection().then(() => {
-    process.exit(1);
-  });
 });
 
 // Iniciar o servidor

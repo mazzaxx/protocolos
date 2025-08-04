@@ -22,7 +22,7 @@ router.post('/login', async (req, res) => {
       [email, senha]
       ),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Login timeout')), 5000)
+        setTimeout(() => reject(new Error('Login timeout')), 10000)
       )
     ]);
 

@@ -2,10 +2,13 @@
 nixPkgs = ['nodejs-18_x', 'npm-9_x']
 
 [phases.install]
-cmds = ['npm ci']
+cmds = ['npm ci --only=production']
 
 [phases.build]
 cmds = ['echo "No build step needed for backend"']
 
 [start]
 cmd = 'node server/server.js'
+
+[variables]
+NODE_ENV = 'production'
