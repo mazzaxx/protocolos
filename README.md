@@ -79,6 +79,16 @@ npm run dev:full
 npm install
 ```
 
+### 2. Configurar Banco de Dados
+
+#### Desenvolvimento Local (SQLite):
+- O sistema usa SQLite automaticamente em desenvolvimento
+- Nenhuma configuração adicional necessária
+
+#### Produção (PostgreSQL):
+- Railway fornece automaticamente a variável `DATABASE_URL`
+- O sistema detecta automaticamente e usa PostgreSQL
+
 ### 2. Executar em desenvolvimento
 ```bash
 # Servidor + Frontend juntos
@@ -169,14 +179,14 @@ server/
 ├── auth.js                # Rotas de autenticação  
 ├── protocols.js           # Rotas de protocolos
 ├── admin.js               # Rotas administrativas
-├── db.js                  # Configuração SQLite
-└── database.sqlite        # Banco de dados (criado automaticamente)
+├── db.js                  # Configuração de banco (SQLite/PostgreSQL)
+└── database.sqlite        # Banco SQLite (desenvolvimento)
 ```
 
 ## Tecnologias Utilizadas
 
 - **Frontend:** React, TypeScript, Tailwind CSS
 - **Backend:** Node.js, Express
-- **Banco:** SQLite3
+- **Banco:** SQLite3 (desenvolvimento), PostgreSQL (produção)
 - **Autenticação:** Context API + localStorage
 - **Deploy:** Railway (backend) + Netlify (frontend)

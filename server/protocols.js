@@ -1,28 +1,22 @@
 import express from 'express';
-import db from './db.js';
+import { query, isPostgreSQL } from './db.js';
 
 const router = express.Router();
 
 // Listar todos os protocolos
-router.get('/protocolos', (req, res) => {
+router.get('/protocolos', async (req, res) => {
   console.log('🔍 SINCRONIZAÇÃO: Listando protocolos para', req.headers.origin);
   console.log('🔄 Modo:', req.headers['x-sync-mode'] || 'normal');
   
-  db.all(`
-    SELECT p.*, f.email as createdByEmail 
-    FROM protocolos p 
-    LEFT JOIN funcionarios f ON p.createdBy = f.id 
-    ORDER BY p.createdAt DESC
-  `, (err, rows) => {
-    if (err) {
-      console.error('❌ ERRO DE SINCRONIZAÇÃO:', err);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro interno do servidor',
-        error: err.message
-      });
-    }
+  try {
+    const result = await query(`
+      SELECT p.*, f.email as createdByEmail 
+      FROM protocolos p 
+      LEFT JOIN funcionarios f ON p.createdBy = f.id 
+      ORDER BY p.createdAt DESC
+    `);
 
+    const rows = result.rows || [];
     console.log(`📊 SINCRONIZANDO ${rows.length} protocolos`);
 
     // Converter strings JSON de volta para objetos
@@ -35,10 +29,10 @@ router.get('/protocolos', (req, res) => {
           activityLog: JSON.parse(row.activityLog || '[]'),
           createdAt: new Date(row.createdAt),
           updatedAt: new Date(row.updatedAt),
-          isFatal: Boolean(row.isFatal),
-          needsProcuration: Boolean(row.needsProcuration),
-          needsGuia: Boolean(row.needsGuia),
-          isDistribution: Boolean(row.isDistribution)
+          isFatal: isPostgreSQL ? row.isFatal : Boolean(row.isFatal),
+          needsProcuration: isPostgreSQL ? row.needsProcuration : Boolean(row.needsProcuration),
+          needsGuia: isPostgreSQL ? row.needsGuia : Boolean(row.needsGuia),
+          isDistribution: isPostgreSQL ? row.isDistribution : Boolean(row.isDistribution)
         };
       } catch (parseError) {
         console.error('❌ Erro ao parsear protocolo:', row.id);
@@ -49,10 +43,10 @@ router.get('/protocolos', (req, res) => {
           activityLog: [],
           createdAt: new Date(row.createdAt),
           updatedAt: new Date(row.updatedAt),
-          isFatal: Boolean(row.isFatal),
-          needsProcuration: Boolean(row.needsProcuration),
-          needsGuia: Boolean(row.needsGuia),
-          isDistribution: Boolean(row.isDistribution)
+          isFatal: isPostgreSQL ? row.isFatal : Boolean(row.isFatal),
+          needsProcuration: isPostgreSQL ? row.needsProcuration : Boolean(row.needsProcuration),
+          needsGuia: isPostgreSQL ? row.needsGuia : Boolean(row.needsGuia),
+          isDistribution: isPostgreSQL ? row.isDistribution : Boolean(row.isDistribution)
         };
       }
     });
@@ -67,11 +61,18 @@ router.get('/protocolos', (req, res) => {
       timestamp: new Date().toISOString(),
       syncStatus: 'success'
     });
-  });
+  } catch (error) {
+    console.error('❌ ERRO DE SINCRONIZAÇÃO:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
 });
 
 // Criar novo protocolo
-router.post('/protocolos', (req, res) => {
+router.post('/protocolos', async (req, res) => {
   console.log('📝 POST /protocolos chamado');
   console.log('📍 Origin:', req.headers.origin);
   console.log('🔗 Referer:', req.headers.referer);
@@ -136,66 +137,60 @@ router.post('/protocolos', (req, res) => {
     isDistribution: Boolean(isDistribution)
   });
 
-  // Preparar dados para inserção
-  const insertData = [
-    id,
-    processNumber || '',
-    court || '',
-    system || '',
-    jurisdiction || '',
-    processType || 'civel',
-    isFatal ? 1 : 0,
-    needsProcuration ? 1 : 0,
-    procurationType || '',
-    needsGuia ? 1 : 0,
-    JSON.stringify(guias || []),
-    petitionType || '',
-    observations || '',
-    JSON.stringify(documents || []),
-    status || 'Aguardando',
-    assignedTo || null,
-    createdBy,
-    isDistribution ? 1 : 0,
-    now,
-    now,
-    1, // queuePosition padrão
-    JSON.stringify(initialLog)
-  ];
-
-  console.log('📊 Dados preparados para inserção:', insertData.map((item, index) => {
-    const fields = [
-      'id', 'processNumber', 'court', 'system', 'jurisdiction', 'processType',
-      'isFatal', 'needsProcuration', 'procurationType', 'needsGuia', 'guias',
-      'petitionType', 'observations', 'documents', 'status', 'assignedTo',
-      'createdBy', 'isDistribution', 'createdAt', 'updatedAt', 'queuePosition', 'activityLog'
+  try {
+    // Preparar dados para inserção
+    const insertData = [
+      id,
+      processNumber || '',
+      court || '',
+      system || '',
+      jurisdiction || '',
+      processType || 'civel',
+      isPostgreSQL ? Boolean(isFatal) : (isFatal ? 1 : 0),
+      isPostgreSQL ? Boolean(needsProcuration) : (needsProcuration ? 1 : 0),
+      procurationType || '',
+      isPostgreSQL ? Boolean(needsGuia) : (needsGuia ? 1 : 0),
+      JSON.stringify(guias || []),
+      petitionType || '',
+      observations || '',
+      JSON.stringify(documents || []),
+      status || 'Aguardando',
+      assignedTo || null,
+      createdBy,
+      isPostgreSQL ? Boolean(isDistribution) : (isDistribution ? 1 : 0),
+      now,
+      now,
+      1, // queuePosition padrão
+      JSON.stringify(initialLog)
     ];
-    return `${fields[index]}: ${item}`;
-  }));
 
-  db.run(`
-    INSERT INTO protocolos (
-      id, processNumber, court, system, jurisdiction, processType,
-      isFatal, needsProcuration, procurationType, needsGuia, guias,
-      petitionType, observations, documents, status, assignedTo,
-      createdBy, isDistribution, createdAt, updatedAt, queuePosition, activityLog
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, insertData, function(err) {
-    if (err) {
-      console.error('❌ ERRO CRÍTICO ao inserir protocolo:', err);
-      console.error('📋 SQL Error details:', err.message);
-      console.error('📊 Dados que causaram erro:', insertData);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro ao criar protocolo: ' + err.message,
-        error: err.message,
-        sqlError: true
-      });
-    }
+    console.log('📊 Dados preparados para inserção:', insertData.map((item, index) => {
+      const fields = [
+        'id', 'processNumber', 'court', 'system', 'jurisdiction', 'processType',
+        'isFatal', 'needsProcuration', 'procurationType', 'needsGuia', 'guias',
+        'petitionType', 'observations', 'documents', 'status', 'assignedTo',
+        'createdBy', 'isDistribution', 'createdAt', 'updatedAt', 'queuePosition', 'activityLog'
+      ];
+      return `${fields[index]}: ${item}`;
+    }));
+
+    // Usar placeholders corretos para PostgreSQL ($1, $2, etc.) ou SQLite (?, ?, etc.)
+    const placeholders = isPostgreSQL 
+      ? insertData.map((_, i) => `$${i + 1}`).join(', ')
+      : insertData.map(() => '?').join(', ');
+
+    const result = await query(`
+      INSERT INTO protocolos (
+        id, processNumber, court, system, jurisdiction, processType,
+        isFatal, needsProcuration, procurationType, needsGuia, guias,
+        petitionType, observations, documents, status, assignedTo,
+        createdBy, isDistribution, createdAt, updatedAt, queuePosition, activityLog
+      ) VALUES (${placeholders})
+    `, insertData);
 
     console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
     console.log('🆔 ID do protocolo:', id);
-    console.log('📊 Linhas afetadas:', this.changes);
-    console.log('📍 LastID:', this.lastID);
+    console.log('📊 Linhas afetadas:', result.rowCount || result.changes || 1);
     console.log('🎯 Protocolo direcionado para:', assignedTo || 'Fila do Robô');
     console.log('📋 Dados do protocolo criado:', {
       processNumber: processNumber || 'N/A',
@@ -205,20 +200,18 @@ router.post('/protocolos', (req, res) => {
     });
     
     // Verificar se foi realmente inserido
-    db.get('SELECT COUNT(*) as count FROM protocolos WHERE id = ?', [id], (countErr, countRow) => {
-      if (countErr) {
-        console.error('❌ Erro ao verificar inserção:', countErr);
-      } else {
-        console.log('✅ Verificação: protocolo existe no banco:', countRow.count > 0);
+    try {
+      const countResult = await query('SELECT COUNT(*) as count FROM protocolos WHERE id = $1', [id]);
+      const count = isPostgreSQL ? countResult.rows[0].count : countResult.rows[0].count;
+      console.log('✅ Verificação: protocolo existe no banco:', count > 0);
         
-        // Verificar contagem total após inserção
-        db.get('SELECT COUNT(*) as total FROM protocolos', (totalErr, totalRow) => {
-          if (!totalErr) {
-            console.log('📊 Total de protocolos no banco após inserção:', totalRow.total);
-          }
-        });
-      }
-    });
+      // Verificar contagem total após inserção
+      const totalResult = await query('SELECT COUNT(*) as total FROM protocolos');
+      const total = isPostgreSQL ? totalResult.rows[0].total : totalResult.rows[0].total;
+      console.log('📊 Total de protocolos no banco após inserção:', total);
+    } catch (countErr) {
+      console.error('❌ Erro ao verificar inserção:', countErr);
+    }
 
     // Retornar protocolo criado
     const createdProtocol = {
@@ -252,11 +245,20 @@ router.post('/protocolos', (req, res) => {
       protocolo: createdProtocol,
       timestamp: new Date().toISOString()
     });
-  });
+  } catch (err) {
+    console.error('❌ ERRO CRÍTICO ao inserir protocolo:', err);
+    console.error('📋 SQL Error details:', err.message);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao criar protocolo: ' + err.message,
+      error: err.message,
+      sqlError: true
+    });
+  }
 });
 
 // Atualizar protocolo
-router.put('/protocolos/:id', (req, res) => {
+router.put('/protocolos/:id', async (req, res) => {
   console.log('🔄 PUT /protocolos/:id chamado');
   console.log('🆔 ID:', req.params.id);
   console.log('📦 Updates:', JSON.stringify(req.body, null, 2));
@@ -265,16 +267,10 @@ router.put('/protocolos/:id', (req, res) => {
   const updates = req.body;
   const now = new Date().toISOString();
 
-  // Primeiro, buscar o protocolo atual para manter o log
-  db.get('SELECT * FROM protocolos WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      console.error('❌ Erro ao buscar protocolo para atualização:', err);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro interno do servidor',
-        error: err.message
-      });
-    }
+  try {
+    // Primeiro, buscar o protocolo atual para manter o log
+    const result = await query('SELECT * FROM protocolos WHERE id = $1', [id]);
+    const row = result.rows && result.rows.length > 0 ? result.rows[0] : null;
 
     if (!row) {
       console.error('❌ Protocolo não encontrado para atualização:', id);
@@ -312,15 +308,17 @@ router.put('/protocolos/:id', (req, res) => {
     // Construir query de atualização dinamicamente
     const fields = [];
     const values = [];
+    let paramIndex = 1;
 
     Object.keys(updates).forEach(key => {
       if (key !== 'newLogEntry' && key !== 'id') {
-        fields.push(`${key} = ?`);
+        fields.push(`${key} = ${isPostgreSQL ? `$${paramIndex}` : '?'}`);
+        paramIndex++;
         
         if (key === 'documents' || key === 'guias') {
           values.push(JSON.stringify(updates[key]));
         } else if (key === 'isFatal' || key === 'needsProcuration' || key === 'needsGuia' || key === 'isDistribution') {
-          values.push(updates[key] ? 1 : 0);
+          values.push(isPostgreSQL ? Boolean(updates[key]) : (updates[key] ? 1 : 0));
         } else {
           values.push(updates[key]);
         }
@@ -328,64 +326,57 @@ router.put('/protocolos/:id', (req, res) => {
     });
 
     // Sempre atualizar updatedAt e activityLog
-    fields.push('updatedAt = ?', 'activityLog = ?');
+    fields.push(`updatedAt = ${isPostgreSQL ? `$${paramIndex}` : '?'}`, `activityLog = ${isPostgreSQL ? `$${paramIndex + 1}` : '?'}`);
     values.push(now, JSON.stringify(currentLog));
-    values.push(id);
+    values.push(id); // WHERE clause parameter
 
-    const query = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = ?`;
+    const updateQuery = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = ${isPostgreSQL ? `$${values.length}` : '?'}`;
     
-    console.log('🔄 Query de atualização:', query);
+    console.log('🔄 Query de atualização:', updateQuery);
     console.log('📊 Valores:', values);
 
-    db.run(query, values, function(err) {
-      if (err) {
-        console.error('❌ Erro ao atualizar protocolo:', err);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Erro ao atualizar protocolo',
-          error: err.message
-        });
-      }
+    const updateResult = await query(updateQuery, values);
+    const changes = updateResult.rowCount || updateResult.changes || 0;
 
-      if (this.changes === 0) {
-        console.error('❌ Nenhuma linha foi atualizada');
-        return res.status(404).json({ 
-          success: false, 
-          message: 'Protocolo não encontrado ou nenhuma alteração feita' 
-        });
-      }
-
-      console.log('✅ Protocolo atualizado com sucesso');
-      console.log('📊 Linhas afetadas:', this.changes);
-      
-      res.json({
-        success: true,
-        message: 'Protocolo atualizado com sucesso',
-        changes: this.changes,
-        timestamp: new Date().toISOString()
+    if (changes === 0) {
+      console.error('❌ Nenhuma linha foi atualizada');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Protocolo não encontrado ou nenhuma alteração feita' 
       });
+    }
+
+    console.log('✅ Protocolo atualizado com sucesso');
+    console.log('📊 Linhas afetadas:', changes);
+      
+    res.json({
+      success: true,
+      message: 'Protocolo atualizado com sucesso',
+      changes: changes,
+      timestamp: new Date().toISOString()
     });
-  });
+  } catch (err) {
+    console.error('❌ Erro ao atualizar protocolo:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao atualizar protocolo',
+      error: err.message
+    });
+  }
 });
 
 // Deletar protocolo
-router.delete('/protocolos/:id', (req, res) => {
+router.delete('/protocolos/:id', async (req, res) => {
   console.log('🗑️ DELETE /protocolos/:id chamado');
   console.log('🆔 ID:', req.params.id);
   
   const { id } = req.params;
 
-  db.run('DELETE FROM protocolos WHERE id = ?', [id], function(err) {
-    if (err) {
-      console.error('❌ Erro ao deletar protocolo:', err);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro ao deletar protocolo',
-        error: err.message
-      });
-    }
+  try {
+    const result = await query('DELETE FROM protocolos WHERE id = $1', [id]);
+    const changes = result.rowCount || result.changes || 0;
 
-    if (this.changes === 0) {
+    if (changes === 0) {
       console.error('❌ Protocolo não encontrado para deleção:', id);
       return res.status(404).json({ 
         success: false, 
@@ -394,43 +385,51 @@ router.delete('/protocolos/:id', (req, res) => {
     }
 
     console.log('✅ Protocolo deletado com sucesso');
-    console.log('📊 Linhas afetadas:', this.changes);
+    console.log('📊 Linhas afetadas:', changes);
     
     res.json({
       success: true,
       message: 'Protocolo deletado com sucesso',
-      changes: this.changes,
+      changes: changes,
       timestamp: new Date().toISOString()
     });
-  });
+  } catch (err) {
+    console.error('❌ Erro ao deletar protocolo:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao deletar protocolo',
+      error: err.message
+    });
+  }
 });
 
 // Rota de teste para verificar conectividade
-router.get('/protocolos/test', (req, res) => {
+router.get('/protocolos/test', async (req, res) => {
   console.log('🧪 GET /protocolos/test chamado');
   
-  // Testar conexão com banco
-  db.get('SELECT COUNT(*) as count FROM protocolos', (err, row) => {
-    if (err) {
-      console.error('❌ Erro no teste de conectividade:', err);
-      return res.status(500).json({
-        success: false,
-        message: 'Erro de conectividade com banco de dados',
-        error: err.message,
-        timestamp: new Date().toISOString()
-      });
-    }
+  try {
+    // Testar conexão com banco
+    const result = await query('SELECT COUNT(*) as count FROM protocolos');
+    const count = isPostgreSQL ? result.rows[0].count : result.rows[0].count;
     
     console.log('✅ Teste de conectividade bem-sucedido');
     res.json({
       success: true,
       message: 'Conectividade com protocolos funcionando',
-      totalProtocols: row.count,
+      totalProtocols: count,
       timestamp: new Date().toISOString(),
-      database: 'SQLite conectado',
+      database: isPostgreSQL ? 'PostgreSQL conectado' : 'SQLite conectado',
       server: 'Express rodando'
     });
-  });
+  } catch (err) {
+    console.error('❌ Erro no teste de conectividade:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro de conectividade com banco de dados',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 export default router;

@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { initializeDb, testConnection, getDatabaseStats } from './db.js';
+import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
@@ -211,23 +211,31 @@ async function startServer() {
 // Tratamento de sinais do sistema
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM recebido, encerrando servidor graciosamente...');
-  process.exit(0);
+  closeConnection().then(() => {
+    process.exit(0);
+  });
 });
 
 process.on('SIGINT', () => {
   console.log('🛑 SIGINT recebido, encerrando servidor graciosamente...');
-  process.exit(0);
+  closeConnection().then(() => {
+    process.exit(0);
+  });
 });
 
 process.on('uncaughtException', (error) => {
   console.error('❌ ERRO NÃO CAPTURADO:', error);
-  process.exit(1);
+  closeConnection().then(() => {
+    process.exit(1);
+  });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ PROMISE REJEITADA NÃO TRATADA:', reason);
   console.error('Promise:', promise);
-  process.exit(1);
+  closeConnection().then(() => {
+    process.exit(1);
+  });
 });
 
 // Iniciar o servidor

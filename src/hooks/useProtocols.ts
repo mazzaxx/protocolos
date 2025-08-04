@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Protocol } from '../types';
 
+// Cache para evitar polling desnecessário
+let lastFetchTime = 0;
+let lastDataHash = '';
+let isCurrentlyFetching = false;
+
 // Função para buscar email do usuário por ID
 const getUserEmailById = async (userId: number): Promise<string> => {
   try {
@@ -31,25 +36,29 @@ export function useProtocols() {
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [userEmails, setUserEmails] = useState<Record<number, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [lastFetchTime, setLastFetchTime] = useState<number>(0);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
 
   // Função para buscar protocolos do servidor
   const fetchProtocols = async (forceRefresh = false) => {
-    // Evitar múltiplas requisições simultâneas
     const now = Date.now();
-    if (!forceRefresh && isLoading) {
+    
+    // Evitar múltiplas requisições simultâneas
+    if (!forceRefresh && isCurrentlyFetching) {
       console.log('🔄 Requisição já em andamento, ignorando...');
       return;
     }
 
-    // Throttle reduzido: evitar requisições muito frequentes (mínimo 500ms)
-    if (!forceRefresh && (now - lastFetchTime) < 500) {
-      console.log('⏱️ Throttle ativo, aguardando...');
+    // Throttle inteligente: evitar requisições muito frequentes
+    const minInterval = forceRefresh ? 100 : 1000; // 1 segundo para polling normal, 100ms para forçado
+    if (!forceRefresh && (now - lastFetchTime) < minInterval) {
+      console.log(`⏱️ Throttle ativo, aguardando ${minInterval}ms...`);
       return;
     }
 
+    isCurrentlyFetching = true;
     setIsLoading(true);
-    setLastFetchTime(now);
+    lastFetchTime = now;
+    setConnectionStatus('checking');
     
     console.log('🔄 Buscando protocolos do servidor...');
     console.log('🌐 Modo:', forceRefresh ? 'Forçado' : 'Normal');
@@ -66,7 +75,7 @@ export function useProtocols() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=0',
+          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=30',
           'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
         },
         credentials: 'include',
@@ -77,6 +86,7 @@ export function useProtocols() {
       
       if (!response.ok) {
         console.error('❌ Erro na resposta:', response.status, response.statusText);
+        setConnectionStatus('disconnected');
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -87,6 +97,18 @@ export function useProtocols() {
       console.log('⏰ Timestamp do servidor:', data.timestamp);
       
       if (data.success && Array.isArray(data.protocolos)) {
+        // Verificar se os dados mudaram usando hash simples
+        const dataHash = JSON.stringify(data.protocolos).length + data.protocolos.length;
+        const dataChanged = dataHash !== lastDataHash;
+        
+        if (!dataChanged && !forceRefresh) {
+          console.log('📊 Dados não mudaram, mantendo cache');
+          setConnectionStatus('connected');
+          return;
+        }
+        
+        lastDataHash = dataHash;
+        
         const protocolsWithDates = data.protocolos.map((p: any) => ({
           ...p,
           createdAt: new Date(p.createdAt),
@@ -107,13 +129,16 @@ export function useProtocols() {
         });
         
         setProtocols(protocolsWithDates);
+        setConnectionStatus('connected');
         
       } else {
         console.error('❌ Resposta inválida do servidor:', data);
+        setConnectionStatus('disconnected');
         throw new Error('Resposta inválida do servidor');
       }
     } catch (error) {
       console.error('❌ Erro ao buscar protocolos:', error);
+      setConnectionStatus('disconnected');
       
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
         console.error('🚨 ERRO CRÍTICO DE SINCRONIZAÇÃO!');
@@ -127,6 +152,7 @@ export function useProtocols() {
       
       throw error;
     } finally {
+      isCurrentlyFetching = false;
       setIsLoading(false);
     }
   };
@@ -136,15 +162,29 @@ export function useProtocols() {
     console.log('🌐 Backend configurado:', import.meta.env.VITE_API_BASE_URL || 'PROXY LOCAL');
     fetchProtocols(true); // Forçar refresh inicial
     
-    // Configurar polling para atualizar a cada 2 segundos (sincronização em tempo real)
+    // Configurar polling inteligente - intervalo adaptativo baseado na atividade
+    let pollInterval = 3000; // Começar com 3 segundos
+    
     const interval = setInterval(() => {
-      console.log('🔄 SINCRONIZAÇÃO AUTOMÁTICA: Verificando novos protocolos...');
+      // Polling adaptativo: mais frequente se há atividade recente
+      const timeSinceLastFetch = Date.now() - lastFetchTime;
+      
+      if (timeSinceLastFetch > 30000) {
+        // Se não há atividade há 30 segundos, reduzir frequência
+        pollInterval = 5000;
+      } else {
+        // Atividade recente, manter frequência alta
+        pollInterval = 2000;
+      }
+      
+      console.log(`🔄 SINCRONIZAÇÃO AUTOMÁTICA (${pollInterval}ms): Verificando novos protocolos...`);
       fetchProtocols(false);
-    }, 2000); // 2 segundos para sincronização mais rápida
+    }, pollInterval);
     
     return () => {
       console.log('🛑 useProtocols: Limpando interval');
       clearInterval(interval);
+      isCurrentlyFetching = false;
     };
   }, [updateTrigger]);
 
@@ -239,6 +279,7 @@ export function useProtocols() {
         // Forçar sincronização imediata para todos os usuários
         setTimeout(() => {
           console.log('🔄 FORÇANDO SINCRONIZAÇÃO IMEDIATA...');
+          lastDataHash = ''; // Invalidar cache
           forceRefresh();
         }, 100); // Mais rápido
         
@@ -247,12 +288,6 @@ export function useProtocols() {
           console.log('🔄 SEGUNDA SINCRONIZAÇÃO (garantia)...');
           forceRefresh();
         }, 500);
-        
-        // Terceira sincronização para garantir que todos vejam
-        setTimeout(() => {
-          console.log('🔄 TERCEIRA SINCRONIZAÇÃO (garantia total)...');
-          forceRefresh();
-        }, 1500);
         
         return data.protocolo;
       } else {
@@ -334,6 +369,9 @@ export function useProtocols() {
     if (!success) {
       throw new Error('Falha ao atualizar status no servidor');
     }
+    
+    // Invalidar cache para forçar refresh
+    lastDataHash = '';
   };
 
   const returnProtocol = async (id: string, returnReason: string, performedBy?: string) => {
@@ -379,6 +417,9 @@ export function useProtocols() {
     if (!success) {
       throw new Error('Falha ao devolver protocolo no servidor');
     }
+    
+    // Invalidar cache para forçar refresh
+    lastDataHash = '';
 
     // Fazer o ícone do navegador piscar quando protocolo é devolvido
     if (foundProtocol) {
@@ -457,6 +498,9 @@ export function useProtocols() {
     if (!success) {
       throw new Error('Falha ao mover protocolo no servidor');
     }
+    
+    // Invalidar cache para forçar refresh
+    lastDataHash = '';
   };
 
   const moveMultipleProtocols = async (ids: string[], assignedTo: Protocol['assignedTo'], performedBy?: string) => {
@@ -464,6 +508,9 @@ export function useProtocols() {
     for (const id of ids) {
       await moveProtocolToQueue(id, assignedTo, performedBy);
     }
+    
+    // Invalidar cache para forçar refresh
+    lastDataHash = '';
   };
 
   const cancelProtocol = async (id: string, performedBy?: string) => {
@@ -482,6 +529,9 @@ export function useProtocols() {
     if (!success) {
       throw new Error('Falha ao cancelar protocolo no servidor');
     }
+    
+    // Invalidar cache para forçar refresh
+    lastDataHash = '';
   };
 
   const updateProtocol = async (id: string, updates: Partial<Protocol>, performedBy?: string) => {
@@ -500,6 +550,9 @@ export function useProtocols() {
     if (!success) {
       throw new Error('Falha ao atualizar protocolo no servidor');
     }
+    
+    // Invalidar cache para forçar refresh
+    lastDataHash = '';
   };
 
   return {
@@ -507,6 +560,7 @@ export function useProtocols() {
     userEmails,
     updateTrigger,
     isLoading,
+    connectionStatus,
     forceRefresh,
     addProtocol,
     updateProtocolStatus,
