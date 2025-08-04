@@ -8,16 +8,16 @@ let funcionariosCache = null;
 let cacheExpiry = 0;
 const CACHE_DURATION = 30000; // 30 segundos
 
-// Listar todos os funcionários (otimizado)
+// Listar todos os funcionários
 router.get('/funcionarios', async (req, res) => {
   const startTime = Date.now();
-  console.log('👥 Buscando funcionários...');
+  console.log('👥 Buscando funcionários Railway...');
   
   try {
     // Verificar cache
     const now = Date.now();
     if (funcionariosCache && now < cacheExpiry) {
-      console.log(`✅ Funcionários from cache (${Date.now() - startTime}ms)`);
+      console.log(`✅ Funcionários from cache Railway (${Date.now() - startTime}ms)`);
       return res.json({
         success: true,
         funcionarios: funcionariosCache,
@@ -26,11 +26,11 @@ router.get('/funcionarios', async (req, res) => {
       });
     }
 
-    // Buscar do banco
+    // Buscar do banco Railway
     const result = await Promise.race([
       query("SELECT id, email, permissao, created_at, updated_at FROM funcionarios ORDER BY id"),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout')), 5000)
+        setTimeout(() => reject(new Error('Query timeout')), 8000)
       )
     ]);
 
@@ -41,7 +41,7 @@ router.get('/funcionarios', async (req, res) => {
     cacheExpiry = now + CACHE_DURATION;
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Funcionários loaded: ${funcionarios.length} (${duration}ms)`);
+    console.log(`✅ Funcionários loaded Railway: ${funcionarios.length} (${duration}ms)`);
 
     res.json({
       success: true,
@@ -51,23 +51,23 @@ router.get('/funcionarios', async (req, res) => {
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao buscar funcionários (${duration}ms):`, err);
+    console.error(`❌ Erro ao buscar funcionários Railway (${duration}ms):`, err);
     
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro interno do servidor',
+      message: 'Erro interno do servidor Railway',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined,
       duration: `${duration}ms`
     });
   }
 });
 
-// Criar novo funcionário (otimizado)
+// Criar novo funcionário
 router.post('/funcionarios', async (req, res) => {
   const startTime = Date.now();
   const { email, senha, permissao } = req.body;
 
-  console.log('👤 Criando funcionário:', email);
+  console.log('👤 Criando funcionário Railway:', email);
 
   if (!email || !senha || !permissao) {
     return res.status(400).json({ 
@@ -81,7 +81,7 @@ router.post('/funcionarios', async (req, res) => {
     const existingUser = await Promise.race([
       query("SELECT email FROM funcionarios WHERE email = $1", [email]),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Check timeout')), 3000)
+        setTimeout(() => reject(new Error('Check timeout')), 5000)
       )
     ]);
 
@@ -99,7 +99,7 @@ router.post('/funcionarios', async (req, res) => {
         [email, senha, permissao]
       ),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Insert timeout')), 5000)
+        setTimeout(() => reject(new Error('Insert timeout')), 8000)
       )
     ]);
 
@@ -114,34 +114,34 @@ router.post('/funcionarios', async (req, res) => {
     cacheExpiry = 0;
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Funcionário criado: ${email} (${duration}ms)`);
+    console.log(`✅ Funcionário criado Railway: ${email} (${duration}ms)`);
     
     res.json({
       success: true,
-      message: 'Funcionário criado com sucesso',
+      message: 'Funcionário criado com sucesso Railway',
       funcionario: newFuncionario,
       duration: `${duration}ms`
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao criar funcionário (${duration}ms):`, err);
+    console.error(`❌ Erro ao criar funcionário Railway (${duration}ms):`, err);
     
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao criar funcionário',
+      message: 'Erro ao criar funcionário Railway',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined,
       duration: `${duration}ms`
     });
   }
 });
 
-// Atualizar funcionário (otimizado)
+// Atualizar funcionário
 router.put('/funcionarios/:id', async (req, res) => {
   const startTime = Date.now();
   const { id } = req.params;
   const { email, senha, permissao } = req.body;
 
-  console.log(`👤 Atualizando funcionário: ${id}`);
+  console.log(`👤 Atualizando funcionário Railway: ${id}`);
 
   if (!email || !permissao) {
     return res.status(400).json({ 
@@ -155,7 +155,7 @@ router.put('/funcionarios/:id', async (req, res) => {
     const existingUser = await Promise.race([
       query("SELECT id FROM funcionarios WHERE email = $1 AND id != $2", [email, id]),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Check timeout')), 3000)
+        setTimeout(() => reject(new Error('Check timeout')), 5000)
       )
     ]);
 
@@ -180,7 +180,7 @@ router.put('/funcionarios/:id', async (req, res) => {
     const result = await Promise.race([
       query(updateQuery, params),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Update timeout')), 5000)
+        setTimeout(() => reject(new Error('Update timeout')), 8000)
       )
     ]);
 
@@ -198,33 +198,33 @@ router.put('/funcionarios/:id', async (req, res) => {
     cacheExpiry = 0;
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Funcionário atualizado: ${id} (${duration}ms)`);
+    console.log(`✅ Funcionário atualizado Railway: ${id} (${duration}ms)`);
     
     res.json({
       success: true,
-      message: 'Funcionário atualizado com sucesso',
+      message: 'Funcionário atualizado com sucesso Railway',
       funcionario: result.rows[0],
       duration: `${duration}ms`
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao atualizar funcionário (${duration}ms):`, err);
+    console.error(`❌ Erro ao atualizar funcionário Railway (${duration}ms):`, err);
     
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao atualizar funcionário',
+      message: 'Erro ao atualizar funcionário Railway',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined,
       duration: `${duration}ms`
     });
   }
 });
 
-// Deletar funcionário (otimizado)
+// Deletar funcionário
 router.delete('/funcionarios/:id', async (req, res) => {
   const startTime = Date.now();
   const { id } = req.params;
 
-  console.log(`👤 Deletando funcionário: ${id}`);
+  console.log(`👤 Deletando funcionário Railway: ${id}`);
 
   try {
     // Verificar se funcionário tem protocolos
@@ -241,7 +241,7 @@ router.delete('/funcionarios/:id', async (req, res) => {
     const result = await Promise.race([
       query("DELETE FROM funcionarios WHERE id = $1", [id]),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Delete timeout')), 5000)
+        setTimeout(() => reject(new Error('Delete timeout')), 8000)
       )
     ]);
 
@@ -259,33 +259,33 @@ router.delete('/funcionarios/:id', async (req, res) => {
     cacheExpiry = 0;
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Funcionário deletado: ${id} (${duration}ms)`);
+    console.log(`✅ Funcionário deletado Railway: ${id} (${duration}ms)`);
     
     res.json({
       success: true,
-      message: 'Funcionário deletado com sucesso',
+      message: 'Funcionário deletado com sucesso Railway',
       duration: `${duration}ms`
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao deletar funcionário (${duration}ms):`, err);
+    console.error(`❌ Erro ao deletar funcionário Railway (${duration}ms):`, err);
     
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao deletar funcionário',
+      message: 'Erro ao deletar funcionário Railway',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined,
       duration: `${duration}ms`
     });
   }
 });
 
-// Estatísticas do sistema (otimizado)
+// Estatísticas do sistema
 router.get('/stats', async (req, res) => {
   const startTime = Date.now();
-  console.log('📊 Buscando estatísticas...');
+  console.log('📊 Buscando estatísticas Railway...');
   
   try {
-    // Executar queries em paralelo para melhor performance
+    // Executar queries em paralelo
     const [
       funcionariosResult,
       protocolosResult,
@@ -316,21 +316,16 @@ router.get('/stats', async (req, res) => {
         devolvido: parseInt(devolvidoResult.rows[0].count),
         cancelado: parseInt(canceladoResult.rows[0].count)
       },
-      filas: {
-        robo: 0, // Será calculado no frontend
-        carlos: 0, // Será calculado no frontend
-        deyse: 0 // Será calculado no frontend
-      },
       database: {
-        type: 'PostgreSQL',
+        type: 'PostgreSQL Railway',
         environment: process.env.NODE_ENV || 'development',
-        connectionString: process.env.DATABASE_URL ? 'Railway PostgreSQL' : 'Local PostgreSQL'
+        connectionString: process.env.DATABASE_URL ? 'Railway PostgreSQL Connected' : 'Local PostgreSQL'
       },
       timestamp: new Date().toISOString()
     };
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Estatísticas loaded (${duration}ms)`);
+    console.log(`✅ Estatísticas Railway loaded (${duration}ms)`);
     
     res.json({
       success: true,
@@ -339,11 +334,11 @@ router.get('/stats', async (req, res) => {
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao buscar estatísticas (${duration}ms):`, err);
+    console.error(`❌ Erro ao buscar estatísticas Railway (${duration}ms):`, err);
     
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao buscar estatísticas',
+      message: 'Erro ao buscar estatísticas Railway',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined,
       duration: `${duration}ms`
     });
@@ -357,7 +352,7 @@ router.post('/clear-cache', (req, res) => {
   
   res.json({
     success: true,
-    message: 'Cache de funcionários limpo com sucesso',
+    message: 'Cache Railway de funcionários limpo com sucesso',
     timestamp: new Date().toISOString()
   });
 });

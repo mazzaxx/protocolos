@@ -20,12 +20,12 @@ const cleanExpiredCache = () => {
 // Limpar cache a cada 5 minutos
 setInterval(cleanExpiredCache, 5 * 60 * 1000);
 
-// Endpoint de login otimizado
+// Endpoint de login
 router.post('/login', async (req, res) => {
   const startTime = Date.now();
   const { email, senha } = req.body;
 
-  console.log('🔐 Login attempt:', email);
+  console.log('🔐 Login attempt Railway:', email);
 
   if (!email || !senha) {
     return res.status(400).json({ 
@@ -40,7 +40,7 @@ router.post('/login', async (req, res) => {
     const cached = userCache.get(cacheKey);
     
     if (cached && Date.now() < cached.expiry) {
-      console.log('✅ Login from cache:', email);
+      console.log('✅ Login from cache Railway:', email);
       return res.json({
         success: true,
         message: 'Login realizado com sucesso',
@@ -49,21 +49,21 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Buscar no banco com timeout otimizado
+    // Buscar no banco Railway
     const result = await Promise.race([
       query(
         "SELECT id, email, permissao FROM funcionarios WHERE email = $1 AND senha = $2", 
         [email, senha]
       ),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Login timeout')), 5000)
+        setTimeout(() => reject(new Error('Login timeout')), 8000)
       )
     ]);
 
     const user = result.rows && result.rows.length > 0 ? result.rows[0] : null;
 
     if (!user) {
-      console.log('❌ Login failed:', email);
+      console.log('❌ Login failed Railway:', email);
       return res.status(401).json({ 
         success: false, 
         message: 'Email ou senha incorretos' 
@@ -77,7 +77,7 @@ router.post('/login', async (req, res) => {
     });
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Login success: ${email} (${duration}ms)`);
+    console.log(`✅ Login success Railway: ${email} (${duration}ms)`);
 
     res.json({
       success: true,
@@ -87,11 +87,11 @@ router.post('/login', async (req, res) => {
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    console.error(`❌ Login error (${duration}ms):`, err.message);
+    console.error(`❌ Login error Railway (${duration}ms):`, err.message);
     
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro interno do servidor',
+      message: 'Erro interno do servidor Railway',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
@@ -101,11 +101,12 @@ router.post('/login', async (req, res) => {
 router.get('/verify', (req, res) => {
   res.json({ 
     success: true,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    railway: true
   });
 });
 
-// Endpoint para logout (limpar cache)
+// Endpoint para logout
 router.post('/logout', (req, res) => {
   const { email } = req.body;
   
@@ -116,7 +117,7 @@ router.post('/logout', (req, res) => {
         userCache.delete(key);
       }
     }
-    console.log('🔓 Logout:', email);
+    console.log('🔓 Logout Railway:', email);
   }
   
   res.json({ 

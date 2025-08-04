@@ -6,13 +6,14 @@ import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
-console.log('🚀 Iniciando servidor otimizado...');
+console.log('🚀 Iniciando servidor Railway otimizado...');
 console.log('🌐 Porta:', PORT);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
+console.log('🔗 DATABASE_URL presente:', !!process.env.DATABASE_URL);
 
-// Lista otimizada de origens permitidas
+// Lista de origens permitidas
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
@@ -63,24 +64,23 @@ const corsOptions = {
     'X-Sync-Action'
   ],
   exposedHeaders: ['Content-Length'],
-  maxAge: 86400, // 24 horas
+  maxAge: 86400,
   optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
 
-// Middleware otimizado
+// Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Middleware de logging otimizado
+// Middleware de logging
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const method = req.method;
   const path = req.path;
   const origin = req.headers.origin;
   
-  // Log apenas para requests importantes
   if (method !== 'OPTIONS') {
     console.log(`📡 ${timestamp.substring(11, 19)} - ${method} ${path} (${origin || 'no-origin'})`);
   }
@@ -88,39 +88,42 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check básico (otimizado)
+// Health check básico
 app.get('/', (req, res) => {
   res.status(200).json({ 
-    message: 'Sistema de Protocolos Jurídicos - API funcionando!',
+    message: 'Sistema de Protocolos Jurídicos Railway - API funcionando!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     port: PORT,
     status: 'healthy',
-    version: '2.0.0'
+    version: '3.0.0',
+    database: 'PostgreSQL Railway'
   });
 });
 
-// Health check detalhado (otimizado)
+// Health check detalhado
 app.get('/health', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    // Teste rápido de conectividade
+    console.log('🏥 Executando health check Railway...');
+    
+    // Teste de conectividade com timeout menor
     await Promise.race([
-      testConnection(),
+      testConnection(1), // Apenas 1 tentativa no health check
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Health timeout')), 5000)
+        setTimeout(() => reject(new Error('Health check timeout')), 8000)
       )
     ]);
     
     const stats = await getDatabaseStats();
     const responseTime = Date.now() - startTime;
     
-    console.log(`✅ Health check OK (${responseTime}ms)`);
+    console.log(`✅ Health check Railway OK (${responseTime}ms)`);
     
     res.status(200).json({
       status: 'healthy',
-      message: 'Sistema funcionando perfeitamente',
+      message: 'Sistema Railway funcionando perfeitamente',
       timestamp: new Date().toISOString(),
       database: 'connected',
       responseTime: `${responseTime}ms`,
@@ -128,26 +131,35 @@ app.get('/health', async (req, res) => {
       port: PORT,
       uptime: process.uptime(),
       stats,
-      version: '2.0.0'
+      version: '3.0.0',
+      railway: {
+        connected: true,
+        databaseUrl: !!process.env.DATABASE_URL
+      }
     });
   } catch (error) {
     const responseTime = Date.now() - startTime;
-    console.error(`❌ Health check falhou (${responseTime}ms):`, error);
+    console.error(`❌ Health check Railway falhou (${responseTime}ms):`, error.message);
     
     res.status(503).json({
       status: 'unhealthy',
-      message: 'Problemas de conectividade',
+      message: 'Problemas de conectividade Railway',
       error: error.message,
       timestamp: new Date().toISOString(),
       responseTime: `${responseTime}ms`,
       environment: process.env.NODE_ENV || 'development',
       port: PORT,
-      version: '2.0.0'
+      version: '3.0.0',
+      railway: {
+        connected: false,
+        databaseUrl: !!process.env.DATABASE_URL,
+        errorType: error.message.includes('timeout') ? 'timeout' : 'connection'
+      }
     });
   }
 });
 
-// Ping endpoint para monitoramento
+// Ping endpoint
 app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
@@ -160,7 +172,7 @@ app.get('/env-check', (req, res) => {
     HAS_DATABASE_URL: !!process.env.DATABASE_URL,
     RAILWAY_ENVIRONMENT: process.env.RAILWAY_ENVIRONMENT || 'unknown',
     timestamp: new Date().toISOString(),
-    version: '2.0.0'
+    version: '3.0.0'
   });
 });
 
@@ -169,7 +181,7 @@ app.use('/api', authRoutes);
 app.use('/api', protocolRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Middleware de tratamento de erros otimizado
+// Middleware de tratamento de erros
 app.use((err, req, res, next) => {
   console.error('❌ Erro no servidor:', err.message);
   
@@ -190,7 +202,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler otimizado
+// 404 handler
 app.use('*', (req, res) => {
   console.log(`❌ Rota não encontrada: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
@@ -207,19 +219,15 @@ app.use('*', (req, res) => {
       'GET /api/protocolos',
       'POST /api/protocolos',
       'PUT /api/protocolos/:id',
-      'DELETE /api/protocolos/:id',
-      'GET /api/admin/funcionarios',
-      'POST /api/admin/funcionarios',
-      'PUT /api/admin/funcionarios/:id',
-      'DELETE /api/admin/funcionarios/:id'
+      'DELETE /api/protocolos/:id'
     ]
   });
 });
 
-// Função para inicializar servidor otimizado
+// Função para inicializar servidor
 async function startServer() {
   try {
-    console.log('🚀 Iniciando servidor Railway otimizado...');
+    console.log('🚀 Iniciando servidor Railway...');
     
     // Iniciar servidor primeiro (para Railway health checks)
     const server = app.listen(PORT, '0.0.0.0', () => {
@@ -230,49 +238,51 @@ async function startServer() {
       console.log(`🎯 Frontend: https://ncasistemaprotocolos.netlify.app`);
       console.log(`⚡ Porta: ${PORT}`);
       console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL ? 'PRESENTE' : 'AUSENTE'}`);
       console.log('=' .repeat(60));
     });
     
-    // Configurar timeouts otimizados
-    server.timeout = 30000; // 30 segundos
-    server.keepAliveTimeout = 65000; // 65 segundos
-    server.headersTimeout = 66000; // 66 segundos
+    // Configurar timeouts
+    server.timeout = 60000; // 60 segundos
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
     
-    // Inicializar banco em background
-    console.log('🗄️ Inicializando banco em background...');
+    // Inicializar banco em background com retry
+    console.log('🗄️ Inicializando banco Railway em background...');
     
     const initializeDatabase = async () => {
       let attempts = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 5;
       
       while (attempts < maxAttempts) {
         attempts++;
         try {
-          console.log(`🔄 Inicialização do banco - Tentativa ${attempts}/${maxAttempts}`);
+          console.log(`🔄 Inicialização Railway - Tentativa ${attempts}/${maxAttempts}`);
           await initializeDb();
-          console.log('✅ Banco inicializado com sucesso!');
+          console.log('✅ Banco Railway inicializado com sucesso!');
           
           // Health check periódico
           setInterval(async () => {
             try {
-              await testConnection();
-              console.log('✅ Health check periódico: OK');
+              await testConnection(1);
+              console.log('✅ Health check periódico Railway: OK');
             } catch (error) {
-              console.error('❌ Health check periódico: FALHA', error.message);
+              console.error('❌ Health check periódico Railway: FALHA', error.message);
             }
-          }, 60000); // A cada 1 minuto
+          }, 120000); // A cada 2 minutos
           
           return;
         } catch (error) {
           console.error(`❌ Tentativa ${attempts}/${maxAttempts} falhou:`, error.message);
           
           if (attempts < maxAttempts) {
-            const delay = Math.min(3000 * attempts, 10000);
-            console.log(`⏳ Aguardando ${delay}ms...`);
+            const delay = Math.min(5000 * attempts, 15000);
+            console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
-            console.error('❌ AVISO: Banco não inicializado após todas as tentativas');
+            console.error('❌ AVISO: Banco Railway não inicializado após todas as tentativas');
             console.error('⚠️ Servidor rodando, mas funcionalidades podem não funcionar');
+            console.error('🔧 Verifique se DATABASE_URL está configurada corretamente');
           }
         }
       }
@@ -280,49 +290,49 @@ async function startServer() {
     
     // Executar inicialização em background
     initializeDatabase().catch(error => {
-      console.error('❌ Erro crítico na inicialização:', error);
+      console.error('❌ Erro crítico na inicialização Railway:', error);
     });
     
-    // Graceful shutdown otimizado
+    // Graceful shutdown
     const gracefulShutdown = (signal) => {
-      console.log(`🛑 ${signal} recebido - encerrando graciosamente...`);
+      console.log(`🛑 ${signal} recebido - encerrando Railway graciosamente...`);
       
       server.close(() => {
-        console.log('🔒 Servidor HTTP fechado');
+        console.log('🔒 Servidor HTTP Railway fechado');
         closeConnection().then(() => {
-          console.log('🔒 Conexões do banco fechadas');
+          console.log('🔒 Conexões Railway fechadas');
           process.exit(0);
         }).catch(() => {
           process.exit(1);
         });
       });
       
-      // Force exit após 10 segundos
+      // Force exit após 15 segundos
       setTimeout(() => {
-        console.log('⏰ Forçando encerramento...');
+        console.log('⏰ Forçando encerramento Railway...');
         process.exit(1);
-      }, 10000);
+      }, 15000);
     };
     
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     
   } catch (error) {
-    console.error('❌ ERRO CRÍTICO ao iniciar servidor:', error);
+    console.error('❌ ERRO CRÍTICO ao iniciar servidor Railway:', error);
     process.exit(1);
   }
 }
 
 // Tratamento de exceções não capturadas
 process.on('uncaughtException', (error) => {
-  console.error('❌ EXCEÇÃO NÃO CAPTURADA:', error);
+  console.error('❌ EXCEÇÃO NÃO CAPTURADA Railway:', error);
   if (process.env.NODE_ENV !== 'production') {
     process.exit(1);
   }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ PROMISE REJEITADA:', reason);
+  console.error('❌ PROMISE REJEITADA Railway:', reason);
   if (process.env.NODE_ENV !== 'production') {
     process.exit(1);
   }

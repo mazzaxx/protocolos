@@ -1,10 +1,10 @@
 import pkg from 'pg';
 const { Pool } = pkg;
 
-// Configuração otimizada para PostgreSQL
+// Configuração PostgreSQL Railway
 const isProduction = process.env.NODE_ENV === 'production';
 
-console.log('🐘 Configurando PostgreSQL otimizado...');
+console.log('🐘 Configurando PostgreSQL Railway...');
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
 console.log('🔗 DATABASE_URL presente:', !!process.env.DATABASE_URL);
 
@@ -12,25 +12,25 @@ let dbConfig;
 
 if (process.env.DATABASE_URL) {
   // Railway PostgreSQL (produção)
-  console.log('🐘 Usando PostgreSQL Railway');
+  console.log('🐘 Usando PostgreSQL Railway com DATABASE_URL');
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
     ssl: isProduction ? { rejectUnauthorized: false } : false,
-    max: 20, // Pool otimizado
+    max: 10, // Pool menor para Railway
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000, // Timeout reduzido
-    acquireTimeoutMillis: 10000,
-    createTimeoutMillis: 5000,
-    destroyTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
+    acquireTimeoutMillis: 15000,
+    createTimeoutMillis: 10000,
+    destroyTimeoutMillis: 5000,
     reapIntervalMillis: 1000,
-    createRetryIntervalMillis: 200,
-    // Configurações de performance
-    statement_timeout: 30000,
-    query_timeout: 30000,
-    application_name: 'sistema_protocolos_juridicos'
+    createRetryIntervalMillis: 500,
+    // Configurações específicas Railway
+    statement_timeout: 60000,
+    query_timeout: 60000,
+    application_name: 'sistema_protocolos_juridicos_railway'
   };
 } else {
-  // PostgreSQL local
+  // PostgreSQL local (desenvolvimento)
   console.log('🐘 Usando PostgreSQL local');
   dbConfig = {
     user: process.env.DB_USER || 'postgres',
@@ -39,86 +39,55 @@ if (process.env.DATABASE_URL) {
     password: process.env.DB_PASSWORD || 'postgres',
     port: parseInt(process.env.DB_PORT || '5432'),
     ssl: false,
-    max: 10,
+    max: 5,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 3000,
+    connectionTimeoutMillis: 5000,
   };
 }
 
-// Pool PostgreSQL otimizado
+// Pool PostgreSQL
 const db = new Pool(dbConfig);
 
 console.log('✅ Pool PostgreSQL configurado');
 console.log('🔗 Max connections:', dbConfig.max);
 
-// Cache de conexões para performance
-let connectionCache = null;
-let cacheExpiry = 0;
-const CACHE_DURATION = 5000; // 5 segundos
-
-// Função otimizada para executar queries
-const query = async (sql, params = [], retries = 2) => {
+// Função para executar queries com retry
+const query = async (sql, params = [], retries = 3) => {
   const startTime = Date.now();
   let lastError;
   
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      // Usar cache de conexão se disponível
-      const now = Date.now();
-      let client;
+      console.log(`🔍 Query attempt ${attempt}/${retries}:`, sql.substring(0, 50) + '...');
       
-      if (connectionCache && now < cacheExpiry) {
-        client = connectionCache;
-      } else {
-        client = await Promise.race([
-          db.connect(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Connection timeout')), 3000)
-          )
-        ]);
-        
-        // Cache da conexão
-        connectionCache = client;
-        cacheExpiry = now + CACHE_DURATION;
-      }
+      const client = await Promise.race([
+        db.connect(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 8000)
+        )
+      ]);
       
       try {
         const result = await Promise.race([
           client.query(sql, params),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Query timeout')), 10000)
+            setTimeout(() => reject(new Error('Query timeout')), 15000)
           )
         ]);
         
         const duration = Date.now() - startTime;
-        if (duration > 1000) {
-          console.warn(`⚠️ Query lenta (${duration}ms):`, sql.substring(0, 100));
-        }
+        console.log(`✅ Query success (${duration}ms)`);
         
         return result;
       } finally {
-        // Não liberar conexão se estiver em cache
-        if (client !== connectionCache) {
-          client.release();
-        }
+        client.release();
       }
     } catch (error) {
       lastError = error;
-      console.error(`❌ Query tentativa ${attempt}/${retries} falhou:`, error.message);
-      
-      // Limpar cache em caso de erro
-      if (connectionCache) {
-        try {
-          connectionCache.release();
-        } catch (e) {
-          // Ignorar erro de release
-        }
-        connectionCache = null;
-        cacheExpiry = 0;
-      }
+      console.error(`❌ Query attempt ${attempt}/${retries} failed:`, error.message);
       
       if (attempt < retries) {
-        const delay = Math.min(500 * attempt, 1000);
+        const delay = Math.min(1000 * attempt, 3000);
         console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -128,21 +97,26 @@ const query = async (sql, params = [], retries = 2) => {
   throw lastError;
 };
 
-// Função para inicializar o banco otimizado
+// Função para inicializar o banco
 export const initializeDb = async () => {
-  console.log('🚀 Inicializando banco PostgreSQL otimizado...');
+  console.log('🚀 Inicializando banco PostgreSQL Railway...');
   
   try {
     // Verificar conectividade primeiro
-    console.log('🔍 Testando conectividade...');
+    console.log('🔍 Testando conectividade Railway...');
     await testConnection();
-    console.log('✅ Conectividade confirmada!');
+    console.log('✅ Conectividade Railway confirmada!');
     
     // Criar extensões necessárias
     console.log('🔧 Configurando extensões...');
-    await query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+    try {
+      await query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+      console.log('✅ Extensão uuid-ossp criada');
+    } catch (error) {
+      console.warn('⚠️ Aviso ao criar extensão:', error.message);
+    }
     
-    // Criar tabela funcionarios otimizada
+    // Criar tabela funcionarios
     console.log('📋 Criando tabela funcionarios...');
     await query(`
       CREATE TABLE IF NOT EXISTS funcionarios (
@@ -161,7 +135,7 @@ export const initializeDb = async () => {
     
     console.log('✅ Tabela funcionarios criada/verificada');
 
-    // Criar tabela protocolos otimizada
+    // Criar tabela protocolos
     console.log('📋 Criando tabela protocolos...');
     await query(`
       CREATE TABLE IF NOT EXISTS protocolos (
@@ -181,7 +155,7 @@ export const initializeDb = async () => {
         documents JSONB NOT NULL DEFAULT '[]',
         status VARCHAR(50) NOT NULL DEFAULT 'Aguardando',
         assigned_to VARCHAR(50) DEFAULT NULL,
-        created_by INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        created_by INTEGER NOT NULL,
         return_reason TEXT DEFAULT NULL,
         is_distribution BOOLEAN NOT NULL DEFAULT false,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -191,18 +165,16 @@ export const initializeDb = async () => {
       )
     `);
     
-    // Índices otimizados para queries frequentes
+    // Índices otimizados
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_status ON protocolos(status)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_assigned_to ON protocolos(assigned_to)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_created_by ON protocolos(created_by)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_created_at ON protocolos(created_at DESC)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_updated_at ON protocolos(updated_at DESC)`);
-    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_queue ON protocolos(status, assigned_to, created_at)`);
-    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_user_status ON protocolos(created_by, status)`);
     
     console.log('✅ Tabela protocolos criada/verificada');
 
-    // Trigger para atualizar updated_at automaticamente
+    // Trigger para atualizar updated_at
     await query(`
       CREATE OR REPLACE FUNCTION update_updated_at_column()
       RETURNS TRIGGER AS $$
@@ -238,7 +210,7 @@ export const initializeDb = async () => {
     // Criar usuários de teste
     await createTestUsers();
     
-    console.log('🎉 Inicialização do banco PostgreSQL concluída!');
+    console.log('🎉 Inicialização do banco PostgreSQL Railway concluída!');
     
   } catch (error) {
     console.error('❌ Erro na inicialização do banco:', error);
@@ -246,7 +218,7 @@ export const initializeDb = async () => {
   }
 };
 
-// Função otimizada para criar usuários de teste
+// Função para criar usuários de teste
 const createTestUsers = async () => {
   const testUsers = [
     { email: 'admin@escritorio.com', senha: '123456', permissao: 'admin' },
@@ -289,27 +261,30 @@ const createTestUsers = async () => {
   }
 };
 
-// Função otimizada para testar conectividade
+// Função para testar conectividade
 export const testConnection = async (retries = 3) => {
   let lastError;
   
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`🔍 Teste conectividade - Tentativa ${attempt}/${retries}`);
+      console.log(`🔍 Teste conectividade Railway - Tentativa ${attempt}/${retries}`);
+      
       const result = await Promise.race([
-        query("SELECT 1 as test, NOW() as timestamp", [], 1),
+        query("SELECT 1 as test, NOW() as timestamp, version() as pg_version", [], 1),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Test timeout')), 3000)
+          setTimeout(() => reject(new Error('Test timeout')), 5000)
         )
       ]);
-      console.log('✅ Conectividade PostgreSQL OK');
+      
+      console.log('✅ Conectividade PostgreSQL Railway OK');
+      console.log('📊 PostgreSQL version:', result.rows[0].pg_version.substring(0, 50));
       return result;
     } catch (error) {
       lastError = error;
       console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
       
       if (attempt < retries) {
-        const delay = Math.min(1000 * attempt, 2000);
+        const delay = Math.min(2000 * attempt, 5000);
         console.log(`⏳ Aguardando ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -319,7 +294,7 @@ export const testConnection = async (retries = 3) => {
   throw lastError;
 };
 
-// Função otimizada para estatísticas
+// Função para estatísticas
 export const getDatabaseStats = async () => {
   try {
     const [funcionariosResult, protocolosResult, aguardandoResult] = await Promise.all([
@@ -332,9 +307,9 @@ export const getDatabaseStats = async () => {
       funcionarios: funcionariosResult.rows[0].count,
       protocolos: protocolosResult.rows[0].count,
       protocolosAguardando: aguardandoResult.rows[0].count,
-      databaseType: 'PostgreSQL',
+      databaseType: 'PostgreSQL Railway',
       environment: process.env.NODE_ENV || 'development',
-      connectionString: process.env.DATABASE_URL ? 'Railway PostgreSQL' : 'Local PostgreSQL',
+      connectionString: process.env.DATABASE_URL ? 'Railway PostgreSQL Connected' : 'Local PostgreSQL',
       timestamp: new Date().toISOString()
     };
   } catch (error) {
@@ -343,16 +318,11 @@ export const getDatabaseStats = async () => {
   }
 };
 
-// Cleanup otimizado
+// Cleanup
 export const closeConnection = async () => {
   try {
-    if (connectionCache) {
-      connectionCache.release();
-      connectionCache = null;
-      cacheExpiry = 0;
-    }
     await db.end();
-    console.log('🔒 Pool PostgreSQL fechado');
+    console.log('🔒 Pool PostgreSQL Railway fechado');
   } catch (error) {
     console.error('❌ Erro ao fechar pool:', error);
   }
@@ -360,13 +330,13 @@ export const closeConnection = async () => {
 
 // Event listeners para cleanup
 process.on('SIGINT', async () => {
-  console.log('🛑 SIGINT - fechando PostgreSQL...');
+  console.log('🛑 SIGINT - fechando PostgreSQL Railway...');
   await closeConnection();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM - fechando PostgreSQL...');
+  console.log('🛑 SIGTERM - fechando PostgreSQL Railway...');
   await closeConnection();
   process.exit(0);
 });
