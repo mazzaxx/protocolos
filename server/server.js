@@ -25,19 +25,27 @@ const allowedOrigins = [
   /^https:\/\/.*\.netlify\.app$/,
   // Permitir qualquer subdomínio do Railway para flexibilidade
   /^https:\/\/.*\.up\.railway\.app$/
+  // Permitir URLs do WebContainer (Bolt.new)
+  /^https:\/\/.*\.webcontainer-api\.io$/,
+  // Permitir URLs locais do WebContainer
+  /^https:\/\/.*\.local-credentialless\.webcontainer-api\.io$/,
+  // Permitir URLs do Bolt.new
+  /^https:\/\/bolt\.new$/,
+  /^https:\/\/.*\.bolt\.new$/,
 ];
 
 // Configuração CORS mais permissiva
 const corsOptions = {
   origin: function (origin, callback) {
     // Log apenas em desenvolvimento para evitar spam
-    if (process.env.NODE_ENV !== 'production') {
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (!isProduction) {
       console.log('🌐 CORS - Origin recebido:', origin);
     }
     
     // Permitir requisições sem origin (ex: Postman, aplicações mobile)
     if (!origin) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (!isProduction) {
         console.log('✅ CORS - Permitindo requisição sem origin');
       }
       return callback(null, true);
@@ -54,13 +62,15 @@ const corsOptions = {
     });
     
     if (isAllowed) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (!isProduction) {
         console.log('✅ CORS - Origin permitida:', origin);
       }
       callback(null, true);
     } else {
       console.log('❌ CORS - Origin bloqueada:', origin);
-      console.log('📋 Origins permitidas:', allowedOrigins);
+      if (!isProduction) {
+        console.log('📋 Origins permitidas:', allowedOrigins);
+      }
       callback(new Error('Não permitido pelo CORS'));
     }
   },
@@ -90,19 +100,22 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Middleware de logging
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
+  const isProduction = process.env.NODE_ENV === 'production';
   
   // Log detalhado apenas para operações importantes
   if (req.path.includes('/api/') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
-    console.log(`📡 ${timestamp} - ${req.method} ${req.path}`);
-    console.log('🌐 Origin:', req.headers.origin);
+    if (!isProduction) {
+      console.log(`📡 ${timestamp} - ${req.method} ${req.path}`);
+      console.log('🌐 Origin:', req.headers.origin);
+    }
     
     if (req.method === 'POST' || req.method === 'PUT') {
       const bodySize = JSON.stringify(req.body || {}).length;
-      if (bodySize > 1000) {
+      if (bodySize > 1000 && !isProduction) {
         console.log('📦 Body size:', bodySize, 'chars');
       }
     }
-  } else if (process.env.NODE_ENV !== 'production') {
+  } else if (!isProduction && !req.path.includes('/health')) {
     // Log simples em desenvolvimento
     console.log(`📡 ${req.method} ${req.path}`);
   }
@@ -112,7 +125,9 @@ app.use((req, res, next) => {
 
 // Rota de health check
 app.get('/', (req, res) => {
-  console.log('🏥 Health check solicitado');
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('🏥 Health check solicitado');
+  }
   res.json({ 
     message: 'Servidor de autenticação funcionando!',
     timestamp: new Date().toISOString(),
@@ -123,10 +138,6 @@ app.get('/', (req, res) => {
 
 // Rota de health check específica
 app.get('/health', async (req, res) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('🏥 Health check detalhado solicitado');
-  }
-  
   try {
     // Testar conexão com banco
     await testConnection();

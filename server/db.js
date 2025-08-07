@@ -9,11 +9,14 @@ const __dirname = dirname(__filename);
 
 // Configuração otimizada do SQLite para múltiplos usuários
 const isProduction = process.env.NODE_ENV === 'production';
-const dbPath = path.join(__dirname, 'database.sqlite');
+
+// CRÍTICO: Usar volume persistente no Railway
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'database.sqlite');
 
 console.log('🗄️ Configurando SQLite otimizado para produção');
 console.log('📍 Caminho do banco:', dbPath);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
+console.log('💾 Persistência:', process.env.DATABASE_PATH ? 'VOLUME RAILWAY' : 'LOCAL');
 
 // Pool de conexões SQLite simulado
 class SQLitePool {

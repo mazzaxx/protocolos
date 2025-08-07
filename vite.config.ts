@@ -9,7 +9,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.NODE_ENV === 'production' 
+          ? 'https://sistema-protocolos-juridicos-production.up.railway.app'
+          : 'http://localhost:3002',
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -26,7 +28,9 @@ export default defineConfig({
         },
       },
       '/health': {
-        target: 'http://localhost:3000',
+        target: process.env.NODE_ENV === 'production' 
+          ? 'https://sistema-protocolos-juridicos-production.up.railway.app'
+          : 'http://localhost:3002',
         changeOrigin: true,
         secure: false,
       },

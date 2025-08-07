@@ -17,6 +17,8 @@ function ConnectivityStatus() {
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
   const [lastCheck, setLastCheck] = React.useState<Date>(new Date());
   const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date} | null>(null);
+  const [retryCount, setRetryCount] = React.useState(0);
+  const [maxRetries] = React.useState(5);
 
   React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -27,18 +29,34 @@ function ConnectivityStatus() {
 
     // Verificar status do backend
     const checkBackend = async () => {
+      // Parar tentativas após limite máximo
+      if (retryCount >= maxRetries) {
+        console.log('🛑 Máximo de tentativas atingido, parando verificações');
+        setBackendStatus('offline');
+        return;
+      }
+      
       setLastCheck(new Date());
       const startTime = Date.now();
       
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-        const healthUrl = `${apiBaseUrl}/health`;
+        // Usar proxy local em desenvolvimento, URL direta em produção
+        const isDevelopment = window.location.hostname === 'localhost' || 
+                             window.location.hostname.includes('webcontainer-api.io') ||
+                             window.location.hostname.includes('bolt.new');
+        
+        const healthUrl = isDevelopment 
+          ? '/health'  // Usar proxy
+          : `${import.meta.env.VITE_API_BASE_URL || 'https://sistema-protocolos-juridicos-production.up.railway.app'}/health`;
+        
+        console.log('🔍 Verificando backend:', healthUrl);
         
         const response = await fetch(healthUrl, { 
           method: 'GET',
           credentials: 'include',
           cache: 'no-cache',
-          mode: 'cors'
+          mode: 'cors',
+          signal: AbortSignal.timeout(8000) // 8 segundos timeout
         });
         
         const responseTime = Date.now() - startTime;
@@ -50,40 +68,67 @@ function ConnectivityStatus() {
             responseTime,
             lastSync: new Date()
           });
+          setRetryCount(0);
         } else {
           setBackendStatus('offline');
           setPerformanceInfo(null);
+          setRetryCount(prev => prev + 1);
         }
       } catch (error) {
+        console.error('🚨 ERRO DE CONECTIVIDADE:', error);
         setBackendStatus('offline');
         setPerformanceInfo(null);
+        setRetryCount(prev => prev + 1);
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
+    
+    // Intervalo adaptativo baseado no número de falhas
+    const getInterval = () => {
+      if (retryCount >= maxRetries) return 60000; // 1 minuto se excedeu limite
+      if (retryCount === 0) return 5000; // 5 segundos se tudo ok
+      if (retryCount < 3) return 10000; // 10 segundos para primeiras falhas
+      return 30000; // 30 segundos após muitas falhas
+    };
+    
+    const interval = setInterval(checkBackend, getInterval());
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, []);
+  }, [retryCount]);
 
   if (!isOnline || backendStatus === 'offline') {
     return (
-      <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
+      <div className="bg-red-500 text-white px-4 py-3 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
           <span>
             {!isOnline 
               ? '🔴 SEM INTERNET - Dados não sincronizados' 
-              : `🔴 SERVIDOR OFFLINE - Sincronização interrompida`
+              : retryCount >= maxRetries
+                ? '🔴 SERVIDOR INACESSÍVEL - Verifique a conexão'
+                : `🔴 SERVIDOR OFFLINE - Tentativa ${retryCount}/${maxRetries}`
             }
           </span>
           <span className="text-xs opacity-75">
             (última verificação: {lastCheck.toLocaleTimeString()})
           </span>
         </div>
+        {backendStatus === 'offline' && retryCount < maxRetries && (
+          <div className="mt-2 text-xs">
+            <p>✅ Verificando conectividade com o servidor...</p>
+            <p>🔄 Reconectando automaticamente...</p>
+          </div>
+        )}
+        {retryCount >= maxRetries && (
+          <div className="mt-2 text-xs">
+            <p>❌ Não foi possível conectar ao servidor</p>
+            <p>🔧 Verifique se o backend está rodando</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -94,6 +139,9 @@ function ConnectivityStatus() {
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
           <span>🟡 Conectando ao servidor...</span>
+          <span className="text-xs opacity-75">
+            (tentativa {retryCount + 1})
+          </span>
         </div>
       </div>
     );

@@ -150,8 +150,16 @@ export function useProtocols() {
     console.log('🔄 SINCRONIZAÇÃO INICIADA:', forceRefresh ? 'FORÇADA' : 'AUTOMÁTICA');
     
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const url = `${apiBaseUrl}/api/protocolos`;
+      // Detectar ambiente e usar URL apropriada
+      const isDevelopment = window.location.hostname === 'localhost' || 
+                           window.location.hostname.includes('webcontainer-api.io') ||
+                           window.location.hostname.includes('bolt.new');
+      
+      const url = isDevelopment 
+        ? '/api/protocolos'  // Usar proxy em desenvolvimento
+        : `${import.meta.env.VITE_API_BASE_URL || 'https://sistema-protocolos-juridicos-production.up.railway.app'}/api/protocolos`;
+      
+      console.log('🌐 Conectando em:', url);
       
       const response = await fetch(url, {
         method: 'GET',
@@ -162,13 +170,16 @@ export function useProtocols() {
           'X-Client-Time': new Date().toISOString()
         },
         credentials: 'include',
-        mode: 'cors'
+        mode: 'cors',
+        signal: AbortSignal.timeout(12000) // 12 segundos timeout
       });
       
       const duration = Date.now() - startTime;
       console.log(`📡 Resposta recebida em ${duration}ms - Status: ${response.status}`);
       
       if (!response.ok) {
+        console.error(`🚨 HTTP ERROR: ${response.status} - ${response.statusText}`);
+        console.error(`🔗 URL tentada: ${url}`);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
@@ -224,20 +235,25 @@ export function useProtocols() {
         setConnectionStatus('disconnected');
         retryCountRef.current++;
         
-        // Estratégia de retry exponencial
-        const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
-        console.log(`🔄 Tentativa ${retryCountRef.current}, próxima em ${retryDelay}ms`);
-        
-        setTimeout(() => {
-          if (mountedRef.current && retryCountRef.current < 5) {
-            fetchProtocols(true);
-          }
-        }, retryDelay);
+        // Limitar tentativas de retry
+        if (retryCountRef.current < 3) {
+          const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 15000);
+          console.log(`🔄 Tentativa ${retryCountRef.current}, próxima em ${retryDelay}ms`);
+          
+          setTimeout(() => {
+            if (mountedRef.current) {
+              fetchProtocols(true);
+            }
+          }, retryDelay);
+        } else {
+          console.log('🛑 Máximo de tentativas atingido, parando sync automático');
+        }
       }
       
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      if (error.name === 'AbortError') {
+        console.error('⏱️ TIMEOUT: Servidor demorou muito para responder');
+      } else if (error instanceof TypeError && error.message === 'Failed to fetch') {
         console.error('🚨 ERRO CRÍTICO: Backend inacessível');
-        console.error('🔧 Verifique: https://sistema-protocolos-juridicos-production.up.railway.app');
       }
       
     } finally {
@@ -357,7 +373,11 @@ export function useProtocols() {
     lastActivityRef.current = Date.now();
     
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      // Detectar ambiente e usar URL apropriada
+      const isDevelopment = window.location.hostname === 'localhost' || 
+                           window.location.hostname.includes('webcontainer-api.io') ||
+                           window.location.hostname.includes('bolt.new');
+      
       const userEmail = await getUserEmailById(protocol.createdBy);
       
       const protocolData = {
@@ -365,7 +385,11 @@ export function useProtocols() {
         createdByEmail: userEmail
       };
       
-      const response = await fetch(`${apiBaseUrl}/api/protocolos`, {
+      const url = isDevelopment 
+        ? '/api/protocolos'
+        : `${import.meta.env.VITE_API_BASE_URL || 'https://sistema-protocolos-juridicos-production.up.railway.app'}/api/protocolos`;
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -373,6 +397,7 @@ export function useProtocols() {
         },
         credentials: 'include',
         mode: 'cors',
+        signal: AbortSignal.timeout(15000), // 15 segundos para criação
         body: JSON.stringify(protocolData),
       });
       
@@ -407,7 +432,10 @@ export function useProtocols() {
   // Função otimizada para atualizar protocolo no servidor
   const updateProtocolInServer = useCallback(async (id: string, updates: any, performedBy?: string) => {
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      // Detectar ambiente e usar URL apropriada
+      const isDevelopment = window.location.hostname === 'localhost' || 
+                           window.location.hostname.includes('webcontainer-api.io') ||
+                           window.location.hostname.includes('bolt.new');
       
       const updateData = { ...updates };
       if (performedBy) {
@@ -422,13 +450,18 @@ export function useProtocols() {
       console.log('🔄 ATUALIZANDO PROTOCOLO:', id);
       lastActivityRef.current = Date.now();
       
-      const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
+      const url = isDevelopment 
+        ? `/api/protocolos/${id}`
+        : `${import.meta.env.VITE_API_BASE_URL || 'https://sistema-protocolos-juridicos-production.up.railway.app'}/api/protocolos/${id}`;
+      
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'X-Sync-Action': 'update-protocol',
         },
         credentials: 'include',
+        signal: AbortSignal.timeout(10000), // 10 segundos para atualização
         body: JSON.stringify(updateData),
       });
       

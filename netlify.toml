@@ -16,3 +16,6 @@
 
 [context.deploy-preview.environment]
   VITE_API_BASE_URL = "https://sistema-protocolos-juridicos-production.up.railway.app"
+
+[context.branch-deploy.environment]
+  VITE_API_BASE_URL = "https://sistema-protocolos-juridicos-production.up.railway.app"
