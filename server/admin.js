@@ -41,7 +41,7 @@ router.post('/funcionarios', async (req, res) => {
 
   // Verificar se email já existe
   try {
-    const existingUser = await query("SELECT email FROM funcionarios WHERE email = $1", [email]);
+    const existingUser = await query("SELECT email FROM funcionarios WHERE email = ?", [email]);
 
     if (existingUser.rows && existingUser.rows.length > 0) {
       return res.status(400).json({ 
@@ -52,11 +52,11 @@ router.post('/funcionarios', async (req, res) => {
 
     // Inserir novo funcionário
     const result = await query(
-      "INSERT INTO funcionarios (email, senha, permissao) VALUES ($1, $2, $3) RETURNING id",
+      "INSERT INTO funcionarios (email, senha, permissao) VALUES (?, ?, ?)",
       [email, senha, permissao]
     );
 
-    const newId = result.rows && result.rows[0] ? result.rows[0].id : result.insertId;
+    const newId = result.insertId;
     
     console.log('Funcionário criado com ID:', newId);
     res.json({
@@ -92,7 +92,7 @@ router.put('/funcionarios/:id', async (req, res) => {
 
   // Verificar se email já existe em outro funcionário
   try {
-    const existingUser = await query("SELECT id FROM funcionarios WHERE email = $1 AND id != $2", [email, id]);
+    const existingUser = await query("SELECT id FROM funcionarios WHERE email = ? AND id != ?", [email, id]);
 
     if (existingUser.rows && existingUser.rows.length > 0) {
       return res.status(400).json({ 
@@ -105,10 +105,10 @@ router.put('/funcionarios/:id', async (req, res) => {
     let updateQuery, params;
     
     if (senha) {
-      updateQuery = "UPDATE funcionarios SET email = $1, senha = $2, permissao = $3 WHERE id = $4";
+      updateQuery = "UPDATE funcionarios SET email = ?, senha = ?, permissao = ? WHERE id = ?";
       params = [email, senha, permissao, id];
     } else {
-      updateQuery = "UPDATE funcionarios SET email = $1, permissao = $2 WHERE id = $3";
+      updateQuery = "UPDATE funcionarios SET email = ?, permissao = ? WHERE id = ?";
       params = [email, permissao, id];
     }
 
@@ -143,7 +143,7 @@ router.delete('/funcionarios/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await query("DELETE FROM funcionarios WHERE id = $1", [id]);
+    const result = await query("DELETE FROM funcionarios WHERE id = ?", [id]);
     const changes = result.rowCount || result.changes || 0;
 
     if (changes === 0) {
