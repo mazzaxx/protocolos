@@ -1,251 +1,360 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Protocol } from '../types';
 
-// Cache otimizado
-let lastFetchTime = 0;
-let lastDataHash = '';
-let isCurrentlyFetching = false;
-let fetchController: AbortController | null = null;
+// Sistema de cache inteligente para evitar re-renders desnecessários
+class ProtocolCache {
+  private cache: Map<string, any> = new Map();
+  private lastHash: string = '';
+  private lastFetch: number = 0;
+  
+  // Gerar hash dos dados para detectar mudanças reais
+  private generateHash(data: any): string {
+    return JSON.stringify(data).split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0).toString();
+  }
+  
+  // Verificar se os dados mudaram
+  hasChanged(data: any): boolean {
+    const newHash = this.generateHash(data);
+    const changed = newHash !== this.lastHash;
+    this.lastHash = newHash;
+    return changed;
+  }
+  
+  // Cache com TTL
+  set(key: string, value: any, ttl: number = 5000) {
+    this.cache.set(key, {
+      value,
+      expires: Date.now() + ttl
+    });
+  }
+  
+  get(key: string): any {
+    const item = this.cache.get(key);
+    if (!item) return null;
+    
+    if (Date.now() > item.expires) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return item.value;
+  }
+  
+  clear() {
+    this.cache.clear();
+    this.lastHash = '';
+  }
+  
+  // Controle de throttling
+  canFetch(minInterval: number = 1000): boolean {
+    const now = Date.now();
+    if (now - this.lastFetch < minInterval) {
+      return false;
+    }
+    this.lastFetch = now;
+    return true;
+  }
+}
 
-// Função para buscar email do usuário por ID (otimizada)
+// Instância global do cache
+const protocolCache = new ProtocolCache();
+
+// Sistema de debounce para evitar múltiplas requisições
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
+// Função para buscar email do usuário por ID (com cache)
 const getUserEmailById = async (userId: number): Promise<string> => {
+  const cacheKey = `user_email_${userId}`;
+  const cached = protocolCache.get(cacheKey);
+  if (cached) return cached;
+  
   try {
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const controller = new AbortController();
-    
-    const response = await Promise.race([
-      fetch(`${apiBaseUrl}/api/admin/funcionarios`, {
-        credentials: 'include',
-        signal: controller.signal,
-        headers: {
-          'Cache-Control': 'max-age=300' // 5 minutos
-        }
-      }),
-      new Promise<never>((_, reject) => 
-        setTimeout(() => {
-          controller.abort();
-          reject(new Error('Timeout'));
-        }, 5000)
-      )
-    ]);
+    const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios`, {
+      credentials: 'include',
+      headers: {
+        'Cache-Control': 'max-age=300' // 5 minutos de cache
+      }
+    });
     
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const data = await response.json();
     
     if (data.success) {
       const user = data.funcionarios.find((f: any) => f.id === userId);
-      return user ? user.email : 'Usuário não encontrado';
+      const email = user ? user.email : 'Usuário não encontrado';
+      
+      // Cache por 10 minutos
+      protocolCache.set(cacheKey, email, 600000);
+      return email;
     }
     return 'Email não disponível';
   } catch (error) {
-    console.error('❌ Erro ao buscar email:', error);
+    console.error('Erro ao buscar email do usuário:', error);
     return 'Email não disponível';
   }
 };
 
 export function useProtocols() {
   const [protocols, setProtocols] = useState<Protocol[]>([]);
-  const [updateTrigger, setUpdateTrigger] = useState(0);
   const [userEmails, setUserEmails] = useState<Record<number, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
-
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  
+  // Refs para controle de estado
+  const isFetchingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
+  const lastActivityRef = useRef(Date.now());
+  
   // Função otimizada para buscar protocolos
-  const fetchProtocols = async (forceRefresh = false) => {
-    const now = Date.now();
+  const fetchProtocols = useCallback(async (forceRefresh = false) => {
+    // Verificar se o componente ainda está montado
+    if (!mountedRef.current) return;
     
-    // Evitar múltiplas requisições
-    if (!forceRefresh && isCurrentlyFetching) {
-      console.log('🔄 Requisição já em andamento');
+    // Evitar múltiplas requisições simultâneas
+    if (isFetchingRef.current && !forceRefresh) {
+      console.log('🔄 Requisição já em andamento, ignorando...');
       return;
     }
-
-    // Throttle inteligente
-    const minInterval = forceRefresh ? 100 : 1000;
-    if (!forceRefresh && (now - lastFetchTime) < minInterval) {
-      console.log(`⏱️ Throttle ativo (${minInterval}ms)`);
+    
+    // Throttling inteligente
+    if (!forceRefresh && !protocolCache.canFetch(1500)) {
+      console.log('⏱️ Throttling ativo, aguardando...');
       return;
     }
-
-    // Cancelar requisição anterior se existir
-    if (fetchController) {
-      fetchController.abort();
-    }
-
-    fetchController = new AbortController();
-    isCurrentlyFetching = true;
+    
+    isFetchingRef.current = true;
     setIsLoading(true);
-    lastFetchTime = now;
     setConnectionStatus('checking');
     
-    console.log('🔄 Buscando protocolos...', forceRefresh ? '(FORÇADO)' : '(AUTO)');
+    const startTime = Date.now();
+    console.log('🔄 SINCRONIZAÇÃO INICIADA:', forceRefresh ? 'FORÇADA' : 'AUTOMÁTICA');
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const url = `${apiBaseUrl}/api/protocolos`;
       
-      const response = await Promise.race([
-        fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=2',
-            'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
-          },
-          credentials: 'include',
-          mode: 'cors',
-          signal: fetchController.signal
-        }),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => {
-            fetchController?.abort();
-            reject(new Error('Timeout'));
-          }, 8000)
-        )
-      ]);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=30',
+          'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
+          'X-Client-Time': new Date().toISOString()
+        },
+        credentials: 'include',
+        mode: 'cors'
+      });
       
-      console.log('📡 Response status:', response.status);
+      const duration = Date.now() - startTime;
+      console.log(`📡 Resposta recebida em ${duration}ms - Status: ${response.status}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log(`📊 Protocolos recebidos: ${data.total || 0} (${data.duration || 'N/A'})`);
       
-      if (data.success && Array.isArray(data.protocolos)) {
-        // Verificar mudanças usando hash
-        const dataHash = JSON.stringify(data.protocolos).length + data.protocolos.length;
-        const dataChanged = dataHash !== lastDataHash;
-        
-        if (!dataChanged && !forceRefresh) {
-          console.log('📊 Dados inalterados');
-          setConnectionStatus('connected');
-          return;
-        }
-        
-        lastDataHash = dataHash;
-        
-        // Processar protocolos
-        const protocolsWithDates = data.protocolos.map((p: any) => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt),
-        }));
-        
-        console.log(`✅ Sincronização: ${protocolsWithDates.length} protocolos`);
-        console.log(`📊 Status: A:${protocolsWithDates.filter(p => p.status === 'Aguardando').length} E:${protocolsWithDates.filter(p => p.status === 'Em Execução').length} P:${protocolsWithDates.filter(p => p.status === 'Peticionado').length} D:${protocolsWithDates.filter(p => p.status === 'Devolvido').length}`);
-        
-        setProtocols(protocolsWithDates);
-        setConnectionStatus('connected');
-        
-      } else {
-        console.error('❌ Resposta inválida:', data);
-        setConnectionStatus('disconnected');
-        throw new Error('Resposta inválida');
+      if (!data.success || !Array.isArray(data.protocolos)) {
+        throw new Error('Resposta inválida do servidor');
       }
-    } catch (error: any) {
-      console.error('❌ Erro ao buscar protocolos:', error.message);
-      setConnectionStatus('disconnected');
       
-      if (error.name === 'AbortError') {
-        console.log('🛑 Requisição cancelada');
+      // Verificar se os dados realmente mudaram
+      if (!forceRefresh && !protocolCache.hasChanged(data.protocolos)) {
+        console.log('📊 Dados inalterados, mantendo cache');
+        setConnectionStatus('connected');
+        setLastSyncTime(new Date());
+        retryCountRef.current = 0;
         return;
       }
       
-      if (error.message === 'Timeout' || error.message.includes('Failed to fetch')) {
-        console.error('🚨 ERRO DE CONEXÃO COM RAILWAY!');
+      // Processar protocolos com validação
+      const protocolsWithDates = data.protocolos.map((p: any) => {
+        try {
+          return {
+            ...p,
+            createdAt: new Date(p.createdAt),
+            updatedAt: new Date(p.updatedAt),
+            documents: Array.isArray(p.documents) ? p.documents : [],
+            guias: Array.isArray(p.guias) ? p.guias : [],
+            activityLog: Array.isArray(p.activityLog) ? p.activityLog : []
+          };
+        } catch (error) {
+          console.error('❌ Erro ao processar protocolo:', p.id, error);
+          return null;
+        }
+      }).filter(Boolean);
+      
+      console.log(`✅ SINCRONIZAÇÃO COMPLETA: ${protocolsWithDates.length} protocolos`);
+      console.log(`📊 Performance: ${duration}ms`);
+      console.log(`🎯 Filas: Robô(${protocolsWithDates.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolsWithDates.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolsWithDates.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
+      
+      // Atualizar estado apenas se o componente ainda estiver montado
+      if (mountedRef.current) {
+        setProtocols(protocolsWithDates);
+        setConnectionStatus('connected');
+        setLastSyncTime(new Date());
+        retryCountRef.current = 0;
+        lastActivityRef.current = Date.now();
+      }
+      
+    } catch (error) {
+      console.error('❌ ERRO DE SINCRONIZAÇÃO:', error);
+      
+      if (mountedRef.current) {
+        setConnectionStatus('disconnected');
+        retryCountRef.current++;
+        
+        // Estratégia de retry exponencial
+        const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
+        console.log(`🔄 Tentativa ${retryCountRef.current}, próxima em ${retryDelay}ms`);
+        
+        setTimeout(() => {
+          if (mountedRef.current && retryCountRef.current < 5) {
+            fetchProtocols(true);
+          }
+        }, retryDelay);
+      }
+      
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        console.error('🚨 ERRO CRÍTICO: Backend inacessível');
         console.error('🔧 Verifique: https://sistema-protocolos-juridicos-production.up.railway.app');
       }
       
-      // Manter lista vazia em caso de erro
-      setProtocols([]);
-      
-      throw error;
     } finally {
-      isCurrentlyFetching = false;
-      setIsLoading(false);
-      fetchController = null;
+      if (mountedRef.current) {
+        setIsLoading(false);
+        isFetchingRef.current = false;
+      }
     }
-  };
-
+  }, []);
+  
+  // Debounced version para evitar chamadas excessivas
+  const debouncedFetch = useCallback(
+    debounce(fetchProtocols, 300),
+    [fetchProtocols]
+  );
+  
+  // Effect principal para inicialização e polling
   useEffect(() => {
-    console.log('🚀 useProtocols: Iniciando...');
+    console.log('🚀 useProtocols: Inicializando sistema otimizado...');
     console.log('🌐 Backend:', import.meta.env.VITE_API_BASE_URL || 'PROXY LOCAL');
     
-    fetchProtocols(true); // Fetch inicial forçado
+    // Fetch inicial
+    fetchProtocols(true);
     
-    // Polling otimizado com intervalo adaptativo
-    let pollInterval = 2000; // Começar com 2 segundos
-    
-    const interval = setInterval(() => {
-      // Intervalo adaptativo baseado na atividade
-      const timeSinceLastFetch = Date.now() - lastFetchTime;
-      
-      if (timeSinceLastFetch > 30000) {
-        pollInterval = 5000; // Reduzir frequência após inatividade
-      } else {
-        pollInterval = 2000; // Manter frequência alta com atividade
+    // Configurar polling adaptativo
+    const setupPolling = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
       }
       
-      console.log(`🔄 Polling (${pollInterval}ms)`);
-      fetchProtocols(false);
-    }, pollInterval);
-    
-    return () => {
-      console.log('🛑 useProtocols: Cleanup');
-      clearInterval(interval);
-      if (fetchController) {
-        fetchController.abort();
-      }
-      isCurrentlyFetching = false;
+      intervalRef.current = setInterval(() => {
+        if (!mountedRef.current) return;
+        
+        // Polling adaptativo baseado na atividade
+        const timeSinceActivity = Date.now() - lastActivityRef.current;
+        let interval = 3000; // 3 segundos padrão
+        
+        if (timeSinceActivity > 60000) {
+          interval = 10000; // 10 segundos se inativo por 1 minuto
+        } else if (timeSinceActivity > 30000) {
+          interval = 5000; // 5 segundos se inativo por 30 segundos
+        }
+        
+        console.log(`🔄 POLLING AUTOMÁTICO (${interval}ms): Verificando atualizações...`);
+        debouncedFetch(false);
+      }, 3000); // Intervalo base de 3 segundos
     };
-  }, [updateTrigger]);
-
-  // Carregar emails dos usuários (otimizado)
+    
+    setupPolling();
+    
+    // Cleanup
+    return () => {
+      console.log('🛑 useProtocols: Limpando recursos...');
+      mountedRef.current = false;
+      isFetchingRef.current = false;
+      
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [debouncedFetch]);
+  
+  // Effect para carregar emails dos usuários
   useEffect(() => {
     const loadUserEmails = async () => {
+      if (protocols.length === 0) return;
+      
       const uniqueUserIds = [...new Set(protocols.map(p => p.createdBy))];
-      const emailPromises = uniqueUserIds
-        .filter(userId => !userEmails[userId])
-        .map(async (userId) => {
-          const email = await getUserEmailById(userId);
-          return { userId, email };
-        });
-
-      if (emailPromises.length > 0) {
-        const results = await Promise.all(emailPromises);
-        const newEmails: Record<number, string> = {};
+      const newEmails: Record<number, string> = {};
+      
+      // Carregar emails em paralelo com limite
+      const batchSize = 5;
+      for (let i = 0; i < uniqueUserIds.length; i += batchSize) {
+        const batch = uniqueUserIds.slice(i, i + batchSize);
         
+        const emailPromises = batch.map(async (userId) => {
+          if (!userEmails[userId]) {
+            try {
+              const email = await getUserEmailById(userId);
+              return { userId, email };
+            } catch (error) {
+              console.error(`Erro ao carregar email do usuário ${userId}:`, error);
+              return { userId, email: 'Email não disponível' };
+            }
+          }
+          return null;
+        });
+        
+        const results = await Promise.all(emailPromises);
         results.forEach(result => {
           if (result) {
             newEmails[result.userId] = result.email;
           }
         });
-
-        if (Object.keys(newEmails).length > 0) {
-          setUserEmails(prev => ({ ...prev, ...newEmails }));
-        }
+      }
+      
+      if (Object.keys(newEmails).length > 0 && mountedRef.current) {
+        setUserEmails(prev => ({ ...prev, ...newEmails }));
       }
     };
-
-    if (protocols.length > 0) {
-      loadUserEmails();
-    }
-  }, [protocols]);
-
-  const forceRefresh = () => {
-    console.log('🔄 Forçando refresh...');
-    lastDataHash = ''; // Invalidar cache
-    setUpdateTrigger(prev => prev + 1);
-  };
-
+    
+    loadUserEmails();
+  }, [protocols, userEmails]);
+  
+  // Função para forçar refresh
+  const forceRefresh = useCallback(() => {
+    console.log('🔄 Forçando refresh dos protocolos...');
+    protocolCache.clear();
+    lastActivityRef.current = Date.now();
+    fetchProtocols(true);
+  }, [fetchProtocols]);
+  
   // Função otimizada para adicionar protocolo
-  const addProtocol = async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
-    console.log('🚀 Criando protocolo...');
+  const addProtocol = useCallback(async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
+    console.log('🚀 CRIANDO PROTOCOLO - Sincronização iniciada');
+    lastActivityRef.current = Date.now();
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
@@ -256,66 +365,47 @@ export function useProtocols() {
         createdByEmail: userEmail
       };
       
-      const controller = new AbortController();
-      const url = `${apiBaseUrl}/api/protocolos`;
-      
-      const response = await Promise.race([
-        fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Sync-Action': 'create-protocol',
-          },
-          credentials: 'include',
-          mode: 'cors',
-          body: JSON.stringify(protocolData),
-          signal: controller.signal
-        }),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => {
-            controller.abort();
-            reject(new Error('Timeout'));
-          }, 15000)
-        )
-      ]);
-
-      console.log('📡 Create response:', response.status);
+      const response = await fetch(`${apiBaseUrl}/api/protocolos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Sync-Action': 'create-protocol',
+        },
+        credentials: 'include',
+        mode: 'cors',
+        body: JSON.stringify(protocolData),
+      });
       
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
-
+      
       const data = await response.json();
-      console.log('📦 Protocolo criado:', data.success);
       
       if (data.success) {
-        console.log(`🎉 Protocolo criado: ${data.protocolo?.id}`);
+        console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
         
-        // Forçar sincronização imediata
-        setTimeout(() => {
-          console.log('🔄 Sincronização imediata...');
-          lastDataHash = '';
-          forceRefresh();
-        }, 200);
+        // Invalidar cache e forçar refresh imediato
+        protocolCache.clear();
+        
+        // Múltiplas sincronizações para garantir consistência
+        setTimeout(() => fetchProtocols(true), 100);
+        setTimeout(() => fetchProtocols(true), 500);
+        setTimeout(() => fetchProtocols(true), 1000);
         
         return data.protocolo;
       } else {
         throw new Error(data.message || 'Erro ao criar protocolo');
       }
-    } catch (error: any) {
-      console.error('🚨 Erro ao criar protocolo:', error);
-      
-      if (error.message === 'Timeout' || error.message.includes('Failed to fetch')) {
-        throw new Error('ERRO DE CONEXÃO: Não foi possível conectar ao servidor. O protocolo NÃO foi salvo. Verifique sua conexão e tente novamente.');
-      }
-      
-      throw error;
+    } catch (error) {
+      console.error('🚨 ERRO CRÍTICO:', error);
+      throw new Error(`ERRO DE CONEXÃO: ${error.message}`);
     }
-  };
-
+  }, [fetchProtocols]);
+  
   // Função otimizada para atualizar protocolo no servidor
-  const updateProtocolInServer = async (id: string, updates: any, performedBy?: string) => {
+  const updateProtocolInServer = useCallback(async (id: string, updates: any, performedBy?: string) => {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       
@@ -324,71 +414,57 @@ export function useProtocols() {
         updateData.newLogEntry = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'status_changed',
-          description: `Status alterado: ${updates.status || 'atualizado'}`,
+          description: `Status alterado para: ${updates.status || 'atualizado'}`,
           performedBy
         };
       }
       
-      console.log(`🔄 Atualizando protocolo: ${id}`);
+      console.log('🔄 ATUALIZANDO PROTOCOLO:', id);
+      lastActivityRef.current = Date.now();
       
-      const controller = new AbortController();
+      const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Sync-Action': 'update-protocol',
+        },
+        credentials: 'include',
+        body: JSON.stringify(updateData),
+      });
       
-      const response = await Promise.race([
-        fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Sync-Action': 'update-protocol',
-          },
-          credentials: 'include',
-          body: JSON.stringify(updateData),
-          signal: controller.signal
-        }),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => {
-            controller.abort();
-            reject(new Error('Timeout'));
-          }, 10000)
-        )
-      ]);
-
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
-
+      
       const data = await response.json();
       
       if (data.success) {
-        console.log('✅ Protocolo atualizado');
+        console.log('✅ PROTOCOLO ATUALIZADO - Sincronizando...');
         
-        // Forçar sincronização
-        setTimeout(() => {
-          lastDataHash = '';
-          forceRefresh();
-        }, 300);
+        // Invalidar cache e sincronizar
+        protocolCache.clear();
+        setTimeout(() => fetchProtocols(true), 200);
         
         return true;
       } else {
-        throw new Error(data.message || 'Erro ao atualizar');
+        throw new Error(data.message || 'Erro ao atualizar protocolo');
       }
-    } catch (error: any) {
-      console.error('🚨 Erro ao atualizar:', error);
+    } catch (error) {
+      console.error('🚨 ERRO DE ATUALIZAÇÃO:', error);
       return false;
     }
-  };
-
-  const updateProtocolStatus = async (id: string, status: Protocol['status'], performedBy?: string) => {
+  }, [fetchProtocols]);
+  
+  // Funções específicas para operações
+  const updateProtocolStatus = useCallback(async (id: string, status: Protocol['status'], performedBy?: string) => {
     const success = await updateProtocolInServer(id, { status }, performedBy);
-    
     if (!success) {
       throw new Error('Falha ao atualizar status no servidor');
     }
-    
-    lastDataHash = '';
-  };
-
-  const returnProtocol = async (id: string, returnReason: string, performedBy?: string) => {
+  }, [updateProtocolInServer]);
+  
+  const returnProtocol = useCallback(async (id: string, returnReason: string, performedBy?: string) => {
     const foundProtocol = protocols.find(p => p.id === id);
     if (!foundProtocol) {
       throw new Error('Protocolo não encontrado');
@@ -423,74 +499,22 @@ export function useProtocols() {
         }
       };
     }
-
-    const success = await updateProtocolInServer(id, updates);
     
+    const success = await updateProtocolInServer(id, updates);
     if (!success) {
       throw new Error('Falha ao devolver protocolo no servidor');
     }
     
-    lastDataHash = '';
-
     // Notificação visual
-    if (foundProtocol) {
-      blinkFavicon();
-      
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Protocolo Devolvido', {
-          body: `Protocolo ${foundProtocol.processNumber} foi devolvido: ${returnReason}`,
-          icon: '/favicon.ico'
-        });
-      }
+    if (foundProtocol && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification('Protocolo Devolvido', {
+        body: `Protocolo ${foundProtocol.processNumber} foi devolvido: ${returnReason}`,
+        icon: '/favicon.ico'
+      });
     }
-  };
-
-  // Função para fazer favicon piscar
-  const blinkFavicon = () => {
-    const originalFavicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
-    const originalHref = originalFavicon?.href || '/vite.svg';
-    
-    const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
-    const ctx = canvas.getContext('2d');
-    
-    if (ctx) {
-      let isRed = false;
-      let blinkCount = 0;
-      const maxBlinks = 6;
-      
-      const blink = () => {
-        ctx.clearRect(0, 0, 32, 32);
-        ctx.fillStyle = isRed ? '#ff0000' : '#646cff';
-        ctx.fillRect(0, 0, 32, 32);
-        ctx.fillStyle = 'white';
-        ctx.font = '20px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('!', 16, 22);
-        
-        const dataURL = canvas.toDataURL();
-        if (originalFavicon) {
-          originalFavicon.href = dataURL;
-        }
-        
-        isRed = !isRed;
-        blinkCount++;
-        
-        if (blinkCount < maxBlinks) {
-          setTimeout(blink, 500);
-        } else {
-          if (originalFavicon) {
-            originalFavicon.href = originalHref;
-          }
-        }
-      };
-      
-      blink();
-    }
-  };
-
-  const moveProtocolToQueue = async (id: string, assignedTo: Protocol['assignedTo'], performedBy?: string) => {
+  }, [protocols, updateProtocolInServer]);
+  
+  const moveProtocolToQueue = useCallback(async (id: string, assignedTo: Protocol['assignedTo'], performedBy?: string) => {
     const updates = {
       assignedTo,
       newLogEntry: {
@@ -500,25 +524,27 @@ export function useProtocols() {
         performedBy: performedBy || 'Sistema'
       }
     };
-
-    const success = await updateProtocolInServer(id, updates);
     
+    const success = await updateProtocolInServer(id, updates);
     if (!success) {
       throw new Error('Falha ao mover protocolo no servidor');
     }
+  }, [updateProtocolInServer]);
+  
+  const moveMultipleProtocols = useCallback(async (ids: string[], assignedTo: Protocol['assignedTo'], performedBy?: string) => {
+    console.log(`🔄 Movendo ${ids.length} protocolos para ${assignedTo || 'Robô'}`);
     
-    lastDataHash = '';
-  };
-
-  const moveMultipleProtocols = async (ids: string[], assignedTo: Protocol['assignedTo'], performedBy?: string) => {
-    for (const id of ids) {
-      await moveProtocolToQueue(id, assignedTo, performedBy);
+    // Processar em lotes para evitar sobrecarga
+    const batchSize = 5;
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batch = ids.slice(i, i + batchSize);
+      await Promise.all(batch.map(id => moveProtocolToQueue(id, assignedTo, performedBy)));
     }
     
-    lastDataHash = '';
-  };
-
-  const cancelProtocol = async (id: string, performedBy?: string) => {
+    console.log('✅ Movimentação em lote concluída');
+  }, [moveProtocolToQueue]);
+  
+  const cancelProtocol = useCallback(async (id: string, performedBy?: string) => {
     const updates = {
       status: 'Cancelado',
       newLogEntry: {
@@ -528,17 +554,14 @@ export function useProtocols() {
         performedBy: performedBy || 'Sistema'
       }
     };
-
-    const success = await updateProtocolInServer(id, updates);
     
+    const success = await updateProtocolInServer(id, updates);
     if (!success) {
       throw new Error('Falha ao cancelar protocolo no servidor');
     }
-    
-    lastDataHash = '';
-  };
-
-  const updateProtocol = async (id: string, updates: Partial<Protocol>, performedBy?: string) => {
+  }, [updateProtocolInServer]);
+  
+  const updateProtocol = useCallback(async (id: string, updates: Partial<Protocol>, performedBy?: string) => {
     const updateData = {
       ...updates,
       newLogEntry: {
@@ -548,22 +571,19 @@ export function useProtocols() {
         performedBy: performedBy || 'Usuário'
       }
     };
-
-    const success = await updateProtocolInServer(id, updateData);
     
+    const success = await updateProtocolInServer(id, updateData);
     if (!success) {
       throw new Error('Falha ao atualizar protocolo no servidor');
     }
-    
-    lastDataHash = '';
-  };
-
+  }, [updateProtocolInServer]);
+  
   return {
     protocols,
     userEmails,
-    updateTrigger,
     isLoading,
     connectionStatus,
+    lastSyncTime,
     forceRefresh,
     addProtocol,
     updateProtocolStatus,

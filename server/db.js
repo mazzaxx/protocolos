@@ -1,216 +1,360 @@
-import pkg from 'pg';
-const { Pool } = pkg;
+import sqlite3 from 'sqlite3';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
-// Configuração PostgreSQL Railway
+// Obter __dirname em ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Configuração otimizada do SQLite para múltiplos usuários
 const isProduction = process.env.NODE_ENV === 'production';
+const dbPath = path.join(__dirname, 'database.sqlite');
 
-console.log('🐘 Configurando PostgreSQL Railway...');
+console.log('🗄️ Configurando SQLite otimizado para produção');
+console.log('📍 Caminho do banco:', dbPath);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
-console.log('🔗 DATABASE_URL presente:', !!process.env.DATABASE_URL);
 
-let dbConfig;
+// Pool de conexões SQLite simulado
+class SQLitePool {
+  constructor(dbPath, maxConnections = 10) {
+    this.dbPath = dbPath;
+    this.maxConnections = maxConnections;
+    this.connections = [];
+    this.activeConnections = 0;
+    this.queue = [];
+    
+    // Criar conexões iniciais
+    this.initializePool();
+  }
 
-if (process.env.DATABASE_URL) {
-  // Railway PostgreSQL (produção)
-  console.log('🐘 Usando PostgreSQL Railway com DATABASE_URL');
-  dbConfig = {
-    connectionString: process.env.DATABASE_URL,
-    ssl: isProduction ? { rejectUnauthorized: false } : false,
-    max: 10, // Pool menor para Railway
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-    acquireTimeoutMillis: 15000,
-    createTimeoutMillis: 10000,
-    destroyTimeoutMillis: 5000,
-    reapIntervalMillis: 1000,
-    createRetryIntervalMillis: 500,
-    // Configurações específicas Railway
-    statement_timeout: 60000,
-    query_timeout: 60000,
-    application_name: 'sistema_protocolos_juridicos_railway'
-  };
-} else {
-  // PostgreSQL local (desenvolvimento)
-  console.log('🐘 Usando PostgreSQL local');
-  dbConfig = {
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'protocolos_juridicos',
-    password: process.env.DB_PASSWORD || 'postgres',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    ssl: false,
-    max: 5,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-  };
+  initializePool() {
+    console.log(`🔗 Inicializando pool SQLite com ${this.maxConnections} conexões`);
+    
+    for (let i = 0; i < this.maxConnections; i++) {
+      const db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
+        if (err) {
+          console.error(`❌ Erro ao criar conexão ${i}:`, err);
+        } else {
+          console.log(`✅ Conexão SQLite ${i} criada`);
+          
+          // Otimizações críticas para performance
+          db.serialize(() => {
+            // WAL mode para melhor concorrência
+            db.run("PRAGMA journal_mode = WAL");
+            
+            // Otimizações de performance
+            db.run("PRAGMA synchronous = NORMAL"); // Balance entre segurança e performance
+            db.run("PRAGMA cache_size = 10000"); // 10MB de cache
+            db.run("PRAGMA temp_store = MEMORY"); // Tabelas temporárias em memória
+            db.run("PRAGMA mmap_size = 268435456"); // 256MB memory-mapped I/O
+            
+            // Otimizações para concorrência
+            db.run("PRAGMA busy_timeout = 30000"); // 30 segundos timeout
+            db.run("PRAGMA wal_autocheckpoint = 1000"); // Checkpoint a cada 1000 páginas
+            
+            // Otimizações de escrita
+            db.run("PRAGMA optimize"); // Otimizar estatísticas
+          });
+        }
+      });
+      
+      this.connections.push({
+        db,
+        inUse: false,
+        id: i
+      });
+    }
+  }
+
+  async getConnection() {
+    return new Promise((resolve, reject) => {
+      // Procurar conexão disponível
+      const availableConnection = this.connections.find(conn => !conn.inUse);
+      
+      if (availableConnection) {
+        availableConnection.inUse = true;
+        this.activeConnections++;
+        resolve(availableConnection);
+      } else {
+        // Adicionar à fila se não há conexões disponíveis
+        this.queue.push({ resolve, reject });
+        
+        // Timeout para evitar travamento
+        setTimeout(() => {
+          const index = this.queue.findIndex(item => item.resolve === resolve);
+          if (index !== -1) {
+            this.queue.splice(index, 1);
+            reject(new Error('Connection timeout'));
+          }
+        }, 10000); // 10 segundos timeout
+      }
+    });
+  }
+
+  releaseConnection(connection) {
+    connection.inUse = false;
+    this.activeConnections--;
+    
+    // Processar fila se há requisições esperando
+    if (this.queue.length > 0) {
+      const { resolve } = this.queue.shift();
+      connection.inUse = true;
+      this.activeConnections++;
+      resolve(connection);
+    }
+  }
+
+  async close() {
+    console.log('🔒 Fechando pool de conexões SQLite...');
+    
+    const closePromises = this.connections.map(conn => {
+      return new Promise((resolve) => {
+        conn.db.close((err) => {
+          if (err) {
+            console.error(`❌ Erro ao fechar conexão ${conn.id}:`, err);
+          } else {
+            console.log(`✅ Conexão ${conn.id} fechada`);
+          }
+          resolve();
+        });
+      });
+    });
+    
+    await Promise.all(closePromises);
+    console.log('🔒 Todas as conexões SQLite fechadas');
+  }
+
+  getStats() {
+    return {
+      totalConnections: this.connections.length,
+      activeConnections: this.activeConnections,
+      queueLength: this.queue.length,
+      availableConnections: this.connections.length - this.activeConnections
+    };
+  }
 }
 
-// Pool PostgreSQL
-const db = new Pool(dbConfig);
+// Instância global do pool
+const pool = new SQLitePool(dbPath, 15); // 15 conexões para 100+ usuários
 
-console.log('✅ Pool PostgreSQL configurado');
-console.log('🔗 Max connections:', dbConfig.max);
-
-// Função para executar queries com retry
+// Função unificada para executar queries com retry automático
 const query = async (sql, params = [], retries = 3) => {
-  const startTime = Date.now();
-  let lastError;
+  let connection;
+  let attempt = 0;
   
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  while (attempt < retries) {
     try {
-      console.log(`🔍 Query attempt ${attempt}/${retries}:`, sql.substring(0, 50) + '...');
+      connection = await pool.getConnection();
       
-      const client = await Promise.race([
-        db.connect(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), 8000)
-        )
-      ]);
-      
-      try {
-        const result = await Promise.race([
-          client.query(sql, params),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Query timeout')), 15000)
-          )
-        ]);
+      return await new Promise((resolve, reject) => {
+        const startTime = Date.now();
         
-        const duration = Date.now() - startTime;
-        console.log(`✅ Query success (${duration}ms)`);
-        
-        return result;
-      } finally {
-        client.release();
-      }
+        if (sql.toLowerCase().trim().startsWith('select') || sql.toLowerCase().includes('pragma')) {
+          // Query de leitura
+          connection.db.all(sql, params, (err, rows) => {
+            const duration = Date.now() - startTime;
+            
+            if (err) {
+              console.error(`❌ Query error (${duration}ms):`, err.message);
+              console.error(`📝 SQL:`, sql);
+              console.error(`📊 Params:`, params);
+              reject(err);
+            } else {
+              if (duration > 1000) {
+                console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
+              }
+              resolve({ rows: rows || [] });
+            }
+          });
+        } else {
+          // Query de escrita
+          connection.db.run(sql, params, function(err) {
+            const duration = Date.now() - startTime;
+            
+            if (err) {
+              console.error(`❌ Query error (${duration}ms):`, err.message);
+              console.error(`📝 SQL:`, sql);
+              console.error(`📊 Params:`, params);
+              reject(err);
+            } else {
+              if (duration > 1000) {
+                console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
+              }
+              resolve({ 
+                rowCount: this.changes,
+                insertId: this.lastID,
+                changes: this.changes
+              });
+            }
+          });
+        }
+      });
     } catch (error) {
-      lastError = error;
-      console.error(`❌ Query attempt ${attempt}/${retries} failed:`, error.message);
+      attempt++;
+      console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
       
-      if (attempt < retries) {
-        const delay = Math.min(1000 * attempt, 3000);
-        console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+      if (attempt >= retries) {
+        throw new Error(`Query failed after ${retries} attempts: ${error.message}`);
+      }
+      
+      // Aguardar antes de tentar novamente
+      await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+    } finally {
+      if (connection) {
+        pool.releaseConnection(connection);
       }
     }
   }
-  
-  throw lastError;
 };
 
-// Função para inicializar o banco
-export const initializeDb = async () => {
-  console.log('🚀 Inicializando banco PostgreSQL Railway...');
+// Função para executar transações
+const transaction = async (queries) => {
+  let connection;
   
   try {
-    // Verificar conectividade primeiro
-    console.log('🔍 Testando conectividade Railway...');
-    await testConnection();
-    console.log('✅ Conectividade Railway confirmada!');
+    connection = await pool.getConnection();
     
-    // Criar extensões necessárias
-    console.log('🔧 Configurando extensões...');
-    try {
-      await query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
-      console.log('✅ Extensão uuid-ossp criada');
-    } catch (error) {
-      console.warn('⚠️ Aviso ao criar extensão:', error.message);
+    return await new Promise((resolve, reject) => {
+      connection.db.serialize(() => {
+        connection.db.run("BEGIN TRANSACTION");
+        
+        const results = [];
+        let completed = 0;
+        let hasError = false;
+        
+        queries.forEach((queryData, index) => {
+          if (hasError) return;
+          
+          const { sql, params = [] } = queryData;
+          
+          connection.db.run(sql, params, function(err) {
+            if (err && !hasError) {
+              hasError = true;
+              connection.db.run("ROLLBACK");
+              reject(err);
+              return;
+            }
+            
+            results[index] = {
+              rowCount: this.changes,
+              insertId: this.lastID
+            };
+            
+            completed++;
+            
+            if (completed === queries.length) {
+              connection.db.run("COMMIT", (commitErr) => {
+                if (commitErr) {
+                  reject(commitErr);
+                } else {
+                  resolve(results);
+                }
+              });
+            }
+          });
+        });
+      });
+    });
+  } finally {
+    if (connection) {
+      pool.releaseConnection(connection);
     }
-    
-    // Criar tabela funcionarios
+  }
+};
+
+// Função para inicializar o banco de dados
+export const initializeDb = async () => {
+  console.log('🚀 Inicializando banco SQLite otimizado...');
+  console.log('📊 Configuração para 100+ usuários simultâneos');
+  
+  try {
+    // Criar tabelas com índices otimizados
     console.log('📋 Criando tabela funcionarios...');
     await query(`
       CREATE TABLE IF NOT EXISTS funcionarios (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        senha VARCHAR(255) NOT NULL,
-        permissao VARCHAR(50) NOT NULL DEFAULT 'advogado',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        senha TEXT NOT NULL,
+        permissao TEXT NOT NULL DEFAULT 'advogado',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     
-    // Índices para performance
+    // Índices para funcionarios
     await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_email ON funcionarios(email)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_permissao ON funcionarios(permissao)`);
     
-    console.log('✅ Tabela funcionarios criada/verificada');
-
-    // Criar tabela protocolos
     console.log('📋 Criando tabela protocolos...');
     await query(`
       CREATE TABLE IF NOT EXISTS protocolos (
-        id VARCHAR(255) PRIMARY KEY,
-        process_number VARCHAR(255) NOT NULL DEFAULT '',
-        court VARCHAR(500) NOT NULL DEFAULT '',
-        system VARCHAR(255) NOT NULL DEFAULT '',
-        jurisdiction VARCHAR(50) NOT NULL DEFAULT '',
-        process_type VARCHAR(50) NOT NULL DEFAULT 'civel',
-        is_fatal BOOLEAN NOT NULL DEFAULT false,
-        needs_procuration BOOLEAN NOT NULL DEFAULT false,
-        procuration_type VARCHAR(500) DEFAULT '',
-        needs_guia BOOLEAN NOT NULL DEFAULT false,
-        guias JSONB NOT NULL DEFAULT '[]',
-        petition_type VARCHAR(255) NOT NULL DEFAULT '',
+        id TEXT PRIMARY KEY,
+        processNumber TEXT NOT NULL DEFAULT '',
+        court TEXT NOT NULL DEFAULT '',
+        system TEXT NOT NULL DEFAULT '',
+        jurisdiction TEXT NOT NULL DEFAULT '',
+        processType TEXT NOT NULL DEFAULT 'civel',
+        isFatal INTEGER NOT NULL DEFAULT 0,
+        needsProcuration INTEGER NOT NULL DEFAULT 0,
+        procurationType TEXT DEFAULT '',
+        needsGuia INTEGER NOT NULL DEFAULT 0,
+        guias TEXT NOT NULL DEFAULT '[]',
+        petitionType TEXT NOT NULL DEFAULT '',
         observations TEXT DEFAULT '',
-        documents JSONB NOT NULL DEFAULT '[]',
-        status VARCHAR(50) NOT NULL DEFAULT 'Aguardando',
-        assigned_to VARCHAR(50) DEFAULT NULL,
-        created_by INTEGER NOT NULL,
-        return_reason TEXT DEFAULT NULL,
-        is_distribution BOOLEAN NOT NULL DEFAULT false,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        queue_position INTEGER NOT NULL DEFAULT 1,
-        activity_log JSONB NOT NULL DEFAULT '[]'
+        documents TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'Aguardando',
+        assignedTo TEXT DEFAULT NULL,
+        createdBy INTEGER NOT NULL,
+        returnReason TEXT DEFAULT NULL,
+        isDistribution INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        queuePosition INTEGER NOT NULL DEFAULT 1,
+        activityLog TEXT NOT NULL DEFAULT '[]',
+        FOREIGN KEY (createdBy) REFERENCES funcionarios (id)
       )
     `);
     
-    // Índices otimizados
+    // Índices críticos para performance
+    console.log('🔍 Criando índices otimizados...');
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_status ON protocolos(status)`);
-    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_assigned_to ON protocolos(assigned_to)`);
-    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_created_by ON protocolos(created_by)`);
-    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_created_at ON protocolos(created_at DESC)`);
-    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_updated_at ON protocolos(updated_at DESC)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_assignedTo ON protocolos(assignedTo)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_createdBy ON protocolos(createdBy)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_createdAt ON protocolos(createdAt)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_updatedAt ON protocolos(updatedAt)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_status_assigned ON protocolos(status, assignedTo)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_queue_lookup ON protocolos(status, assignedTo, createdAt)`);
     
-    console.log('✅ Tabela protocolos criada/verificada');
-
-    // Trigger para atualizar updated_at
+    // Trigger para atualizar updated_at automaticamente
     await query(`
-      CREATE OR REPLACE FUNCTION update_updated_at_column()
-      RETURNS TRIGGER AS $$
+      CREATE TRIGGER IF NOT EXISTS update_protocolos_timestamp 
+      AFTER UPDATE ON protocolos
       BEGIN
-        NEW.updated_at = NOW();
-        RETURN NEW;
-      END;
-      $$ language 'plpgsql'
+        UPDATE protocolos SET updatedAt = datetime('now') WHERE id = NEW.id;
+      END
     `);
     
     await query(`
-      DROP TRIGGER IF EXISTS update_protocolos_updated_at ON protocolos
+      CREATE TRIGGER IF NOT EXISTS update_funcionarios_timestamp 
+      AFTER UPDATE ON funcionarios
+      BEGIN
+        UPDATE funcionarios SET updated_at = datetime('now') WHERE id = NEW.id;
+      END
     `);
     
-    await query(`
-      CREATE TRIGGER update_protocolos_updated_at
-        BEFORE UPDATE ON protocolos
-        FOR EACH ROW
-        EXECUTE FUNCTION update_updated_at_column()
-    `);
-    
-    await query(`
-      DROP TRIGGER IF EXISTS update_funcionarios_updated_at ON funcionarios
-    `);
-    
-    await query(`
-      CREATE TRIGGER update_funcionarios_updated_at
-        BEFORE UPDATE ON funcionarios
-        FOR EACH ROW
-        EXECUTE FUNCTION update_updated_at_column()
-    `);
-
     // Criar usuários de teste
     await createTestUsers();
     
-    console.log('🎉 Inicialização do banco PostgreSQL Railway concluída!');
+    // Otimizar banco após criação
+    console.log('⚡ Otimizando banco de dados...');
+    await query(`ANALYZE`);
+    await query(`PRAGMA optimize`);
+    
+    // Estatísticas finais
+    const stats = await getDatabaseStats();
+    console.log('📊 Estatísticas do banco:', stats);
+    console.log('🎉 Inicialização SQLite concluída com sucesso!');
     
   } catch (error) {
     console.error('❌ Erro na inicialização do banco:', error);
@@ -231,16 +375,16 @@ const createTestUsers = async () => {
   for (const user of testUsers) {
     try {
       const existingUser = await query(
-        "SELECT email FROM funcionarios WHERE email = $1", 
+        "SELECT email FROM funcionarios WHERE email = ?", 
         [user.email]
       );
       
-      if (existingUser.rows && existingUser.rows.length === 0) {
+      if (existingUser.rows.length === 0) {
         await query(
-          "INSERT INTO funcionarios (email, senha, permissao) VALUES ($1, $2, $3)",
+          "INSERT INTO funcionarios (email, senha, permissao) VALUES (?, ?, ?)",
           [user.email, user.senha, user.permissao]
         );
-        console.log(`✅ Usuário criado: ${user.email} (${user.permissao})`);
+        console.log(`✅ Usuário de teste criado: ${user.email} (${user.permissao})`);
         usersCreated++;
       }
     } catch (error) {
@@ -248,100 +392,77 @@ const createTestUsers = async () => {
     }
   }
 
-  // Verificar totais
-  try {
-    const funcionariosCount = await query("SELECT COUNT(*) as count FROM funcionarios");
-    const protocolosCount = await query("SELECT COUNT(*) as count FROM protocolos");
-    
-    console.log(`👥 Total funcionários: ${funcionariosCount.rows[0].count}`);
-    console.log(`📋 Total protocolos: ${protocolosCount.rows[0].count}`);
-    console.log(`🆕 Usuários criados: ${usersCreated}`);
-  } catch (error) {
-    console.error('❌ Erro ao verificar totais:', error);
+  if (usersCreated > 0) {
+    console.log(`🆕 ${usersCreated} usuários criados nesta inicialização`);
   }
 };
 
 // Função para testar conectividade
-export const testConnection = async (retries = 3) => {
-  let lastError;
-  
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      console.log(`🔍 Teste conectividade Railway - Tentativa ${attempt}/${retries}`);
-      
-      const result = await Promise.race([
-        query("SELECT 1 as test, NOW() as timestamp, version() as pg_version", [], 1),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Test timeout')), 5000)
-        )
-      ]);
-      
-      console.log('✅ Conectividade PostgreSQL Railway OK');
-      console.log('📊 PostgreSQL version:', result.rows[0].pg_version.substring(0, 50));
-      return result;
-    } catch (error) {
-      lastError = error;
-      console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
-      
-      if (attempt < retries) {
-        const delay = Math.min(2000 * attempt, 5000);
-        console.log(`⏳ Aguardando ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
+export const testConnection = async () => {
+  try {
+    const result = await query("SELECT 1 as test");
+    const stats = pool.getStats();
+    console.log('✅ Teste de conectividade bem-sucedido');
+    console.log('📊 Pool stats:', stats);
+    return result;
+  } catch (error) {
+    console.error('❌ Teste de conectividade falhou:', error);
+    throw error;
   }
-  
-  throw lastError;
 };
 
-// Função para estatísticas
+// Função para obter estatísticas do banco
 export const getDatabaseStats = async () => {
   try {
-    const [funcionariosResult, protocolosResult, aguardandoResult] = await Promise.all([
-      query("SELECT COUNT(*) as count FROM funcionarios"),
-      query("SELECT COUNT(*) as count FROM protocolos"),
-      query("SELECT COUNT(*) as count FROM protocolos WHERE status = 'Aguardando'")
-    ]);
+    const funcionariosResult = await query("SELECT COUNT(*) as count FROM funcionarios");
+    const protocolosResult = await query("SELECT COUNT(*) as count FROM protocolos");
+    const aguardandoResult = await query("SELECT COUNT(*) as count FROM protocolos WHERE status = 'Aguardando'");
+    const poolStats = pool.getStats();
     
-    return {
+    const stats = {
       funcionarios: funcionariosResult.rows[0].count,
       protocolos: protocolosResult.rows[0].count,
       protocolosAguardando: aguardandoResult.rows[0].count,
-      databaseType: 'PostgreSQL Railway',
+      databaseType: 'SQLite Otimizado',
       environment: process.env.NODE_ENV || 'development',
-      connectionString: process.env.DATABASE_URL ? 'Railway PostgreSQL Connected' : 'Local PostgreSQL',
-      timestamp: new Date().toISOString()
+      poolStats
     };
+    
+    return stats;
   } catch (error) {
     console.error('❌ Erro ao obter estatísticas:', error);
     throw error;
   }
 };
 
-// Cleanup
-export const closeConnection = async () => {
+// Função para manutenção do banco
+export const maintenanceDb = async () => {
+  console.log('🔧 Executando manutenção do banco...');
+  
   try {
-    await db.end();
-    console.log('🔒 Pool PostgreSQL Railway fechado');
+    // Vacuum para otimizar espaço
+    await query("VACUUM");
+    
+    // Reindexar para otimizar queries
+    await query("REINDEX");
+    
+    // Analisar estatísticas
+    await query("ANALYZE");
+    
+    // Otimizar
+    await query("PRAGMA optimize");
+    
+    console.log('✅ Manutenção concluída');
   } catch (error) {
-    console.error('❌ Erro ao fechar pool:', error);
+    console.error('❌ Erro na manutenção:', error);
   }
 };
 
-// Event listeners para cleanup
-process.on('SIGINT', async () => {
-  console.log('🛑 SIGINT - fechando PostgreSQL Railway...');
-  await closeConnection();
-  process.exit(0);
-});
+// Função para fechar conexões (cleanup)
+export const closeConnection = async () => {
+  await pool.close();
+};
 
-process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM - fechando PostgreSQL Railway...');
-  await closeConnection();
-  process.exit(0);
-});
-
-// Exportar funções
-export { query };
-export const isPostgreSQL = true;
-export default { query, isPostgreSQL: true };
+// Exportar funções principais
+export { query, transaction };
+export default { query, transaction };

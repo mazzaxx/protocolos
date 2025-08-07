@@ -12,7 +12,6 @@
     "start": "node server/server.js",
     "start:production": "node server/server.js",
     "start:server": "cross-env PORT=3002 node server/server.js",
-    "railway:start": "node server/server.js",
     "build": "vite build",
     "preview": "vite preview",
     "preview:production": "npm run build && npm run start",
@@ -20,8 +19,7 @@
     "postinstall": "echo 'Railway deploy complete'",
     "test:server": "curl http://localhost:3002 || echo 'Servidor não está rodando'",
     "debug": "concurrently \"npm run server\" \"npm run dev\" --kill-others-on-fail",
-    "test:connectivity": "node server/test-connectivity.js",
-    "railway:health": "curl $RAILWAY_PUBLIC_DOMAIN/health || echo 'Health check failed'"
+    "test:connectivity": "node server/test-connectivity.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -31,10 +29,10 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.344.0",
-    "pg": "^8.16.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.7.0"
+    "react-router-dom": "^7.7.0",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

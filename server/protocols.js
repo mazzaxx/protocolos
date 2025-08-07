@@ -1,130 +1,87 @@
 import express from 'express';
-import { query } from './db.js';
+import { query, isPostgreSQL } from './db.js';
 
 const router = express.Router();
 
-// Cache para protocolos
-let protocolsCache = null;
-let cacheExpiry = 0;
-const CACHE_DURATION = 2000; // 2 segundos
-
-// Função para converter snake_case para camelCase
-const toCamelCase = (obj) => {
-  if (Array.isArray(obj)) {
-    return obj.map(toCamelCase);
-  } else if (obj !== null && typeof obj === 'object') {
-    return Object.keys(obj).reduce((result, key) => {
-      const camelKey = key.replace(/_([a-z])/g, (match, letter) => letter.toUpperCase());
-      result[camelKey] = toCamelCase(obj[key]);
-      return result;
-    }, {});
-  }
-  return obj;
-};
-
 // Listar todos os protocolos
 router.get('/protocolos', async (req, res) => {
-  const startTime = Date.now();
-  console.log('🔍 Buscando protocolos Railway...');
+  console.log('🔍 SINCRONIZAÇÃO: Listando protocolos para', req.headers.origin);
+  console.log('🔄 Modo:', req.headers['x-sync-mode'] || 'normal');
   
   try {
-    // Verificar cache
-    const now = Date.now();
-    if (protocolsCache && now < cacheExpiry) {
-      console.log(`✅ Protocolos from cache Railway (${Date.now() - startTime}ms)`);
-      return res.json({
-        success: true,
-        protocolos: protocolsCache,
-        total: protocolsCache.length,
-        timestamp: new Date().toISOString(),
-        cached: true,
-        duration: `${Date.now() - startTime}ms`
-      });
-    }
-
-    // Buscar do banco Railway
-    const result = await Promise.race([
-      query(`
-        SELECT 
-          p.*,
-          f.email as created_by_email
-        FROM protocolos p 
-        LEFT JOIN funcionarios f ON p.created_by = f.id 
-        ORDER BY p.created_at DESC
-        LIMIT 1000
-      `),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout')), 10000)
-      )
-    ]);
+    const result = await query(`
+      SELECT p.*, f.email as createdByEmail 
+      FROM protocolos p 
+      LEFT JOIN funcionarios f ON p.createdBy = f.id 
+      ORDER BY p.createdAt DESC
+    `);
 
     const rows = result.rows || [];
-    console.log(`📊 Found ${rows.length} protocolos Railway`);
+    console.log(`📊 SINCRONIZANDO ${rows.length} protocolos`);
 
-    // Converter e processar dados
+    // Converter strings JSON de volta para objetos
     const protocolos = rows.map(row => {
       try {
-        const protocol = toCamelCase(row);
-        
-        // Processar campos JSON
-        protocol.documents = typeof protocol.documents === 'string' 
-          ? JSON.parse(protocol.documents) 
-          : protocol.documents || [];
-        protocol.guias = typeof protocol.guias === 'string' 
-          ? JSON.parse(protocol.guias) 
-          : protocol.guias || [];
-        protocol.activityLog = typeof protocol.activityLog === 'string' 
-          ? JSON.parse(protocol.activityLog) 
-          : protocol.activityLog || [];
-
-        // Converter datas
-        protocol.createdAt = new Date(protocol.createdAt);
-        protocol.updatedAt = new Date(protocol.updatedAt);
-
-        // Converter booleans
-        protocol.isFatal = Boolean(protocol.isFatal);
-        protocol.needsProcuration = Boolean(protocol.needsProcuration);
-        protocol.needsGuia = Boolean(protocol.needsGuia);
-        protocol.isDistribution = Boolean(protocol.isDistribution);
-
-        return protocol;
+        return {
+          ...row,
+          documents: JSON.parse(row.documents || '[]'),
+          guias: JSON.parse(row.guias || '[]'),
+          activityLog: JSON.parse(row.activityLog || '[]'),
+          createdAt: new Date(row.createdAt),
+          updatedAt: new Date(row.updatedAt),
+          isFatal: isPostgreSQL ? row.isFatal : Boolean(row.isFatal),
+          needsProcuration: isPostgreSQL ? row.needsProcuration : Boolean(row.needsProcuration),
+          needsGuia: isPostgreSQL ? row.needsGuia : Boolean(row.needsGuia),
+          isDistribution: isPostgreSQL ? row.isDistribution : Boolean(row.isDistribution)
+        };
       } catch (parseError) {
-        console.error('❌ Erro ao processar protocolo Railway:', row.id, parseError);
-        return null;
+        console.error('❌ Erro ao parsear protocolo:', row.id);
+        return {
+          ...row,
+          documents: [],
+          guias: [],
+          activityLog: [],
+          createdAt: new Date(row.createdAt),
+          updatedAt: new Date(row.updatedAt),
+          isFatal: isPostgreSQL ? row.isFatal : Boolean(row.isFatal),
+          needsProcuration: isPostgreSQL ? row.needsProcuration : Boolean(row.needsProcuration),
+          needsGuia: isPostgreSQL ? row.needsGuia : Boolean(row.needsGuia),
+          isDistribution: isPostgreSQL ? row.isDistribution : Boolean(row.isDistribution)
+        };
       }
-    }).filter(Boolean);
+    });
 
-    // Atualizar cache
-    protocolsCache = protocolos;
-    cacheExpiry = now + CACHE_DURATION;
-
-    const duration = Date.now() - startTime;
-    console.log(`✅ Protocolos loaded Railway (${duration}ms)`);
+    console.log('✅ SINCRONIZAÇÃO COMPLETA');
+    console.log(`🎯 Filas: Robô(${protocolos.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolos.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolos.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
     
     res.json({
       success: true,
       protocolos,
       total: protocolos.length,
       timestamp: new Date().toISOString(),
-      duration: `${duration}ms`
+      syncStatus: 'success'
     });
   } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao buscar protocolos Railway (${duration}ms):`, error);
-    
+    console.error('❌ ERRO DE SINCRONIZAÇÃO:', error);
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro interno do servidor Railway',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-      duration: `${duration}ms`
+      message: 'Erro interno do servidor',
+      error: error.message
     });
   }
 });
 
 // Criar novo protocolo
 router.post('/protocolos', async (req, res) => {
-  const startTime = Date.now();
-  console.log('📝 Criando protocolo Railway...');
+  console.log('📝 POST /protocolos chamado');
+  console.log('📍 Origin:', req.headers.origin);
+  console.log('🔗 Referer:', req.headers.referer);
+  console.log('🌍 Host:', req.headers.host);
+  console.log('🔐 Headers de CORS:', {
+    'access-control-request-method': req.headers['access-control-request-method'],
+    'access-control-request-headers': req.headers['access-control-request-headers']
+  });
+  console.log('📦 Dados recebidos:', JSON.stringify(req.body, null, 2));
   
   const {
     processNumber,
@@ -147,7 +104,9 @@ router.post('/protocolos', async (req, res) => {
     createdByEmail
   } = req.body;
 
+  // Validações básicas
   if (!createdBy) {
+    console.error('❌ createdBy é obrigatório');
     return res.status(400).json({
       success: false,
       message: 'ID do usuário criador é obrigatório'
@@ -166,6 +125,18 @@ router.post('/protocolos', async (req, res) => {
     performedBy: createdByEmail || 'Usuário'
   }];
 
+  console.log('💾 Tentando inserir protocolo:');
+  console.log('🆔 ID:', id);
+  console.log('📋 Dados principais:', {
+    processNumber: processNumber || 'N/A',
+    court: court || 'N/A',
+    system: system || 'N/A',
+    status: status || 'Aguardando',
+    assignedTo: assignedTo || 'null',
+    createdBy,
+    isDistribution: Boolean(isDistribution)
+  });
+
   try {
     // Preparar dados para inserção
     const insertData = [
@@ -175,10 +146,10 @@ router.post('/protocolos', async (req, res) => {
       system || '',
       jurisdiction || '',
       processType || 'civel',
-      Boolean(isFatal),
-      Boolean(needsProcuration),
+      isPostgreSQL ? Boolean(isFatal) : (isFatal ? 1 : 0),
+      isPostgreSQL ? Boolean(needsProcuration) : (needsProcuration ? 1 : 0),
       procurationType || '',
-      Boolean(needsGuia),
+      isPostgreSQL ? Boolean(needsGuia) : (needsGuia ? 1 : 0),
       JSON.stringify(guias || []),
       petitionType || '',
       observations || '',
@@ -186,110 +157,141 @@ router.post('/protocolos', async (req, res) => {
       status || 'Aguardando',
       assignedTo || null,
       createdBy,
-      Boolean(isDistribution),
+      isPostgreSQL ? Boolean(isDistribution) : (isDistribution ? 1 : 0),
       now,
       now,
-      1,
+      1, // queuePosition padrão
       JSON.stringify(initialLog)
     ];
 
-    const result = await Promise.race([
-      query(`
-        INSERT INTO protocolos (
-          id, process_number, court, system, jurisdiction, process_type,
-          is_fatal, needs_procuration, procuration_type, needs_guia, guias,
-          petition_type, observations, documents, status, assigned_to,
-          created_by, is_distribution, created_at, updated_at, queue_position, activity_log
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-        RETURNING id
-      `, insertData),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Insert timeout')), 15000)
-      )
-    ]);
+    console.log('📊 Dados preparados para inserção:', insertData.map((item, index) => {
+      const fields = [
+        'id', 'processNumber', 'court', 'system', 'jurisdiction', 'processType',
+        'isFatal', 'needsProcuration', 'procurationType', 'needsGuia', 'guias',
+        'petitionType', 'observations', 'documents', 'status', 'assignedTo',
+        'createdBy', 'isDistribution', 'createdAt', 'updatedAt', 'queuePosition', 'activityLog'
+      ];
+      return `${fields[index]}: ${item}`;
+    }));
 
-    // Invalidar cache
-    protocolsCache = null;
-    cacheExpiry = 0;
+    // Usar placeholders corretos para PostgreSQL ($1, $2, etc.) ou SQLite (?, ?, etc.)
+    const placeholders = isPostgreSQL 
+      ? insertData.map((_, i) => `$${i + 1}`).join(', ')
+      : insertData.map(() => '?').join(', ');
 
-    const duration = Date.now() - startTime;
-    console.log(`🎉 Protocolo criado Railway: ${id} (${duration}ms)`);
+    const result = await query(`
+      INSERT INTO protocolos (
+        id, processNumber, court, system, jurisdiction, processType,
+        isFatal, needsProcuration, procurationType, needsGuia, guias,
+        petitionType, observations, documents, status, assignedTo,
+        createdBy, isDistribution, createdAt, updatedAt, queuePosition, activityLog
+      ) VALUES (${placeholders})
+    `, insertData);
+
+    console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
+    console.log('🆔 ID do protocolo:', id);
+    console.log('📊 Linhas afetadas:', result.rowCount || result.changes || 1);
+    console.log('🎯 Protocolo direcionado para:', assignedTo || 'Fila do Robô');
+    console.log('📋 Dados do protocolo criado:', {
+      processNumber: processNumber || 'N/A',
+      court: court || 'N/A',
+      status: status || 'Aguardando',
+      assignedTo: assignedTo || null
+    });
     
+    // Verificar se foi realmente inserido
+    try {
+      const countResult = await query('SELECT COUNT(*) as count FROM protocolos WHERE id = $1', [id]);
+      const count = isPostgreSQL ? countResult.rows[0].count : countResult.rows[0].count;
+      console.log('✅ Verificação: protocolo existe no banco:', count > 0);
+        
+      // Verificar contagem total após inserção
+      const totalResult = await query('SELECT COUNT(*) as total FROM protocolos');
+      const total = isPostgreSQL ? totalResult.rows[0].total : totalResult.rows[0].total;
+      console.log('📊 Total de protocolos no banco após inserção:', total);
+    } catch (countErr) {
+      console.error('❌ Erro ao verificar inserção:', countErr);
+    }
+
     // Retornar protocolo criado
-    const createdProtocol = toCamelCase({
+    const createdProtocol = {
       id,
-      process_number: processNumber || '',
+      processNumber: processNumber || '',
       court: court || '',
       system: system || '',
       jurisdiction: jurisdiction || '',
-      process_type: processType || 'civel',
-      is_fatal: Boolean(isFatal),
-      needs_procuration: Boolean(needsProcuration),
-      procuration_type: procurationType || '',
-      needs_guia: Boolean(needsGuia),
+      processType: processType || 'civel',
+      isFatal: Boolean(isFatal),
+      needsProcuration: Boolean(needsProcuration),
+      procurationType: procurationType || '',
+      needsGuia: Boolean(needsGuia),
       guias: guias || [],
-      petition_type: petitionType || '',
+      petitionType: petitionType || '',
       observations: observations || '',
       documents: documents || [],
       status: status || 'Aguardando',
-      assigned_to: assignedTo || null,
-      created_by: createdBy,
-      is_distribution: Boolean(isDistribution),
-      created_at: new Date(now),
-      updated_at: new Date(now),
-      queue_position: 1,
-      activity_log: initialLog
-    });
+      assignedTo: assignedTo || null,
+      createdBy,
+      isDistribution: Boolean(isDistribution),
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
+      queuePosition: 1,
+      activityLog: initialLog
+    };
     
     res.json({
       success: true,
-      message: 'Protocolo criado com sucesso Railway',
+      message: 'Protocolo criado com sucesso',
       protocolo: createdProtocol,
-      timestamp: new Date().toISOString(),
-      duration: `${duration}ms`
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao criar protocolo Railway (${duration}ms):`, err);
-    
+    console.error('❌ ERRO CRÍTICO ao inserir protocolo:', err);
+    console.error('📋 SQL Error details:', err.message);
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao criar protocolo Railway',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
-      duration: `${duration}ms`
+      message: 'Erro ao criar protocolo: ' + err.message,
+      error: err.message,
+      sqlError: true
     });
   }
 });
 
 // Atualizar protocolo
 router.put('/protocolos/:id', async (req, res) => {
-  const startTime = Date.now();
+  console.log('🔄 PUT /protocolos/:id chamado');
+  console.log('🆔 ID:', req.params.id);
+  console.log('📦 Updates:', JSON.stringify(req.body, null, 2));
+  
   const { id } = req.params;
   const updates = req.body;
   const now = new Date().toISOString();
 
-  console.log(`🔄 Atualizando protocolo Railway: ${id}`);
-
   try {
-    // Buscar protocolo atual
-    const currentResult = await query('SELECT * FROM protocolos WHERE id = $1', [id]);
-    const currentRow = currentResult.rows && currentResult.rows.length > 0 ? currentResult.rows[0] : null;
+    // Primeiro, buscar o protocolo atual para manter o log
+    const result = await query('SELECT * FROM protocolos WHERE id = $1', [id]);
+    const row = result.rows && result.rows.length > 0 ? result.rows[0] : null;
 
-    if (!currentRow) {
+    if (!row) {
+      console.error('❌ Protocolo não encontrado para atualização:', id);
       return res.status(404).json({ 
         success: false, 
         message: 'Protocolo não encontrado' 
       });
     }
 
-    // Processar log de atividades
+    console.log('📋 Protocolo encontrado para atualização:', {
+      id: row.id,
+      processNumber: row.processNumber,
+      status: row.status
+    });
+
+    // Manter log existente e adicionar nova entrada se fornecida
     let currentLog = [];
     try {
-      currentLog = typeof currentRow.activity_log === 'string' 
-        ? JSON.parse(currentRow.activity_log) 
-        : currentRow.activity_log || [];
+      currentLog = JSON.parse(row.activityLog || '[]');
     } catch (parseError) {
-      console.error('❌ Erro ao parsear log Railway:', parseError);
+      console.error('❌ Erro ao parsear log existente:', parseError);
       currentLog = [];
     }
 
@@ -300,181 +302,134 @@ router.put('/protocolos/:id', async (req, res) => {
         id: updates.newLogEntry.id || (Date.now().toString() + Math.random().toString(36).substr(2, 9))
       };
       currentLog.push(newEntry);
+      console.log('📝 Nova entrada de log adicionada:', newEntry);
     }
 
-    // Construir query de atualização
+    // Construir query de atualização dinamicamente
     const fields = [];
     const values = [];
     let paramIndex = 1;
 
     Object.keys(updates).forEach(key => {
       if (key !== 'newLogEntry' && key !== 'id') {
-        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-        fields.push(`${snakeKey} = $${paramIndex}`);
+        fields.push(`${key} = ${isPostgreSQL ? `$${paramIndex}` : '?'}`);
         paramIndex++;
         
         if (key === 'documents' || key === 'guias') {
           values.push(JSON.stringify(updates[key]));
         } else if (key === 'isFatal' || key === 'needsProcuration' || key === 'needsGuia' || key === 'isDistribution') {
-          values.push(Boolean(updates[key]));
+          values.push(isPostgreSQL ? Boolean(updates[key]) : (updates[key] ? 1 : 0));
         } else {
           values.push(updates[key]);
         }
       }
     });
 
-    // Sempre atualizar updated_at e activity_log
-    fields.push(`updated_at = $${paramIndex}`, `activity_log = $${paramIndex + 1}`);
+    // Sempre atualizar updatedAt e activityLog
+    fields.push(`updatedAt = ${isPostgreSQL ? `$${paramIndex}` : '?'}`, `activityLog = ${isPostgreSQL ? `$${paramIndex + 1}` : '?'}`);
     values.push(now, JSON.stringify(currentLog));
-    values.push(id);
+    values.push(id); // WHERE clause parameter
 
-    const updateQuery = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = $${values.length}`;
+    const updateQuery = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = ${isPostgreSQL ? `$${values.length}` : '?'}`;
     
-    const updateResult = await Promise.race([
-      query(updateQuery, values),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Update timeout')), 10000)
-      )
-    ]);
+    console.log('🔄 Query de atualização:', updateQuery);
+    console.log('📊 Valores:', values);
 
-    const changes = updateResult.rowCount || 0;
+    const updateResult = await query(updateQuery, values);
+    const changes = updateResult.rowCount || updateResult.changes || 0;
 
     if (changes === 0) {
+      console.error('❌ Nenhuma linha foi atualizada');
       return res.status(404).json({ 
         success: false, 
         message: 'Protocolo não encontrado ou nenhuma alteração feita' 
       });
     }
 
-    // Invalidar cache
-    protocolsCache = null;
-    cacheExpiry = 0;
-
-    const duration = Date.now() - startTime;
-    console.log(`✅ Protocolo atualizado Railway: ${id} (${duration}ms)`);
+    console.log('✅ Protocolo atualizado com sucesso');
+    console.log('📊 Linhas afetadas:', changes);
       
     res.json({
       success: true,
-      message: 'Protocolo atualizado com sucesso Railway',
+      message: 'Protocolo atualizado com sucesso',
       changes: changes,
-      timestamp: new Date().toISOString(),
-      duration: `${duration}ms`
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao atualizar protocolo Railway (${duration}ms):`, err);
-    
+    console.error('❌ Erro ao atualizar protocolo:', err);
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao atualizar protocolo Railway',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
-      duration: `${duration}ms`
+      message: 'Erro ao atualizar protocolo',
+      error: err.message
     });
   }
 });
 
 // Deletar protocolo
 router.delete('/protocolos/:id', async (req, res) => {
-  const startTime = Date.now();
+  console.log('🗑️ DELETE /protocolos/:id chamado');
+  console.log('🆔 ID:', req.params.id);
+  
   const { id } = req.params;
 
-  console.log(`🗑️ Deletando protocolo Railway: ${id}`);
-  
   try {
-    const result = await Promise.race([
-      query('DELETE FROM protocolos WHERE id = $1', [id]),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Delete timeout')), 8000)
-      )
-    ]);
-
-    const changes = result.rowCount || 0;
+    const result = await query('DELETE FROM protocolos WHERE id = $1', [id]);
+    const changes = result.rowCount || result.changes || 0;
 
     if (changes === 0) {
+      console.error('❌ Protocolo não encontrado para deleção:', id);
       return res.status(404).json({ 
         success: false, 
         message: 'Protocolo não encontrado' 
       });
     }
 
-    // Invalidar cache
-    protocolsCache = null;
-    cacheExpiry = 0;
-
-    const duration = Date.now() - startTime;
-    console.log(`✅ Protocolo deletado Railway: ${id} (${duration}ms)`);
+    console.log('✅ Protocolo deletado com sucesso');
+    console.log('📊 Linhas afetadas:', changes);
     
     res.json({
       success: true,
-      message: 'Protocolo deletado com sucesso Railway',
+      message: 'Protocolo deletado com sucesso',
       changes: changes,
-      timestamp: new Date().toISOString(),
-      duration: `${duration}ms`
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ Erro ao deletar protocolo Railway (${duration}ms):`, err);
-    
+    console.error('❌ Erro ao deletar protocolo:', err);
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao deletar protocolo Railway',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
-      duration: `${duration}ms`
+      message: 'Erro ao deletar protocolo',
+      error: err.message
     });
   }
 });
 
-// Rota de teste
+// Rota de teste para verificar conectividade
 router.get('/protocolos/test', async (req, res) => {
-  const startTime = Date.now();
-  console.log('🧪 Teste de conectividade Railway...');
+  console.log('🧪 GET /protocolos/test chamado');
   
   try {
-    const result = await Promise.race([
-      query('SELECT COUNT(*) as count FROM protocolos'),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Test timeout')), 5000)
-      )
-    ]);
-
-    const count = result.rows[0].count;
-    const duration = Date.now() - startTime;
+    // Testar conexão com banco
+    const result = await query('SELECT COUNT(*) as count FROM protocolos');
+    const count = isPostgreSQL ? result.rows[0].count : result.rows[0].count;
     
-    console.log(`✅ Teste Railway OK (${duration}ms)`);
-    
+    console.log('✅ Teste de conectividade bem-sucedido');
     res.json({
       success: true,
-      message: 'Conectividade Railway com protocolos funcionando',
+      message: 'Conectividade com protocolos funcionando',
       totalProtocols: count,
       timestamp: new Date().toISOString(),
-      database: 'PostgreSQL Railway conectado',
-      server: 'Express rodando',
-      duration: `${duration}ms`
+      database: isPostgreSQL ? 'PostgreSQL conectado' : 'SQLite conectado',
+      server: 'Express rodando'
     });
   } catch (err) {
-    const duration = Date.now() - startTime;
-    console.error(`❌ Teste Railway falhou (${duration}ms):`, err);
-    
+    console.error('❌ Erro no teste de conectividade:', err);
     return res.status(500).json({
       success: false,
-      message: 'Erro de conectividade Railway com banco de dados',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
-      timestamp: new Date().toISOString(),
-      duration: `${duration}ms`
+      message: 'Erro de conectividade com banco de dados',
+      error: err.message,
+      timestamp: new Date().toISOString()
     });
   }
-});
-
-// Endpoint para limpar cache
-router.post('/protocolos/clear-cache', (req, res) => {
-  protocolsCache = null;
-  cacheExpiry = 0;
-  
-  res.json({
-    success: true,
-    message: 'Cache Railway limpo com sucesso',
-    timestamp: new Date().toISOString()
-  });
 });
 
 export default router;

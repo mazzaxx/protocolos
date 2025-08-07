@@ -16,6 +16,7 @@ function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
   const [lastCheck, setLastCheck] = React.useState<Date>(new Date());
+  const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date} | null>(null);
 
   React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -27,12 +28,11 @@ function ConnectivityStatus() {
     // Verificar status do backend
     const checkBackend = async () => {
       setLastCheck(new Date());
-      console.log('🏥 Verificando Railway...');
+      const startTime = Date.now();
       
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
         const healthUrl = `${apiBaseUrl}/health`;
-        console.log('📡 Testando:', healthUrl);
         
         const response = await fetch(healthUrl, { 
           method: 'GET',
@@ -41,24 +41,27 @@ function ConnectivityStatus() {
           mode: 'cors'
         });
         
-        console.log('📡 Railway status:', response.status);
+        const responseTime = Date.now() - startTime;
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Railway online:', data.message);
           setBackendStatus('online');
+          setPerformanceInfo({
+            responseTime,
+            lastSync: new Date()
+          });
         } else {
-          console.error('❌ Railway offline:', response.status);
           setBackendStatus('offline');
+          setPerformanceInfo(null);
         }
       } catch (error) {
-        console.error('❌ Erro de conexão com Railway:', error.message);
         setBackendStatus('offline');
+        setPerformanceInfo(null);
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 5000); // Verificar a cada 5 segundos
+    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -74,7 +77,7 @@ function ConnectivityStatus() {
           <span>
             {!isOnline 
               ? '🔴 SEM INTERNET - Dados não sincronizados' 
-              : `🔴 RAILWAY OFFLINE - Sincronização interrompida para todo o escritório`
+              : `🔴 SERVIDOR OFFLINE - Sincronização interrompida`
             }
           </span>
           <span className="text-xs opacity-75">
@@ -90,16 +93,23 @@ function ConnectivityStatus() {
       <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-          <span>🟡 Conectando ao Railway...</span>
+          <span>🟡 Conectando ao servidor...</span>
         </div>
       </div>
     );
   }
 
-  // Mostrar status online brevemente
+  // Mostrar status online com informações de performance
   return (
     <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
-      🟢 RAILWAY ONLINE - Dados sincronizados em tempo real para todo o escritório (última verificação: {lastCheck.toLocaleTimeString()})
+      <div className="flex items-center justify-center space-x-4">
+        <span>🟢 SERVIDOR ONLINE - Sincronização ativa</span>
+        {performanceInfo && (
+          <span className="opacity-75">
+            Latência: {performanceInfo.responseTime}ms | Última sync: {performanceInfo.lastSync.toLocaleTimeString()}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
