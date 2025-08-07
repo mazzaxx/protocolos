@@ -1,34 +1,33 @@
 import express from 'express';
-import { query } from './db.js';
+import db from './db.js';
 
 const router = express.Router();
 
 // Listar todos os funcionários
-router.get('/funcionarios', async (req, res) => {
+router.get('/funcionarios', (req, res) => {
   console.log('GET /funcionarios chamado');
   console.log('Headers recebidos:', req.headers);
   console.log('Origin:', req.headers.origin);
   
-  try {
-    const result = await query("SELECT id, email, permissao FROM funcionarios ORDER BY id");
-    const funcionarios = result.rows || [];
+  db.all("SELECT id, email, permissao FROM funcionarios ORDER BY id", (err, rows) => {
+    if (err) {
+      console.error('Erro ao buscar funcionários:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro interno do servidor' 
+      });
+    }
 
-    console.log('Funcionários encontrados:', funcionarios);
+    console.log('Funcionários encontrados:', rows);
     res.json({
       success: true,
-      funcionarios: funcionarios
+      funcionarios: rows
     });
-  } catch (err) {
-    console.error('Erro ao buscar funcionários:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro interno do servidor' 
-    });
-  }
+  });
 });
 
 // Criar novo funcionário
-router.post('/funcionarios', async (req, res) => {
+router.post('/funcionarios', (req, res) => {
   console.log('POST /funcionarios chamado com:', req.body);
   const { email, senha, permissao } = req.body;
 
@@ -40,10 +39,16 @@ router.post('/funcionarios', async (req, res) => {
   }
 
   // Verificar se email já existe
-  try {
-    const existingUser = await query("SELECT email FROM funcionarios WHERE email = ?", [email]);
+  db.get("SELECT email FROM funcionarios WHERE email = ?", [email], (err, row) => {
+    if (err) {
+      console.error('Erro ao verificar email:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro interno do servidor' 
+      });
+    }
 
-    if (existingUser.rows && existingUser.rows.length > 0) {
+    if (row) {
       return res.status(400).json({ 
         success: false, 
         message: 'Email já está em uso' 
@@ -51,34 +56,35 @@ router.post('/funcionarios', async (req, res) => {
     }
 
     // Inserir novo funcionário
-    const result = await query(
+    db.run(
       "INSERT INTO funcionarios (email, senha, permissao) VALUES (?, ?, ?)",
-      [email, senha, permissao]
-    );
+      [email, senha, permissao],
+      function(err) {
+        if (err) {
+          console.error('Erro ao criar funcionário:', err);
+          return res.status(500).json({ 
+            success: false, 
+            message: 'Erro ao criar funcionário' 
+          });
+        }
 
-    const newId = result.insertId;
-    
-    console.log('Funcionário criado com ID:', newId);
-    res.json({
-      success: true,
-      message: 'Funcionário criado com sucesso',
-      funcionario: {
-        id: newId,
-        email,
-        permissao
+        console.log('Funcionário criado com ID:', this.lastID);
+        res.json({
+          success: true,
+          message: 'Funcionário criado com sucesso',
+          funcionario: {
+            id: this.lastID,
+            email,
+            permissao
+          }
+        });
       }
-    });
-  } catch (err) {
-    console.error('Erro ao criar funcionário:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro ao criar funcionário' 
-    });
-  }
+    );
+  });
 });
 
 // Atualizar funcionário
-router.put('/funcionarios/:id', async (req, res) => {
+router.put('/funcionarios/:id', (req, res) => {
   console.log('PUT /funcionarios/:id chamado com:', req.params.id, req.body);
   const { id } = req.params;
   const { email, senha, permissao } = req.body;
@@ -91,10 +97,16 @@ router.put('/funcionarios/:id', async (req, res) => {
   }
 
   // Verificar se email já existe em outro funcionário
-  try {
-    const existingUser = await query("SELECT id FROM funcionarios WHERE email = ? AND id != ?", [email, id]);
+  db.get("SELECT id FROM funcionarios WHERE email = ? AND id != ?", [email, id], (err, row) => {
+    if (err) {
+      console.error('Erro ao verificar email:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro interno do servidor' 
+      });
+    }
 
-    if (existingUser.rows && existingUser.rows.length > 0) {
+    if (row) {
       return res.status(400).json({ 
         success: false, 
         message: 'Email já está em uso por outro funcionário' 
@@ -102,51 +114,54 @@ router.put('/funcionarios/:id', async (req, res) => {
     }
 
     // Atualizar funcionário
-    let updateQuery, params;
+    const updateQuery = senha 
+      ? "UPDATE funcionarios SET email = ?, senha = ?, permissao = ? WHERE id = ?"
+      : "UPDATE funcionarios SET email = ?, permissao = ? WHERE id = ?";
     
-    if (senha) {
-      updateQuery = "UPDATE funcionarios SET email = ?, senha = ?, permissao = ? WHERE id = ?";
-      params = [email, senha, permissao, id];
-    } else {
-      updateQuery = "UPDATE funcionarios SET email = ?, permissao = ? WHERE id = ?";
-      params = [email, permissao, id];
-    }
+    const params = senha 
+      ? [email, senha, permissao, id]
+      : [email, permissao, id];
 
-    const result = await query(updateQuery, params);
+    db.run(updateQuery, params, function(err) {
+      if (err) {
+        console.error('Erro ao atualizar funcionário:', err);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Erro ao atualizar funcionário' 
+        });
+      }
 
-    const changes = result.rowCount || result.changes || 0;
+      if (this.changes === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Funcionário não encontrado' 
+        });
+      }
 
-    if (changes === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Funcionário não encontrado' 
+      console.log('Funcionário atualizado:', id);
+      res.json({
+        success: true,
+        message: 'Funcionário atualizado com sucesso'
       });
-    }
-
-    console.log('Funcionário atualizado:', id);
-    res.json({
-      success: true,
-      message: 'Funcionário atualizado com sucesso'
     });
-  } catch (err) {
-    console.error('Erro ao atualizar funcionário:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro ao atualizar funcionário' 
-    });
-  }
+  });
 });
 
 // Deletar funcionário
-router.delete('/funcionarios/:id', async (req, res) => {
+router.delete('/funcionarios/:id', (req, res) => {
   console.log('DELETE /funcionarios/:id chamado com:', req.params.id);
   const { id } = req.params;
 
-  try {
-    const result = await query("DELETE FROM funcionarios WHERE id = ?", [id]);
-    const changes = result.rowCount || result.changes || 0;
+  db.run("DELETE FROM funcionarios WHERE id = ?", [id], function(err) {
+    if (err) {
+      console.error('Erro ao deletar funcionário:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao deletar funcionário' 
+      });
+    }
 
-    if (changes === 0) {
+    if (this.changes === 0) {
       return res.status(404).json({ 
         success: false, 
         message: 'Funcionário não encontrado' 
@@ -158,13 +173,7 @@ router.delete('/funcionarios/:id', async (req, res) => {
       success: true,
       message: 'Funcionário deletado com sucesso'
     });
-  } catch (err) {
-    console.error('Erro ao deletar funcionário:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro ao deletar funcionário' 
-    });
-  }
+  });
 });
 
 export default router;

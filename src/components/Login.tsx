@@ -26,31 +26,22 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
-      // Detectar ambiente e usar URL apropriada
-      const isDevelopment = window.location.hostname === 'localhost' || 
-                           window.location.hostname.includes('webcontainer-api.io') ||
-                           window.location.hostname.includes('bolt.new');
-      
-      const loginUrl = isDevelopment 
-        ? '/api/login'  // Usar proxy em desenvolvimento
-        : `${import.meta.env.VITE_API_BASE_URL || 'https://sistema-protocolos-juridicos-production.up.railway.app'}/api/login`;
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const loginUrl = `${apiBaseUrl}/api/login`;
       
       console.log('🔐 Tentando fazer login em:', loginUrl);
       console.log('📧 Email:', formData.email);
       
-      const response = await fetch(loginUrl, {
+      const response = await fetch(`${apiBaseUrl}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        mode: 'cors',
-        signal: AbortSignal.timeout(8000), // 8 segundos timeout
         body: JSON.stringify(formData),
       });
 
       console.log('📡 Status da resposta:', response.status);
-      console.log('🌐 URL usada:', loginUrl);
       
       const data = await response.json();
       console.log('📦 Dados da resposta:', data);
@@ -66,9 +57,7 @@ export function Login({ onLogin }: LoginProps) {
       }
     } catch (err) {
       console.error('❌ Erro de login:', err);
-      if (err.name === 'AbortError') {
-        setError('Timeout: O servidor demorou muito para responder. Tente novamente.');
-      } else if (err instanceof TypeError && err.message === 'Failed to fetch') {
+      if (err instanceof TypeError && err.message === 'Failed to fetch') {
         setError('Erro de conexão com o servidor. Verifique sua conexão com a internet.');
       } else {
         setError('Erro de conexão. Tente novamente.');

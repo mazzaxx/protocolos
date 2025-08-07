@@ -9,18 +9,11 @@
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   },
-  "volumes": [
-    {
-      "name": "database-volume",
-      "mountPath": "/app/data"
-    }
-  ],
   "environments": {
     "production": {
       "variables": {
         "NODE_ENV": "production",
-        "PORT": "$PORT",
-        "DATABASE_PATH": "/app/data/database.sqlite"
+        "PORT": "$PORT"
       }
     }
   }

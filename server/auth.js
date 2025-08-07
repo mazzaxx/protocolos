@@ -1,10 +1,10 @@
 import express from 'express';
-import { query } from './db.js';
+import db from './db.js';
 
 const router = express.Router();
 
 // Endpoint de login
-router.post('/login', async (req, res) => {
+router.post('/login', (req, res) => {
   const { email, senha } = req.body;
 
   if (!email || !senha) {
@@ -15,38 +15,37 @@ router.post('/login', async (req, res) => {
   }
 
   // Buscar usuário no banco
-  try {
-    const result = await query(
-      "SELECT * FROM funcionarios WHERE email = ? AND senha = ?", 
-      [email, senha]
-    );
+  db.get(
+    "SELECT * FROM funcionarios WHERE email = ? AND senha = ?", 
+    [email, senha], 
+    (err, row) => {
+      if (err) {
+        console.error('Erro no banco de dados:', err);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Erro interno do servidor' 
+        });
+      }
 
-    const user = result.rows && result.rows.length > 0 ? result.rows[0] : null;
+      if (!row) {
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Email ou senha incorretos' 
+        });
+      }
 
-    if (!user) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Email ou senha incorretos' 
+      // Login bem-sucedido
+      res.json({
+        success: true,
+        message: 'Login realizado com sucesso',
+        user: {
+          id: row.id,
+          email: row.email,
+          permissao: row.permissao
+        }
       });
     }
-
-    // Login bem-sucedido
-    res.json({
-      success: true,
-      message: 'Login realizado com sucesso',
-      user: {
-        id: user.id,
-        email: user.email,
-        permissao: user.permissao
-      }
-    });
-  } catch (err) {
-    console.error('Erro no banco de dados:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro interno do servidor' 
-    });
-  }
+  );
 });
 
 // Endpoint para verificar se usuário está logado

@@ -79,13 +79,6 @@ npm run dev:full
 npm install
 ```
 
-### 2. Banco de Dados SQLite Otimizado
-- **Desenvolvimento e Produção:** SQLite com WAL mode
-- **Pool de Conexões:** 15 conexões simultâneas
-- **Otimizações:** Cache de 10MB, memory-mapped I/O
-- **Capacidade:** 100+ usuários simultâneos
-- **Nenhuma configuração adicional necessária**
-
 ### 2. Executar em desenvolvimento
 ```bash
 # Servidor + Frontend juntos
@@ -138,13 +131,6 @@ npm run preview:production
 
 ## Funcionalidades
 
-### Performance Otimizada
-- **SQLite WAL Mode:** Melhor concorrência para múltiplos usuários
-- **Connection Pooling:** 15 conexões simultâneas
-- **Cache Inteligente:** Reduz requisições desnecessárias
-- **Polling Adaptativo:** Intervalo baseado na atividade
-- **Índices Otimizados:** Queries rápidas mesmo com milhares de protocolos
-
 ### Autenticação
 - Login com email e senha
 - Proteção de rotas
@@ -159,10 +145,8 @@ npm run preview:production
 - Acompanhamento de status
 
 ### Banco de Dados
-- **SQLite Otimizado** (desenvolvimento e produção)
-- **WAL Mode** para melhor concorrência
-- **Connection Pooling** para múltiplos usuários
-- **Manutenção automática** a cada 6 horas
+- SQLite no Railway (produção)
+- SQLite local (desenvolvimento)
 - Tabela de funcionários
 - Tabela de protocolos
 - Usuário de teste pré-criado
@@ -185,15 +169,14 @@ server/
 ├── auth.js                # Rotas de autenticação  
 ├── protocols.js           # Rotas de protocolos
 ├── admin.js               # Rotas administrativas
-├── db.js                  # SQLite otimizado com pooling
-└── database.sqlite        # Banco SQLite (desenvolvimento)
+├── db.js                  # Configuração SQLite
+└── database.sqlite        # Banco de dados (criado automaticamente)
 ```
 
 ## Tecnologias Utilizadas
 
 - **Frontend:** React, TypeScript, Tailwind CSS
 - **Backend:** Node.js, Express
-- **Banco:** SQLite3 otimizado com WAL mode e pooling
+- **Banco:** SQLite3
 - **Autenticação:** Context API + localStorage
 - **Deploy:** Railway (backend) + Netlify (frontend)
-- **Capacidade:** 100+ usuários simultâneos
