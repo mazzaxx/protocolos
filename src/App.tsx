@@ -19,8 +19,15 @@ function ConnectivityStatus() {
   const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date, syncCount: number} | null>(null);
   const [syncCount, setSyncCount] = React.useState(0);
   const [isMinimized, setIsMinimized] = React.useState(true);
+  const [debugInfo, setDebugInfo] = React.useState<{backendUrl: string, frontendUrl: string} | null>(null);
 
   React.useEffect(() => {
+    // Capturar informações de debug
+    setDebugInfo({
+      backendUrl: import.meta.env.VITE_API_BASE_URL || 'NÃO CONFIGURADO',
+      frontendUrl: window.location.origin
+    });
+    
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -34,19 +41,32 @@ function ConnectivityStatus() {
       
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+        
+        if (!apiBaseUrl) {
+          console.error('❌ VITE_API_BASE_URL não configurada');
+          setBackendStatus('offline');
+          return;
+        }
+        
         const healthUrl = `${apiBaseUrl}/health`;
+        console.log('🏥 Verificando saúde do backend:', healthUrl);
         
         const response = await fetch(healthUrl, { 
           method: 'GET',
           credentials: 'include',
           cache: 'no-cache',
-          mode: 'cors'
+          mode: 'cors',
+          headers: {
+            'Origin': window.location.origin
+          }
         });
         
         const responseTime = Date.now() - startTime;
+        console.log(`🏥 Health check: ${response.status} em ${responseTime}ms`);
         
         if (response.ok) {
           const data = await response.json();
+          console.log('✅ Backend online:', data);
           setBackendStatus('online');
           setSyncCount(prev => prev + 1);
           setPerformanceInfo({
@@ -55,17 +75,19 @@ function ConnectivityStatus() {
             syncCount: syncCount + 1
           });
         } else {
+          console.error('❌ Backend retornou erro:', response.status, response.statusText);
           setBackendStatus('offline');
           setPerformanceInfo(null);
         }
       } catch (error) {
+        console.error('❌ Erro ao verificar backend:', error);
         setBackendStatus('offline');
         setPerformanceInfo(null);
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 5000); // Verificar a cada 5 segundos (mais agressivo)
+    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos
     
     // Listener para atualizações de protocolos
     const handleProtocolUpdate = () => {
@@ -99,13 +121,18 @@ function ConnectivityStatus() {
           <span>
             {!isOnline 
               ? '🔴 SEM INTERNET' 
-              : `🔴 SERVIDOR OFFLINE`
+              : `🔴 SERVIDOR OFFLINE (${debugInfo?.backendUrl || 'URL não configurada'})`
             }
           </span>
           <span className="text-xs opacity-75 hidden sm:inline">
             (última verificação: {lastCheck.toLocaleTimeString()})
           </span>
         </div>
+        {debugInfo && (
+          <div className="text-xs opacity-75 mt-1">
+            Frontend: {debugInfo.frontendUrl} → Backend: {debugInfo.backendUrl}
+          </div>
+        )}
       </div>
     );
   }

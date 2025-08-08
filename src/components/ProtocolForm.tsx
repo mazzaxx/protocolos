@@ -194,11 +194,20 @@ export function ProtocolForm() {
 
     setIsSubmitting(true);
     console.log('🚀 Iniciando envio do protocolo...');
+    console.log('🌐 Configuração atual:');
+    console.log('   - Backend:', import.meta.env.VITE_API_BASE_URL);
+    console.log('   - Frontend:', window.location.origin);
+    console.log('   - Usuário:', user?.email);
     
     try {
       // Validação adicional antes do envio
       if (!user?.id) {
         throw new Error('Usuário não identificado. Faça login novamente.');
+      }
+      
+      // Verificar se a URL do backend está configurada
+      if (!import.meta.env.VITE_API_BASE_URL) {
+        throw new Error('ERRO DE CONFIGURAÇÃO: Sistema não está configurado corretamente. Entre em contato com o administrador.');
       }
       
       // Converter arquivos de petição para base64

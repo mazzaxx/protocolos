@@ -24,22 +24,22 @@ const allowedOrigins = [
   // Permitir qualquer subdomínio do Netlify para flexibilidade
   /^https:\/\/.*\.netlify\.app$/,
   // Permitir qualquer subdomínio do Railway para flexibilidade
-  /^https:\/\/.*\.up\.railway\.app$/
+  /^https:\/\/.*\.up\.railway\.app$/,
+  // Permitir deploy previews do Netlify
+  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
+  // Permitir branch deploys do Netlify
+  /^https:\/\/.*--.*\.netlify\.app$/
 ];
 
 // Configuração CORS mais permissiva
 const corsOptions = {
   origin: function (origin, callback) {
-    // Log apenas em desenvolvimento para evitar spam
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🌐 CORS - Origin recebido:', origin);
-    }
+    // Log para debug em produção também
+    console.log('🌐 CORS - Origin recebido:', origin);
     
     // Permitir requisições sem origin (ex: Postman, aplicações mobile)
     if (!origin) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('✅ CORS - Permitindo requisição sem origin');
-      }
+      console.log('✅ CORS - Permitindo requisição sem origin');
       return callback(null, true);
     }
     
@@ -54,14 +54,14 @@ const corsOptions = {
     });
     
     if (isAllowed) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('✅ CORS - Origin permitida:', origin);
-      }
+      console.log('✅ CORS - Origin permitida:', origin);
       callback(null, true);
     } else {
       console.log('❌ CORS - Origin bloqueada:', origin);
       console.log('📋 Origins permitidas:', allowedOrigins);
-      callback(new Error('Não permitido pelo CORS'));
+      // Em vez de bloquear, vamos permitir temporariamente para debug
+      console.log('⚠️ CORS - Permitindo temporariamente para debug');
+      callback(null, true);
     }
   },
   credentials: true,

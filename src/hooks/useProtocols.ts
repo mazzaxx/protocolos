@@ -171,7 +171,15 @@ export function useProtocols() {
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      
+      // Verificar se a URL está configurada
+      if (!apiBaseUrl) {
+        throw new Error('VITE_API_BASE_URL não está configurada. Verifique as variáveis de ambiente.');
+      }
+      
       const url = `${apiBaseUrl}/api/protocolos`;
+      
+      console.log(`📡 [${syncId}] Fazendo requisição para:`, url);
       
       const response = await fetch(url, {
         method: 'GET',
@@ -183,7 +191,8 @@ export function useProtocols() {
           'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
           'X-Sync-ID': syncId,
           'X-Client-Time': new Date().toISOString(),
-          'X-Force-Refresh': forceRefresh ? '1' : '0'
+          'X-Force-Refresh': forceRefresh ? '1' : '0',
+          'Origin': window.location.origin
         },
         credentials: 'include',
         mode: 'cors'
@@ -193,12 +202,15 @@ export function useProtocols() {
       console.log(`📡 [${syncId}] Resposta em ${duration}ms - Status: ${response.status}`);
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ [${syncId}] Erro HTTP:`, response.status, response.statusText, errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
       
       if (!data.success || !Array.isArray(data.protocolos)) {
+        console.error(`❌ [${syncId}] Resposta inválida:`, data);
         throw new Error('Resposta inválida do servidor');
       }
       
@@ -251,6 +263,16 @@ export function useProtocols() {
     } catch (error) {
       console.error(`❌ [${syncId}] ERRO DE SINCRONIZAÇÃO:`, error);
       
+      // Log detalhado do erro para debug
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        console.error('🚨 ERRO CRÍTICO: Falha na requisição fetch');
+        console.error('🔧 Possíveis causas:');
+        console.error('   1. Backend offline:', import.meta.env.VITE_API_BASE_URL);
+        console.error('   2. Problema de CORS');
+        console.error('   3. Problema de rede');
+        console.error('   4. Firewall bloqueando');
+      }
+      
       if (mountedRef.current) {
         setConnectionStatus('disconnected');
         syncManager.incrementRetry();
@@ -268,11 +290,6 @@ export function useProtocols() {
         } else {
           console.error(`🚨 [${syncId}] Máximo de tentativas excedido`);
         }
-      }
-      
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        console.error('🚨 ERRO CRÍTICO: Backend inacessível');
-        console.error('🔧 Verifique: https://sistema-protocolos-juridicos-production.up.railway.app');
       }
       
     } finally {
@@ -407,25 +424,40 @@ export function useProtocols() {
   // Função otimizada para adicionar protocolo
   const addProtocol = useCallback(async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
     console.log('🚀 CRIANDO PROTOCOLO - Sincronização crítica iniciada');
+    console.log('🌐 Backend URL:', import.meta.env.VITE_API_BASE_URL);
+    console.log('🌐 Frontend URL:', window.location.origin);
     lastActivityRef.current = Date.now();
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      
+      // Verificar se a URL está configurada
+      if (!apiBaseUrl) {
+        throw new Error('ERRO DE CONFIGURAÇÃO: VITE_API_BASE_URL não está configurada. Entre em contato com o administrador do sistema.');
+      }
       
       // Verificar se o servidor está acessível antes de tentar enviar
       try {
         const healthResponse = await fetch(`${apiBaseUrl}/health`, {
           method: 'GET',
           credentials: 'include',
-          timeout: 5000
+          headers: {
+            'Origin': window.location.origin
+          },
+          mode: 'cors'
         });
         
         if (!healthResponse.ok) {
+          const healthText = await healthResponse.text();
+          console.error('❌ Health check falhou:', healthResponse.status, healthText);
           throw new Error('Servidor não está respondendo');
         }
+        
+        const healthData = await healthResponse.json();
+        console.log('✅ Health check OK:', healthData);
       } catch (healthError) {
         console.error('❌ Servidor inacessível:', healthError);
-        throw new Error('ERRO DE CONEXÃO: Servidor não está acessível. Verifique sua conexão com a internet e tente novamente.');
+        throw new Error(`ERRO DE CONEXÃO: Não foi possível conectar ao servidor (${apiBaseUrl}). Verifique sua conexão com a internet e tente novamente.`);
       }
       
       const userEmail = await getUserEmailById(protocol.createdBy);
@@ -451,7 +483,8 @@ export function useProtocols() {
           'X-Force-Sync': '1',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'Expires': '0'
+          'Expires': '0',
+          'Origin': window.location.origin
         },
         credentials: 'include',
         mode: 'cors',
@@ -469,6 +502,8 @@ export function useProtocols() {
           }
         } catch (parseError) {
           const errorText = await response.text();
+          console.error('❌ Erro ao parsear resposta:', parseError);
+          console.error('❌ Texto da resposta:', errorText);
           if (errorText) {
             errorMessage = errorText;
           }
