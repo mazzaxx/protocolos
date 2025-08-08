@@ -4,7 +4,7 @@ import { query } from './db.js';
 const router = express.Router();
 
 // Endpoint de login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, senha } = req.body;
 
   if (!email || !senha) {
@@ -17,7 +17,7 @@ router.post('/login', (req, res) => {
   // Buscar usuário no banco
   try {
     const result = await query(
-      "SELECT * FROM funcionarios WHERE email = $1 AND senha = $2", 
+      "SELECT * FROM funcionarios WHERE email = ? AND senha = ?", 
       [email, senha]
     );
 
