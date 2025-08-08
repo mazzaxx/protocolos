@@ -411,6 +411,23 @@ export function useProtocols() {
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      
+      // Verificar se o servidor está acessível antes de tentar enviar
+      try {
+        const healthResponse = await fetch(`${apiBaseUrl}/health`, {
+          method: 'GET',
+          credentials: 'include',
+          timeout: 5000
+        });
+        
+        if (!healthResponse.ok) {
+          throw new Error('Servidor não está respondendo');
+        }
+      } catch (healthError) {
+        console.error('❌ Servidor inacessível:', healthError);
+        throw new Error('ERRO DE CONEXÃO: Servidor não está acessível. Verifique sua conexão com a internet e tente novamente.');
+      }
+      
       const userEmail = await getUserEmailById(protocol.createdBy);
       
       const protocolData = {
@@ -418,25 +435,49 @@ export function useProtocols() {
         createdByEmail: userEmail
       };
       
+      console.log('📡 Enviando protocolo para:', `${apiBaseUrl}/api/protocolos`);
+      console.log('📦 Dados do protocolo:', {
+        processNumber: protocolData.processNumber,
+        court: protocolData.court,
+        assignedTo: protocolData.assignedTo,
+        createdBy: protocolData.createdBy
+      });
+      
       const response = await fetch(`${apiBaseUrl}/api/protocolos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Sync-Action': 'create-protocol',
           'X-Force-Sync': '1',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
         credentials: 'include',
         mode: 'cors',
         body: JSON.stringify(protocolData),
       });
       
+      console.log('📡 Resposta do servidor:', response.status, response.statusText);
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          const errorText = await response.text();
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
+      console.log('📦 Dados de resposta:', data);
       
       if (data.success) {
         console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
@@ -445,10 +486,15 @@ export function useProtocols() {
         syncManager.forceSync();
         
         // Sincronizações escalonadas para máxima confiabilidade
-        setTimeout(() => fetchProtocols(true), 100);
-        setTimeout(() => fetchProtocols(true), 500);
-        setTimeout(() => fetchProtocols(true), 1000);
-        setTimeout(() => fetchProtocols(true), 2000);
+        const syncDelays = [100, 300, 800, 1500, 3000];
+        syncDelays.forEach((delay, index) => {
+          setTimeout(() => {
+            if (mountedRef.current) {
+              console.log(`🔄 Sincronização ${index + 1}/5 após criação`);
+              fetchProtocols(true);
+            }
+          }, delay);
+        });
         
         // Notificar outros componentes
         window.dispatchEvent(new CustomEvent('protocolCreated', {
@@ -457,11 +503,21 @@ export function useProtocols() {
         
         return data.protocolo;
       } else {
-        throw new Error(data.message || 'Erro ao criar protocolo');
+        const errorMsg = data.message || 'Erro desconhecido ao criar protocolo';
+        console.error('❌ Erro na resposta do servidor:', errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error) {
       console.error('🚨 ERRO CRÍTICO AO CRIAR PROTOCOLO:', error);
-      throw new Error(`ERRO DE CONEXÃO: ${error.message}`);
+      
+      // Melhorar mensagem de erro para o usuário
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error('ERRO DE CONEXÃO: Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('ERRO DE TIMEOUT: O servidor demorou muito para responder. Tente novamente.');
+      } else {
+        throw new Error(`ERRO: ${error.message}`);
+      }
     }
   }, [fetchProtocols]);
   

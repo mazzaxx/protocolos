@@ -196,6 +196,11 @@ export function ProtocolForm() {
     console.log('🚀 Iniciando envio do protocolo...');
     
     try {
+      // Validação adicional antes do envio
+      if (!user?.id) {
+        throw new Error('Usuário não identificado. Faça login novamente.');
+      }
+      
       // Converter arquivos de petição para base64
       const petitionProtocolDocuments = await Promise.all(
         petitionDocuments.map(async (file) => ({
@@ -250,6 +255,11 @@ export function ProtocolForm() {
       
       console.log('📋 Dados do protocolo preparados:', protocolData);
       
+      // Verificar se os dados essenciais estão presentes
+      if (!protocolData.createdBy) {
+        throw new Error('Erro interno: ID do usuário não encontrado');
+      }
+      
       const result = await addProtocol(protocolData);
       console.log('✅ Protocolo adicionado:', result);
 
@@ -281,7 +291,10 @@ export function ProtocolForm() {
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
       console.error('❌ Erro ao enviar protocolo:', error);
-      alert('ERRO CRÍTICO: Não foi possível salvar o protocolo no servidor.\n\nIsso significa que o protocolo NÃO será visível para outros usuários.\n\nVerifique sua conexão com a internet e tente novamente.');
+      
+      // Mostrar erro mais amigável para o usuário
+      const errorMessage = error.message || 'Erro desconhecido';
+      alert(`ERRO AO ENVIAR PROTOCOLO:\n\n${errorMessage}\n\nO protocolo NÃO foi salvo. Tente novamente.`);
     } finally {
       setIsSubmitting(false);
     }

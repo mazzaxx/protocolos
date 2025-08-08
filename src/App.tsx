@@ -18,6 +18,7 @@ function ConnectivityStatus() {
   const [lastCheck, setLastCheck] = React.useState<Date>(new Date());
   const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date, syncCount: number} | null>(null);
   const [syncCount, setSyncCount] = React.useState(0);
+  const [isMinimized, setIsMinimized] = React.useState(true);
 
   React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -90,17 +91,18 @@ function ConnectivityStatus() {
     };
   }, []);
 
+  // Só mostrar se houver problemas de conectividade
   if (!isOnline || backendStatus === 'offline') {
     return (
-      <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
+      <div className="bg-red-500 text-white px-2 py-1 text-xs text-center">
         <div className="flex items-center justify-center space-x-2">
           <span>
             {!isOnline 
-              ? '🔴 SEM INTERNET - Dados não sincronizados' 
-              : `🔴 SERVIDOR OFFLINE - Sincronização interrompida`
+              ? '🔴 SEM INTERNET' 
+              : `🔴 SERVIDOR OFFLINE`
             }
           </span>
-          <span className="text-xs opacity-75">
+          <span className="text-xs opacity-75 hidden sm:inline">
             (última verificação: {lastCheck.toLocaleTimeString()})
           </span>
         </div>
@@ -110,24 +112,44 @@ function ConnectivityStatus() {
 
   if (backendStatus === 'checking') {
     return (
-      <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
+      <div className="bg-yellow-500 text-white px-2 py-1 text-xs text-center">
         <div className="flex items-center justify-center space-x-2">
-          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-          <span>🟡 Conectando ao servidor...</span>
+          <div className="animate-spin rounded-full h-2 w-2 border-b-2 border-white"></div>
+          <span>🟡 Conectando...</span>
         </div>
       </div>
     );
   }
 
-  // Mostrar status online com informações de performance
+  // Status online - mostrar apenas se o usuário clicar para expandir
   return (
-    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center animate-pulse">
-      <div className="flex items-center justify-center space-x-4">
-        <span>🟢 SISTEMA SINCRONIZADO - 100+ usuários conectados</span>
-        {performanceInfo && (
-          <span className="opacity-75">
-            Latência: {performanceInfo.responseTime}ms | Syncs: {performanceInfo.syncCount} | Última: {performanceInfo.lastSync.toLocaleTimeString()}
-          </span>
+    <div className="fixed bottom-4 right-4 z-40">
+      <div className={`transition-all duration-300 ${isMinimized ? 'w-3 h-3' : 'w-auto h-auto'}`}>
+        {isMinimized ? (
+          <button
+            onClick={() => setIsMinimized(false)}
+            className="w-3 h-3 bg-green-500 rounded-full animate-pulse hover:bg-green-600 transition-colors"
+            title="Sistema online - Clique para ver detalhes"
+          />
+        ) : (
+          <div className="bg-green-500 text-white px-3 py-2 rounded-lg shadow-lg text-xs">
+            <div className="flex items-center justify-between space-x-2 mb-1">
+              <span className="font-medium">🟢 Sistema Online</span>
+              <button
+                onClick={() => setIsMinimized(true)}
+                className="text-white hover:text-gray-200 text-xs"
+              >
+                ×
+              </button>
+            </div>
+            {performanceInfo && (
+              <div className="text-xs opacity-90">
+                <div>Latência: {performanceInfo.responseTime}ms</div>
+                <div>Última sync: {performanceInfo.lastSync.toLocaleTimeString()}</div>
+                <div>Syncs: {performanceInfo.syncCount}</div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

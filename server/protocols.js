@@ -99,12 +99,6 @@ router.post('/protocolos', async (req, res) => {
   console.log(`📝 [${syncId}] CRIAÇÃO DE PROTOCOLO CRÍTICA`);
   console.log(`📍 [${syncId}] Origin:`, req.headers.origin);
   console.log(`🔗 [${syncId}] User-Agent:`, req.headers['user-agent']?.substring(0, 50));
-  console.log(`📦 [${syncId}] Dados:`, {
-    processNumber: req.body.processNumber,
-    court: req.body.court,
-    assignedTo: req.body.assignedTo,
-    createdBy: req.body.createdBy
-  });
   
   const {
     processNumber,
@@ -127,13 +121,43 @@ router.post('/protocolos', async (req, res) => {
     createdByEmail
   } = req.body;
 
+  console.log(`📦 [${syncId}] Dados recebidos:`, {
+    processNumber: processNumber || 'N/A',
+    court: court || 'N/A',
+    assignedTo: assignedTo || 'null',
+    createdBy: createdBy || 'MISSING',
+    isDistribution: Boolean(isDistribution),
+    documentsCount: Array.isArray(documents) ? documents.length : 0
+  });
+
   // Validações básicas
   if (!createdBy) {
-    console.error('❌ createdBy é obrigatório');
+    console.error(`❌ [${syncId}] createdBy é obrigatório`);
     return res.status(400).json({
       success: false,
-      message: 'ID do usuário criador é obrigatório'
+      message: 'ID do usuário criador é obrigatório',
+      syncId: syncId
     });
+  }
+
+  // Validação adicional para campos obrigatórios em protocolos normais
+  if (!isDistribution) {
+    const missingFields = [];
+    if (!processNumber?.trim()) missingFields.push('processNumber');
+    if (!court?.trim()) missingFields.push('court');
+    if (!system?.trim()) missingFields.push('system');
+    if (!jurisdiction?.trim()) missingFields.push('jurisdiction');
+    if (!processType?.trim()) missingFields.push('processType');
+    if (!petitionType?.trim()) missingFields.push('petitionType');
+    
+    if (missingFields.length > 0) {
+      console.error(`❌ [${syncId}] Campos obrigatórios faltando:`, missingFields);
+      return res.status(400).json({
+        success: false,
+        message: `Campos obrigatórios faltando: ${missingFields.join(', ')}`,
+        syncId: syncId
+      });
+    }
   }
 
   const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
@@ -148,17 +172,7 @@ router.post('/protocolos', async (req, res) => {
     performedBy: createdByEmail || 'Usuário'
   }];
 
-  console.log('💾 Tentando inserir protocolo:');
-  console.log('🆔 ID:', id);
-  console.log('📋 Dados principais:', {
-    processNumber: processNumber || 'N/A',
-    court: court || 'N/A',
-    system: system || 'N/A',
-    status: status || 'Aguardando',
-    assignedTo: assignedTo || 'null',
-    createdBy,
-    isDistribution: Boolean(isDistribution)
-  });
+  console.log(`💾 [${syncId}] Tentando inserir protocolo com ID:`, id);
 
   try {
     // Preparar dados para inserção
@@ -187,15 +201,7 @@ router.post('/protocolos', async (req, res) => {
       JSON.stringify(initialLog)
     ];
 
-    console.log('📊 Dados preparados para inserção:', insertData.map((item, index) => {
-      const fields = [
-        'id', 'processNumber', 'court', 'system', 'jurisdiction', 'processType',
-        'isFatal', 'needsProcuration', 'procurationType', 'needsGuia', 'guias',
-        'petitionType', 'observations', 'documents', 'status', 'assignedTo',
-        'createdBy', 'isDistribution', 'createdAt', 'updatedAt', 'queuePosition', 'activityLog'
-      ];
-      return `${fields[index]}: ${item}`;
-    }));
+    console.log(`📊 [${syncId}] Dados preparados - ${insertData.length} campos`);
 
     const result = await query(`
       INSERT INTO protocolos (
@@ -206,7 +212,7 @@ router.post('/protocolos', async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, insertData);
 
-    console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
+    console.log(`🎉 [${syncId}] PROTOCOLO CRIADO COM SUCESSO!`);
     console.log(`🎉 [${syncId}] PROTOCOLO CRIADO - NOTIFICANDO TODOS OS USUÁRIOS`);
     console.log(`🆔 [${syncId}] ID:`, id);
     console.log(`🎯 [${syncId}] Direcionado para:`, assignedTo || 'Fila do Robô');
@@ -216,6 +222,10 @@ router.post('/protocolos', async (req, res) => {
       const countResult = await query('SELECT COUNT(*) as count FROM protocolos WHERE id = ?', [id]);
       const count = countResult.rows[0].count;
       console.log(`✅ [${syncId}] Verificação: protocolo existe no banco:`, count > 0);
+      
+      if (count === 0) {
+        throw new Error('Protocolo não foi inserido no banco de dados');
+      }
         
       // Verificar contagem total após inserção
       const totalResult = await query('SELECT COUNT(*) as total FROM protocolos');
@@ -254,6 +264,8 @@ router.post('/protocolos', async (req, res) => {
     // Headers para invalidar cache
     res.set({
       'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
       'X-Protocol-Created': id,
       'X-Sync-Trigger': 'protocol-created',
       'X-Timestamp': new Date().toISOString()
@@ -268,6 +280,7 @@ router.post('/protocolos', async (req, res) => {
     });
   } catch (err) {
     console.error(`❌ [${syncId}] ERRO CRÍTICO ao inserir protocolo:`, err);
+    console.error(`❌ [${syncId}] Stack trace:`, err.stack);
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao criar protocolo: ' + err.message,

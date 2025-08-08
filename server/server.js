@@ -99,8 +99,15 @@ app.use((req, res, next) => {
     
     if (req.method === 'POST' || req.method === 'PUT') {
       const bodySize = JSON.stringify(req.body || {}).length;
-      if (bodySize > 1000) {
-        console.log('📦 Body size:', bodySize, 'chars');
+      console.log('📦 Body size:', bodySize, 'chars');
+      
+      // Log crítico para criação de protocolos
+      if (req.path.includes('/protocolos') && req.method === 'POST') {
+        console.log('📋 Dados críticos do protocolo:', {
+          createdBy: req.body?.createdBy,
+          processNumber: req.body?.processNumber,
+          hasDocuments: Array.isArray(req.body?.documents) && req.body.documents.length > 0
+        });
       }
     }
   } else if (process.env.NODE_ENV !== 'production') {
