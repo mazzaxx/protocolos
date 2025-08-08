@@ -168,13 +168,40 @@ export function useProtocols() {
     const syncId = Math.random().toString(36).substr(2, 9);
     
     console.log(`🚀 SINCRONIZAÇÃO [${syncId}] INICIADA:`, forceRefresh ? 'FORÇADA' : 'AUTOMÁTICA');
+    console.log(`🌐 Backend configurado:`, import.meta.env.VITE_API_BASE_URL);
+    console.log(`🌐 Frontend URL:`, window.location.origin);
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       
       // Verificar se a URL está configurada
       if (!apiBaseUrl) {
-        throw new Error('VITE_API_BASE_URL não está configurada. Verifique as variáveis de ambiente.');
+        console.error('❌ VITE_API_BASE_URL não configurada');
+        throw new Error('ERRO DE CONFIGURAÇÃO: Backend não configurado. Entre em contato com o administrador.');
+      }
+      
+      // Teste de conectividade primeiro
+      console.log(`🧪 [${syncId}] Testando conectividade...`);
+      try {
+        const testResponse = await fetch(`${apiBaseUrl}/api/test-connection`, {
+          method: 'GET',
+          headers: {
+            'Origin': window.location.origin,
+            'User-Agent': navigator.userAgent
+          },
+          credentials: 'include',
+          mode: 'cors'
+        });
+        
+        if (testResponse.ok) {
+          const testData = await testResponse.json();
+          console.log(`✅ [${syncId}] Conectividade OK:`, testData);
+        } else {
+          console.warn(`⚠️ [${syncId}] Teste de conectividade falhou:`, testResponse.status);
+        }
+      } catch (testError) {
+        console.error(`❌ [${syncId}] Erro no teste de conectividade:`, testError);
+        throw new Error(`ERRO DE CONECTIVIDADE: Não foi possível conectar ao servidor (${apiBaseUrl}). Verifique sua conexão com a internet.`);
       }
       
       const url = `${apiBaseUrl}/api/protocolos`;
@@ -192,7 +219,8 @@ export function useProtocols() {
           'X-Sync-ID': syncId,
           'X-Client-Time': new Date().toISOString(),
           'X-Force-Refresh': forceRefresh ? '1' : '0',
-          'Origin': window.location.origin
+          'Origin': window.location.origin,
+          'User-Agent': navigator.userAgent
         },
         credentials: 'include',
         mode: 'cors'
@@ -204,7 +232,14 @@ export function useProtocols() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ [${syncId}] Erro HTTP:`, response.status, response.statusText, errorText);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        
+        if (response.status === 0 || response.status >= 500) {
+          throw new Error(`ERRO DE SERVIDOR: O servidor não está respondendo (${response.status}). Tente novamente em alguns minutos.`);
+        } else if (response.status === 403) {
+          throw new Error(`ERRO DE ACESSO: Acesso negado pelo servidor. Verifique se o domínio está autorizado.`);
+        } else {
+          throw new Error(`ERRO HTTP ${response.status}: ${response.statusText || 'Erro desconhecido'}`);
+        }
       }
       
       const data = await response.json();
@@ -433,31 +468,34 @@ export function useProtocols() {
       
       // Verificar se a URL está configurada
       if (!apiBaseUrl) {
-        throw new Error('ERRO DE CONFIGURAÇÃO: VITE_API_BASE_URL não está configurada. Entre em contato com o administrador do sistema.');
+        console.error('❌ VITE_API_BASE_URL não configurada');
+        throw new Error('ERRO DE CONFIGURAÇÃO: Sistema não está configurado para funcionar online. Entre em contato com o administrador.');
       }
       
       // Verificar se o servidor está acessível antes de tentar enviar
+      console.log('🧪 Testando conectividade antes de enviar protocolo...');
       try {
-        const healthResponse = await fetch(`${apiBaseUrl}/health`, {
+        const testResponse = await fetch(`${apiBaseUrl}/api/test-connection`, {
           method: 'GET',
-          credentials: 'include',
           headers: {
-            'Origin': window.location.origin
+            'Origin': window.location.origin,
+            'User-Agent': navigator.userAgent
           },
+          credentials: 'include',
           mode: 'cors'
         });
         
-        if (!healthResponse.ok) {
-          const healthText = await healthResponse.text();
-          console.error('❌ Health check falhou:', healthResponse.status, healthText);
-          throw new Error('Servidor não está respondendo');
+        if (!testResponse.ok) {
+          const testText = await testResponse.text();
+          console.error('❌ Teste de conectividade falhou:', testResponse.status, testText);
+          throw new Error(`Servidor não está respondendo (Status: ${testResponse.status})`);
         }
         
-        const healthData = await healthResponse.json();
-        console.log('✅ Health check OK:', healthData);
-      } catch (healthError) {
-        console.error('❌ Servidor inacessível:', healthError);
-        throw new Error(`ERRO DE CONEXÃO: Não foi possível conectar ao servidor (${apiBaseUrl}). Verifique sua conexão com a internet e tente novamente.`);
+        const testData = await testResponse.json();
+        console.log('✅ Conectividade OK:', testData);
+      } catch (connectError) {
+        console.error('❌ Servidor inacessível:', connectError);
+        throw new Error(`ERRO DE CONEXÃO: Não foi possível conectar ao servidor.\n\nDetalhes técnicos:\n- URL: ${apiBaseUrl}\n- Erro: ${connectError.message}\n\nVerifique sua conexão com a internet e tente novamente.`);
       }
       
       const userEmail = await getUserEmailById(protocol.createdBy);
@@ -484,7 +522,8 @@ export function useProtocols() {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
-          'Origin': window.location.origin
+          'Origin': window.location.origin,
+          'User-Agent': navigator.userAgent
         },
         credentials: 'include',
         mode: 'cors',
@@ -508,7 +547,17 @@ export function useProtocols() {
             errorMessage = errorText;
           }
         }
-        throw new Error(errorMessage);
+        
+        // Melhorar mensagens de erro para o usuário
+        if (response.status === 0) {
+          throw new Error('ERRO DE REDE: Não foi possível conectar ao servidor. Verifique sua conexão com a internet.');
+        } else if (response.status === 403) {
+          throw new Error('ERRO DE ACESSO: Acesso negado pelo servidor. Entre em contato com o administrador.');
+        } else if (response.status >= 500) {
+          throw new Error(`ERRO DO SERVIDOR: O servidor está com problemas (${response.status}). Tente novamente em alguns minutos.`);
+        } else {
+          throw new Error(`ERRO: ${errorMessage}`);
+        }
       }
       
       const data = await response.json();
@@ -547,7 +596,7 @@ export function useProtocols() {
       
       // Melhorar mensagem de erro para o usuário
       if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        throw new Error('ERRO DE CONEXÃO: Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.');
+        throw new Error('ERRO DE CONEXÃO: Não foi possível conectar ao servidor.\n\nPossíveis causas:\n• Problema de internet\n• Servidor temporariamente indisponível\n• Firewall bloqueando a conexão\n\nTente novamente em alguns minutos.');
       } else if (error.message.includes('timeout')) {
         throw new Error('ERRO DE TIMEOUT: O servidor demorou muito para responder. Tente novamente.');
       } else {

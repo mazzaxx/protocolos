@@ -28,14 +28,26 @@ const allowedOrigins = [
   // Permitir deploy previews do Netlify
   /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
   // Permitir branch deploys do Netlify
+  /^https:\/\/.*--.*\.netlify\.app$/,
+  // Permitir domínios personalizados
+  'https://ncasistemaprotocolos.netlify.app',
+  'http://ncasistemaprotocolos.netlify.app'
+  // Permitir qualquer subdomínio do Netlify para flexibilidade
+  /^https:\/\/.*\.netlify\.app$/,
+  // Permitir qualquer subdomínio do Railway para flexibilidade
+  /^https:\/\/.*\.up\.railway\.app$/,
+  // Permitir deploy previews do Netlify
+  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
+  // Permitir branch deploys do Netlify
   /^https:\/\/.*--.*\.netlify\.app$/
 ];
 
 // Configuração CORS mais permissiva
 const corsOptions = {
   origin: function (origin, callback) {
-    // Log para debug em produção também
-    console.log('🌐 CORS - Origin recebido:', origin);
+    // Log detalhado para debug
+    console.log('🌐 CORS - Origin recebido:', origin || 'SEM ORIGIN');
+    console.log('🌐 CORS - User-Agent:', req?.headers?.['user-agent']?.substring(0, 50) || 'N/A');
     
     // Permitir requisições sem origin (ex: Postman, aplicações mobile)
     if (!origin) {
@@ -59,8 +71,8 @@ const corsOptions = {
     } else {
       console.log('❌ CORS - Origin bloqueada:', origin);
       console.log('📋 Origins permitidas:', allowedOrigins);
-      // Em vez de bloquear, vamos permitir temporariamente para debug
-      console.log('⚠️ CORS - Permitindo temporariamente para debug');
+      // TEMPORÁRIO: Permitir todas as origins para debug
+      console.log('⚠️ CORS - Permitindo TODAS as origins para debug');
       callback(null, true);
     }
   },
@@ -74,10 +86,16 @@ const corsOptions = {
     'Authorization',
     'Cache-Control',
     'X-Sync-Mode',
-    'X-Sync-Action'
+    'X-Sync-Action',
+    'X-Sync-ID',
+    'X-Client-Time',
+    'X-Force-Refresh',
+    'X-Force-Sync'
   ],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
-  maxAge: 86400 // 24 horas
+  maxAge: 86400, // 24 horas
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 // Aplicar CORS
@@ -91,11 +109,14 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const syncId = req.headers['x-sync-id'];
+  const origin = req.headers.origin;
+  const userAgent = req.headers['user-agent'];
   
   // Log detalhado apenas para operações importantes
   if (req.path.includes('/api/') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
     console.log(`📡 ${timestamp} - ${req.method} ${req.path}${syncId ? ` [${syncId}]` : ''}`);
-    console.log('🌐 Origin:', req.headers.origin);
+    console.log('🌐 Origin:', origin || 'SEM ORIGIN');
+    console.log('🔧 User-Agent:', userAgent?.substring(0, 100) || 'N/A');
     
     if (req.method === 'POST' || req.method === 'PUT') {
       const bodySize = JSON.stringify(req.body || {}).length;
@@ -115,7 +136,30 @@ app.use((req, res, next) => {
     console.log(`📡 ${req.method} ${req.path}${syncId ? ` [${syncId}]` : ''}`);
   }
   
+  // Headers de segurança e CORS para todas as respostas
+  res.header('Access-Control-Allow-Origin', origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Sync-Mode, X-Sync-Action, X-Sync-ID, X-Client-Time, X-Force-Refresh, X-Force-Sync');
+  
+  // Responder OPTIONS requests imediatamente
+  if (req.method === 'OPTIONS') {
+    console.log('✅ Respondendo OPTIONS request para:', req.path);
+    return res.status(204).end();
+  }
+  
   next();
+});
+
+// Middleware específico para tratar preflight requests
+app.options('*', (req, res) => {
+  console.log('✅ Preflight request para:', req.path);
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Sync-Mode, X-Sync-Action, X-Sync-ID, X-Client-Time, X-Force-Refresh, X-Force-Sync');
+  res.header('Access-Control-Max-Age', '86400');
+  res.status(204).end();
 });
 
 // Rota de health check
@@ -124,15 +168,20 @@ app.get('/', (req, res) => {
   res.set({
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
-    'Expires': '0'
+    'Expires': '0',
+    'Access-Control-Allow-Origin': req.headers.origin || '*',
+    'Access-Control-Allow-Credentials': 'true'
   });
   
   console.log('🏥 Health check solicitado');
+  console.log('🌐 Origin do health check:', req.headers.origin);
   res.json({ 
     message: 'Servidor de autenticação funcionando!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    port: PORT
+    port: PORT,
+    cors: 'enabled',
+    origin: req.headers.origin || 'no-origin'
   });
 });
 
@@ -142,12 +191,15 @@ app.get('/health', async (req, res) => {
   res.set({
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
-    'Expires': '0'
+    'Expires': '0',
+    'Access-Control-Allow-Origin': req.headers.origin || '*',
+    'Access-Control-Allow-Credentials': 'true'
   });
   
   if (process.env.NODE_ENV !== 'production') {
     console.log('🏥 Health check detalhado solicitado');
   }
+  console.log('🌐 Origin do health check detalhado:', req.headers.origin);
   
   try {
     // Testar conexão com banco
@@ -165,7 +217,9 @@ app.get('/health', async (req, res) => {
       database: 'connected',
       stats: stats,
       environment: process.env.NODE_ENV || 'development',
-      port: PORT
+      port: PORT,
+      cors: 'enabled',
+      origin: req.headers.origin || 'no-origin'
     });
   } catch (error) {
     console.error('❌ Health check falhou:', error);
@@ -173,9 +227,37 @@ app.get('/health', async (req, res) => {
       status: 'unhealthy',
       message: 'Problemas de conectividade',
       error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cors: 'enabled',
+      origin: req.headers.origin || 'no-origin'
     });
   }
+});
+
+// Rota específica para testar conectividade do frontend
+app.get('/api/test-connection', (req, res) => {
+  console.log('🧪 Teste de conectividade do frontend');
+  console.log('🌐 Origin:', req.headers.origin);
+  console.log('🔧 User-Agent:', req.headers['user-agent']?.substring(0, 100));
+  
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Access-Control-Allow-Origin': req.headers.origin || '*',
+    'Access-Control-Allow-Credentials': 'true'
+  });
+  
+  res.json({
+    success: true,
+    message: 'Conectividade OK - Sistema funcionando',
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin || 'no-origin',
+    userAgent: req.headers['user-agent']?.substring(0, 100) || 'N/A',
+    server: 'Railway',
+    database: 'SQLite',
+    cors: 'enabled'
+  });
 });
 
 // Rotas da API

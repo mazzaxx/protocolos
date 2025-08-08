@@ -20,6 +20,7 @@ function ConnectivityStatus() {
   const [syncCount, setSyncCount] = React.useState(0);
   const [isMinimized, setIsMinimized] = React.useState(true);
   const [debugInfo, setDebugInfo] = React.useState<{backendUrl: string, frontendUrl: string} | null>(null);
+  const [connectionError, setConnectionError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     // Capturar informações de debug
@@ -38,35 +39,38 @@ function ConnectivityStatus() {
     const checkBackend = async () => {
       setLastCheck(new Date());
       const startTime = Date.now();
+      setConnectionError(null);
       
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
         
         if (!apiBaseUrl) {
           console.error('❌ VITE_API_BASE_URL não configurada');
+          setConnectionError('Backend não configurado');
           setBackendStatus('offline');
           return;
         }
         
-        const healthUrl = `${apiBaseUrl}/health`;
-        console.log('🏥 Verificando saúde do backend:', healthUrl);
+        const testUrl = `${apiBaseUrl}/api/test-connection`;
+        console.log('🧪 Testando conectividade:', testUrl);
         
-        const response = await fetch(healthUrl, { 
+        const response = await fetch(testUrl, { 
           method: 'GET',
           credentials: 'include',
           cache: 'no-cache',
           mode: 'cors',
           headers: {
-            'Origin': window.location.origin
+            'Origin': window.location.origin,
+            'User-Agent': navigator.userAgent
           }
         });
         
         const responseTime = Date.now() - startTime;
-        console.log(`🏥 Health check: ${response.status} em ${responseTime}ms`);
+        console.log(`🧪 Teste de conectividade: ${response.status} em ${responseTime}ms`);
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Backend online:', data);
+          console.log('✅ Conectividade OK:', data);
           setBackendStatus('online');
           setSyncCount(prev => prev + 1);
           setPerformanceInfo({
@@ -74,13 +78,16 @@ function ConnectivityStatus() {
             lastSync: new Date(),
             syncCount: syncCount + 1
           });
+          setConnectionError(null);
         } else {
-          console.error('❌ Backend retornou erro:', response.status, response.statusText);
+          console.error('❌ Teste de conectividade falhou:', response.status, response.statusText);
+          setConnectionError(`HTTP ${response.status}: ${response.statusText}`);
           setBackendStatus('offline');
           setPerformanceInfo(null);
         }
       } catch (error) {
-        console.error('❌ Erro ao verificar backend:', error);
+        console.error('❌ Erro no teste de conectividade:', error);
+        setConnectionError(error.message || 'Erro de conexão');
         setBackendStatus('offline');
         setPerformanceInfo(null);
       }
@@ -121,16 +128,22 @@ function ConnectivityStatus() {
           <span>
             {!isOnline 
               ? '🔴 SEM INTERNET' 
-              : `🔴 SERVIDOR OFFLINE (${debugInfo?.backendUrl || 'URL não configurada'})`
+              : `🔴 SERVIDOR OFFLINE`
             }
           </span>
           <span className="text-xs opacity-75 hidden sm:inline">
             (última verificação: {lastCheck.toLocaleTimeString()})
           </span>
         </div>
+        {connectionError && (
+          <div className="text-xs opacity-90 mt-1">
+            Erro: {connectionError}
+          </div>
+        )}
         {debugInfo && (
           <div className="text-xs opacity-75 mt-1">
-            Frontend: {debugInfo.frontendUrl} → Backend: {debugInfo.backendUrl}
+            <div>Frontend: {debugInfo.frontendUrl}</div>
+            <div>Backend: {debugInfo.backendUrl}</div>
           </div>
         )}
       </div>
@@ -144,6 +157,11 @@ function ConnectivityStatus() {
           <div className="animate-spin rounded-full h-2 w-2 border-b-2 border-white"></div>
           <span>🟡 Conectando...</span>
         </div>
+        {debugInfo && (
+          <div className="text-xs opacity-75 mt-1">
+            Testando: {debugInfo.backendUrl}
+          </div>
+        )}
       </div>
     );
   }
@@ -174,6 +192,12 @@ function ConnectivityStatus() {
                 <div>Latência: {performanceInfo.responseTime}ms</div>
                 <div>Última sync: {performanceInfo.lastSync.toLocaleTimeString()}</div>
                 <div>Syncs: {performanceInfo.syncCount}</div>
+              </div>
+            )}
+            {debugInfo && (
+              <div className="text-xs opacity-75 mt-1 border-t border-green-400 pt-1">
+                <div>Backend: Online</div>
+                <div>Sincronização: Ativa</div>
               </div>
             )}
           </div>
