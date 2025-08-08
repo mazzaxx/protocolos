@@ -1,9 +1,10 @@
 import express from 'express';
 import cors from 'cors';
-import { initializeDb, testConnection, getDatabaseStats } from './db.js';
+import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
+import { maintenanceDb } from './db.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 console.log('🚀 Iniciando servidor...');
 console.log('🌐 Porta:', PORT);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
+console.log('🗄️ Banco: SQLite Otimizado para 100+ usuários');
 
 // Lista de origens permitidas para CORS
 const allowedOrigins = [
@@ -28,11 +30,16 @@ const allowedOrigins = [
 // Configuração CORS mais permissiva
 const corsOptions = {
   origin: function (origin, callback) {
-    console.log('🌐 CORS - Origin recebido:', origin);
+    // Log apenas em desenvolvimento para evitar spam
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🌐 CORS - Origin recebido:', origin);
+    }
     
     // Permitir requisições sem origin (ex: Postman, aplicações mobile)
     if (!origin) {
-      console.log('✅ CORS - Permitindo requisição sem origin');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ CORS - Permitindo requisição sem origin');
+      }
       return callback(null, true);
     }
     
@@ -47,7 +54,9 @@ const corsOptions = {
     });
     
     if (isAllowed) {
-      console.log('✅ CORS - Origin permitida:', origin);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ CORS - Origin permitida:', origin);
+      }
       callback(null, true);
     } else {
       console.log('❌ CORS - Origin bloqueada:', origin);
@@ -81,13 +90,21 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Middleware de logging
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`📡 ${timestamp} - ${req.method} ${req.path}`);
-  console.log('🌐 Origin:', req.headers.origin);
-  console.log('🔗 Referer:', req.headers.referer);
-  console.log('🌍 User-Agent:', req.headers['user-agent']?.substring(0, 100));
   
-  if (req.method === 'POST' || req.method === 'PUT') {
-    console.log('📦 Body size:', JSON.stringify(req.body).length, 'chars');
+  // Log detalhado apenas para operações importantes
+  if (req.path.includes('/api/') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
+    console.log(`📡 ${timestamp} - ${req.method} ${req.path}`);
+    console.log('🌐 Origin:', req.headers.origin);
+    
+    if (req.method === 'POST' || req.method === 'PUT') {
+      const bodySize = JSON.stringify(req.body || {}).length;
+      if (bodySize > 1000) {
+        console.log('📦 Body size:', bodySize, 'chars');
+      }
+    }
+  } else if (process.env.NODE_ENV !== 'production') {
+    // Log simples em desenvolvimento
+    console.log(`📡 ${req.method} ${req.path}`);
   }
   
   next();
@@ -106,7 +123,9 @@ app.get('/', (req, res) => {
 
 // Rota de health check específica
 app.get('/health', async (req, res) => {
-  console.log('🏥 Health check detalhado solicitado');
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('🏥 Health check detalhado solicitado');
+  }
   
   try {
     // Testar conexão com banco
@@ -177,6 +196,17 @@ async function startServer() {
     await initializeDb();
     console.log('✅ Banco de dados inicializado com sucesso!');
     
+    // Agendar manutenção periódica (a cada 6 horas)
+    setInterval(async () => {
+      console.log('🔧 Executando manutenção automática do banco...');
+      try {
+        await maintenanceDb();
+        console.log('✅ Manutenção automática concluída');
+      } catch (error) {
+        console.error('❌ Erro na manutenção automática:', error);
+      }
+    }, 6 * 60 * 60 * 1000); // 6 horas
+    
     app.listen(PORT, '0.0.0.0', () => {
       console.log('🎉 SERVIDOR INICIADO COM SUCESSO!');
       console.log('=' .repeat(50));
@@ -184,6 +214,8 @@ async function startServer() {
       console.log(`🔗 URL local: http://localhost:${PORT}`);
       console.log(`🌍 URL Railway: https://sistema-protocolos-juridicos-production.up.railway.app`);
       console.log(`🎯 Frontend Netlify: https://ncasistemaprotocolos.netlify.app`);
+      console.log(`🗄️ Banco: SQLite Otimizado (WAL mode, 15 conexões)`);
+      console.log(`👥 Capacidade: 100+ usuários simultâneos`);
       console.log('=' .repeat(50));
       console.log('📋 Rotas disponíveis:');
       console.log('  GET  / - Health check básico');
@@ -195,6 +227,7 @@ async function startServer() {
       console.log('  GET  /api/admin/funcionarios - Listar funcionários');
       console.log('=' .repeat(50));
       console.log('🔄 Sistema pronto para receber requisições!');
+      console.log('⚡ Performance otimizada para escritório grande');
       
       // Teste de conectividade inicial
       testConnection()
@@ -211,23 +244,31 @@ async function startServer() {
 // Tratamento de sinais do sistema
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM recebido, encerrando servidor graciosamente...');
-  process.exit(0);
+  closeConnection().then(() => {
+    process.exit(0);
+  });
 });
 
 process.on('SIGINT', () => {
   console.log('🛑 SIGINT recebido, encerrando servidor graciosamente...');
-  process.exit(0);
+  closeConnection().then(() => {
+    process.exit(0);
+  });
 });
 
 process.on('uncaughtException', (error) => {
   console.error('❌ ERRO NÃO CAPTURADO:', error);
-  process.exit(1);
+  closeConnection().then(() => {
+    process.exit(1);
+  });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ PROMISE REJEITADA NÃO TRATADA:', reason);
   console.error('Promise:', promise);
-  process.exit(1);
+  closeConnection().then(() => {
+    process.exit(1);
+  });
 });
 
 // Iniciar o servidor
