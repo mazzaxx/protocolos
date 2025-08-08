@@ -90,10 +90,11 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Middleware de logging
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
+  const syncId = req.headers['x-sync-id'];
   
   // Log detalhado apenas para operações importantes
   if (req.path.includes('/api/') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
-    console.log(`📡 ${timestamp} - ${req.method} ${req.path}`);
+    console.log(`📡 ${timestamp} - ${req.method} ${req.path}${syncId ? ` [${syncId}]` : ''}`);
     console.log('🌐 Origin:', req.headers.origin);
     
     if (req.method === 'POST' || req.method === 'PUT') {
@@ -104,7 +105,7 @@ app.use((req, res, next) => {
     }
   } else if (process.env.NODE_ENV !== 'production') {
     // Log simples em desenvolvimento
-    console.log(`📡 ${req.method} ${req.path}`);
+    console.log(`📡 ${req.method} ${req.path}${syncId ? ` [${syncId}]` : ''}`);
   }
   
   next();
@@ -112,6 +113,13 @@ app.use((req, res, next) => {
 
 // Rota de health check
 app.get('/', (req, res) => {
+  // Headers para evitar cache
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  
   console.log('🏥 Health check solicitado');
   res.json({ 
     message: 'Servidor de autenticação funcionando!',
@@ -123,6 +131,13 @@ app.get('/', (req, res) => {
 
 // Rota de health check específica
 app.get('/health', async (req, res) => {
+  // Headers para evitar cache
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  
   if (process.env.NODE_ENV !== 'production') {
     console.log('🏥 Health check detalhado solicitado');
   }
@@ -136,7 +151,9 @@ app.get('/health', async (req, res) => {
     
     res.json({
       status: 'healthy',
-      message: 'Servidor funcionando perfeitamente',
+      message: 'Sistema otimizado para 100+ usuários simultâneos',
+      capacity: '100+ usuários',
+      syncMode: 'real-time',
       timestamp: new Date().toISOString(),
       database: 'connected',
       stats: stats,

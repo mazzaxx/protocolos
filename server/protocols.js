@@ -5,10 +5,28 @@ const router = express.Router();
 
 // Listar todos os protocolos
 router.get('/protocolos', async (req, res) => {
-  console.log('🔍 SINCRONIZAÇÃO: Listando protocolos para', req.headers.origin);
-  console.log('🔄 Modo:', req.headers['x-sync-mode'] || 'normal');
+  const syncId = req.headers['x-sync-id'] || 'unknown';
+  const forceRefresh = req.headers['x-force-refresh'] === '1';
+  
+  console.log(`🔍 [${syncId}] SINCRONIZAÇÃO CRÍTICA:`, {
+    origin: req.headers.origin,
+    mode: req.headers['x-sync-mode'] || 'normal',
+    force: forceRefresh,
+    userAgent: req.headers['user-agent']?.substring(0, 50)
+  });
   
   try {
+    // Headers para evitar cache em qualquer nível
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Last-Modified': new Date().toUTCString(),
+      'ETag': `"${Date.now()}-${Math.random()}"`,
+      'X-Sync-Response': syncId,
+      'X-Timestamp': new Date().toISOString()
+    });
+    
     const result = await query(`
       SELECT p.*, f.email as createdByEmail 
       FROM protocolos p 
@@ -17,7 +35,7 @@ router.get('/protocolos', async (req, res) => {
     `);
 
     const rows = result.rows || [];
-    console.log(`📊 SINCRONIZANDO ${rows.length} protocolos`);
+    console.log(`📊 [${syncId}] SINCRONIZANDO ${rows.length} protocolos para TODOS os usuários`);
 
     // Converter strings JSON de volta para objetos
     const protocolos = rows.map(row => {
@@ -51,37 +69,42 @@ router.get('/protocolos', async (req, res) => {
       }
     });
 
-    console.log('✅ SINCRONIZAÇÃO COMPLETA');
-    console.log(`🎯 Filas: Robô(${protocolos.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolos.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolos.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
+    console.log(`✅ [${syncId}] SINCRONIZAÇÃO COMPLETA - DADOS FRESCOS ENVIADOS`);
+    console.log(`🎯 [${syncId}] Filas: Robô(${protocolos.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolos.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolos.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
     
     res.json({
       success: true,
       protocolos,
       total: protocolos.length,
       timestamp: new Date().toISOString(),
-      syncStatus: 'success'
+      syncStatus: 'success',
+      syncId: syncId,
+      serverTime: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ ERRO DE SINCRONIZAÇÃO:', error);
+    console.error(`❌ [${syncId}] ERRO CRÍTICO DE SINCRONIZAÇÃO:`, error);
     return res.status(500).json({ 
       success: false, 
       message: 'Erro interno do servidor',
-      error: error.message
+      error: error.message,
+      syncId: syncId
     });
   }
 });
 
 // Criar novo protocolo
 router.post('/protocolos', async (req, res) => {
-  console.log('📝 POST /protocolos chamado');
-  console.log('📍 Origin:', req.headers.origin);
-  console.log('🔗 Referer:', req.headers.referer);
-  console.log('🌍 Host:', req.headers.host);
-  console.log('🔐 Headers de CORS:', {
-    'access-control-request-method': req.headers['access-control-request-method'],
-    'access-control-request-headers': req.headers['access-control-request-headers']
+  const syncId = req.headers['x-sync-id'] || Date.now().toString();
+  
+  console.log(`📝 [${syncId}] CRIAÇÃO DE PROTOCOLO CRÍTICA`);
+  console.log(`📍 [${syncId}] Origin:`, req.headers.origin);
+  console.log(`🔗 [${syncId}] User-Agent:`, req.headers['user-agent']?.substring(0, 50));
+  console.log(`📦 [${syncId}] Dados:`, {
+    processNumber: req.body.processNumber,
+    court: req.body.court,
+    assignedTo: req.body.assignedTo,
+    createdBy: req.body.createdBy
   });
-  console.log('📦 Dados recebidos:', JSON.stringify(req.body, null, 2));
   
   const {
     processNumber,
@@ -184,28 +207,22 @@ router.post('/protocolos', async (req, res) => {
     `, insertData);
 
     console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
-    console.log('🆔 ID do protocolo:', id);
-    console.log('📊 Linhas afetadas:', result.changes || 1);
-    console.log('🎯 Protocolo direcionado para:', assignedTo || 'Fila do Robô');
-    console.log('📋 Dados do protocolo criado:', {
-      processNumber: processNumber || 'N/A',
-      court: court || 'N/A',
-      status: status || 'Aguardando',
-      assignedTo: assignedTo || null
-    });
+    console.log(`🎉 [${syncId}] PROTOCOLO CRIADO - NOTIFICANDO TODOS OS USUÁRIOS`);
+    console.log(`🆔 [${syncId}] ID:`, id);
+    console.log(`🎯 [${syncId}] Direcionado para:`, assignedTo || 'Fila do Robô');
     
     // Verificar se foi realmente inserido
     try {
       const countResult = await query('SELECT COUNT(*) as count FROM protocolos WHERE id = ?', [id]);
       const count = countResult.rows[0].count;
-      console.log('✅ Verificação: protocolo existe no banco:', count > 0);
+      console.log(`✅ [${syncId}] Verificação: protocolo existe no banco:`, count > 0);
         
       // Verificar contagem total após inserção
       const totalResult = await query('SELECT COUNT(*) as total FROM protocolos');
       const total = totalResult.rows[0].total;
-      console.log('📊 Total de protocolos no banco após inserção:', total);
+      console.log(`📊 [${syncId}] Total no banco:`, total);
     } catch (countErr) {
-      console.error('❌ Erro ao verificar inserção:', countErr);
+      console.error(`❌ [${syncId}] Erro ao verificar inserção:`, countErr);
     }
 
     // Retornar protocolo criado
@@ -234,29 +251,40 @@ router.post('/protocolos', async (req, res) => {
       activityLog: initialLog
     };
     
+    // Headers para invalidar cache
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Protocol-Created': id,
+      'X-Sync-Trigger': 'protocol-created',
+      'X-Timestamp': new Date().toISOString()
+    });
+    
     res.json({
       success: true,
       message: 'Protocolo criado com sucesso',
       protocolo: createdProtocol,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      syncId: syncId
     });
   } catch (err) {
-    console.error('❌ ERRO CRÍTICO ao inserir protocolo:', err);
-    console.error('📋 SQL Error details:', err.message);
+    console.error(`❌ [${syncId}] ERRO CRÍTICO ao inserir protocolo:`, err);
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao criar protocolo: ' + err.message,
       error: err.message,
-      sqlError: true
+      sqlError: true,
+      syncId: syncId
     });
   }
 });
 
 // Atualizar protocolo
 router.put('/protocolos/:id', async (req, res) => {
-  console.log('🔄 PUT /protocolos/:id chamado');
-  console.log('🆔 ID:', req.params.id);
-  console.log('📦 Updates:', JSON.stringify(req.body, null, 2));
+  const syncId = req.headers['x-sync-id'] || Date.now().toString();
+  
+  console.log(`🔄 [${syncId}] ATUALIZAÇÃO CRÍTICA DE PROTOCOLO`);
+  console.log(`🆔 [${syncId}] ID:`, req.params.id);
+  console.log(`📦 [${syncId}] Updates:`, Object.keys(req.body));
   
   const { id } = req.params;
   const updates = req.body;
@@ -268,14 +296,15 @@ router.put('/protocolos/:id', async (req, res) => {
     const row = result.rows && result.rows.length > 0 ? result.rows[0] : null;
 
     if (!row) {
-      console.error('❌ Protocolo não encontrado para atualização:', id);
+      console.error(`❌ [${syncId}] Protocolo não encontrado:`, id);
       return res.status(404).json({ 
         success: false, 
-        message: 'Protocolo não encontrado' 
+        message: 'Protocolo não encontrado',
+        syncId: syncId
       });
     }
 
-    console.log('📋 Protocolo encontrado para atualização:', {
+    console.log(`📋 [${syncId}] Protocolo encontrado:`, {
       id: row.id,
       processNumber: row.processNumber,
       status: row.status
@@ -297,7 +326,7 @@ router.put('/protocolos/:id', async (req, res) => {
         id: updates.newLogEntry.id || (Date.now().toString() + Math.random().toString(36).substr(2, 9))
       };
       currentLog.push(newEntry);
-      console.log('📝 Nova entrada de log adicionada:', newEntry);
+      console.log(`📝 [${syncId}] Nova entrada de log:`, newEntry.description);
     }
 
     // Construir query de atualização dinamicamente
@@ -326,35 +355,45 @@ router.put('/protocolos/:id', async (req, res) => {
 
     const updateQuery = `UPDATE protocolos SET ${fields.join(', ')} WHERE id = ?`;
     
-    console.log('🔄 Query de atualização:', updateQuery);
-    console.log('📊 Valores:', values);
+    console.log(`🔄 [${syncId}] Executando atualização...`);
 
     const updateResult = await query(updateQuery, values);
     const changes = updateResult.changes || 0;
 
     if (changes === 0) {
-      console.error('❌ Nenhuma linha foi atualizada');
+      console.error(`❌ [${syncId}] Nenhuma linha foi atualizada`);
       return res.status(404).json({ 
         success: false, 
-        message: 'Protocolo não encontrado ou nenhuma alteração feita' 
+        message: 'Protocolo não encontrado ou nenhuma alteração feita',
+        syncId: syncId
       });
     }
 
-    console.log('✅ Protocolo atualizado com sucesso');
-    console.log('📊 Linhas afetadas:', changes);
+    console.log(`✅ [${syncId}] PROTOCOLO ATUALIZADO - NOTIFICANDO TODOS OS USUÁRIOS`);
+    console.log(`📊 [${syncId}] Linhas afetadas:`, changes);
+    
+    // Headers para invalidar cache
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Protocol-Updated': id,
+      'X-Sync-Trigger': 'protocol-updated',
+      'X-Timestamp': new Date().toISOString()
+    });
       
     res.json({
       success: true,
       message: 'Protocolo atualizado com sucesso',
       changes: changes,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      syncId: syncId
     });
   } catch (err) {
-    console.error('❌ Erro ao atualizar protocolo:', err);
+    console.error(`❌ [${syncId}] Erro ao atualizar protocolo:`, err);
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao atualizar protocolo',
-      error: err.message
+      error: err.message,
+      syncId: syncId
     });
   }
 });

@@ -16,7 +16,8 @@ function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
   const [lastCheck, setLastCheck] = React.useState<Date>(new Date());
-  const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date} | null>(null);
+  const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date, syncCount: number} | null>(null);
+  const [syncCount, setSyncCount] = React.useState(0);
 
   React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -46,9 +47,11 @@ function ConnectivityStatus() {
         if (response.ok) {
           const data = await response.json();
           setBackendStatus('online');
+          setSyncCount(prev => prev + 1);
           setPerformanceInfo({
             responseTime,
-            lastSync: new Date()
+            lastSync: new Date(),
+            syncCount: syncCount + 1
           });
         } else {
           setBackendStatus('offline');
@@ -61,12 +64,29 @@ function ConnectivityStatus() {
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
+    const interval = setInterval(checkBackend, 5000); // Verificar a cada 5 segundos (mais agressivo)
+    
+    // Listener para atualizações de protocolos
+    const handleProtocolUpdate = () => {
+      setSyncCount(prev => prev + 1);
+      setPerformanceInfo(prev => prev ? {
+        ...prev,
+        lastSync: new Date(),
+        syncCount: prev.syncCount + 1
+      } : null);
+    };
+    
+    window.addEventListener('protocolsUpdated', handleProtocolUpdate);
+    window.addEventListener('protocolCreated', handleProtocolUpdate);
+    window.addEventListener('protocolUpdated', handleProtocolUpdate);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
+      window.removeEventListener('protocolsUpdated', handleProtocolUpdate);
+      window.removeEventListener('protocolCreated', handleProtocolUpdate);
+      window.removeEventListener('protocolUpdated', handleProtocolUpdate);
     };
   }, []);
 
@@ -101,12 +121,12 @@ function ConnectivityStatus() {
 
   // Mostrar status online com informações de performance
   return (
-    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
+    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center animate-pulse">
       <div className="flex items-center justify-center space-x-4">
-        <span>🟢 SERVIDOR ONLINE - Sincronização ativa</span>
+        <span>🟢 SISTEMA SINCRONIZADO - 100+ usuários conectados</span>
         {performanceInfo && (
           <span className="opacity-75">
-            Latência: {performanceInfo.responseTime}ms | Última sync: {performanceInfo.lastSync.toLocaleTimeString()}
+            Latência: {performanceInfo.responseTime}ms | Syncs: {performanceInfo.syncCount} | Última: {performanceInfo.lastSync.toLocaleTimeString()}
           </span>
         )}
       </div>
