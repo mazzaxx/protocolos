@@ -1,10 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
+import { initializeDb, testConnection, getDatabaseStats, closeConnection, maintenanceDb } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
-import { maintenanceDb } from './db.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
