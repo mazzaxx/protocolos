@@ -20,26 +20,26 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'https://ncasistemaprotocolos.netlify.app',
   'https://sistema-protocolos-juridicos-production.up.railway.app',
+  // Permitir qualquer subdomínio do Netlify para flexibilidade
+  /^https:\/\/.*\.netlify\.app$/,
+  // Permitir qualquer subdomínio do Railway para flexibilidade
+  /^https:\/\/.*\.up\.railway\.app$/,
+  // Permitir deploy previews do Netlify
+  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
+  // Permitir branch deploys do Netlify
+  /^https:\/\/.*--.*\.netlify\.app$/,
+  // Permitir domínios personalizados
+  'https://ncasistemaprotocolos.netlify.app',
   'http://ncasistemaprotocolos.netlify.app'
+  // Permitir qualquer subdomínio do Netlify para flexibilidade
+  /^https:\/\/.*\.netlify\.app$/,
+  // Permitir qualquer subdomínio do Railway para flexibilidade
+  /^https:\/\/.*\.up\.railway\.app$/,
+  // Permitir deploy previews do Netlify
+  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
+  // Permitir branch deploys do Netlify
+  /^https:\/\/.*--.*\.netlify\.app$/
 ];
-
-// Função para verificar se uma origin é permitida
-const isOriginAllowed = (origin) => {
-  if (!origin) return true; // Permitir requisições sem origin
-  
-  // Verificar origins exatas
-  if (allowedOrigins.includes(origin)) return true;
-  
-  // Verificar padrões com regex
-  const patterns = [
-    /^https:\/\/.*\.netlify\.app$/,
-    /^https:\/\/.*\.up\.railway\.app$/,
-    /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
-    /^https:\/\/.*--.*\.netlify\.app$/
-  ];
-  
-  return patterns.some(pattern => pattern.test(origin));
-};
 
 // Configuração CORS mais permissiva
 const corsOptions = {
@@ -47,20 +47,34 @@ const corsOptions = {
     // Log detalhado para debug
     console.log('🌐 CORS - Origin recebido:', origin || 'SEM ORIGIN');
     
-    const isAllowed = isOriginAllowed(origin);
+    // Permitir requisições sem origin (ex: Postman, aplicações mobile)
+    if (!origin) {
+      console.log('✅ CORS - Permitindo requisição sem origin');
+      return callback(null, true);
+    }
+    
+    // Verificar se a origin está na lista permitida
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return allowedOrigin === origin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
     
     if (isAllowed) {
       console.log('✅ CORS - Origin permitida:', origin);
       callback(null, true);
     } else {
       console.log('❌ CORS - Origin bloqueada:', origin);
-      console.log('📋 Origins permitidas:', allowedOrigins.slice(0, 3), '... e padrões regex');
+      console.log('📋 Origins permitidas:', allowedOrigins);
       // TEMPORÁRIO: Permitir todas as origins para debug
       console.log('⚠️ CORS - Permitindo TODAS as origins para debug');
       callback(null, true);
     }
   },
-  credentials: true,
+  credentials: false, // Mudança crítica para Railway
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Origin',
@@ -94,13 +108,11 @@ app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const syncId = req.headers['x-sync-id'];
   const origin = req.headers.origin;
-  const userAgent = req.headers['user-agent'];
   
   // Log detalhado apenas para operações importantes
   if (req.path.includes('/api/') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
     console.log(`📡 ${timestamp} - ${req.method} ${req.path}${syncId ? ` [${syncId}]` : ''}`);
     console.log('🌐 Origin:', origin || 'SEM ORIGIN');
-    console.log('🔧 User-Agent:', userAgent?.substring(0, 100) || 'N/A');
     
     if (req.method === 'POST' || req.method === 'PUT') {
       const bodySize = JSON.stringify(req.body || {}).length;
@@ -122,7 +134,7 @@ app.use((req, res, next) => {
   
   // Headers de segurança e CORS para todas as respostas
   res.header('Access-Control-Allow-Origin', origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Credentials', 'false'); // Mudança crítica
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Sync-Mode, X-Sync-Action, X-Sync-ID, X-Client-Time, X-Force-Refresh, X-Force-Sync');
   
@@ -139,7 +151,7 @@ app.use((req, res, next) => {
 app.options('*', (req, res) => {
   console.log('✅ Preflight request para:', req.path);
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Credentials', 'false'); // Mudança crítica
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Sync-Mode, X-Sync-Action, X-Sync-ID, X-Client-Time, X-Force-Refresh, X-Force-Sync');
   res.header('Access-Control-Max-Age', '86400');
@@ -154,7 +166,7 @@ app.get('/', (req, res) => {
     'Pragma': 'no-cache',
     'Expires': '0',
     'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'true'
+    'Access-Control-Allow-Credentials': 'false'
   });
   
   console.log('🏥 Health check solicitado');
@@ -177,7 +189,7 @@ app.get('/health', async (req, res) => {
     'Pragma': 'no-cache',
     'Expires': '0',
     'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'true'
+    'Access-Control-Allow-Credentials': 'false'
   });
   
   if (process.env.NODE_ENV !== 'production') {
@@ -222,14 +234,13 @@ app.get('/health', async (req, res) => {
 app.get('/api/test-connection', (req, res) => {
   console.log('🧪 Teste de conectividade do frontend');
   console.log('🌐 Origin:', req.headers.origin);
-  console.log('🔧 User-Agent:', req.headers['user-agent']?.substring(0, 100));
   
   res.set({
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
     'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'true'
+    'Access-Control-Allow-Credentials': 'false'
   });
   
   res.json({
@@ -237,7 +248,6 @@ app.get('/api/test-connection', (req, res) => {
     message: 'Conectividade OK - Sistema funcionando',
     timestamp: new Date().toISOString(),
     origin: req.headers.origin || 'no-origin',
-    userAgent: req.headers['user-agent']?.substring(0, 100) || 'N/A',
     server: 'Railway',
     database: 'SQLite',
     cors: 'enabled'

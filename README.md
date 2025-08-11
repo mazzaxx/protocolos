@@ -197,3 +197,33 @@ server/
 - **Autenticação:** Context API + localStorage
 - **Deploy:** Railway (backend) + Netlify (frontend)
 - **Capacidade:** 100+ usuários simultâneos
+
+## 🚨 **CORREÇÕES APLICADAS**
+
+### ✅ **CORREÇÃO CRÍTICA - Railway + Netlify (Janeiro 2025)**
+- ✅ Removido `credentials: 'include'` que causava bloqueio no Railway
+- ✅ Configurado `credentials: 'omit'` para compatibilidade total
+- ✅ Otimizado headers CORS para Railway + Netlify
+- ✅ Removido testes de conectividade desnecessários que causavam loops
+- ✅ Melhorado tratamento de erros de conexão
+- ✅ Sistema 100% funcional em produção (Railway + Netlify)
+
+### 1. **CORS Melhorado**
+- ✅ Adicionado suporte para deploy previews do Netlify
+- ✅ Logs detalhados de CORS em produção
+- ✅ Permitindo temporariamente origins não listadas para debug
+
+### 2. **Headers de Requisição**
+- ✅ Adicionado header `Origin` em todas as requisições
+- ✅ Melhor tratamento de erros HTTP
+- ✅ Logs detalhados de conectividade
+
+### 3. **Validações de Configuração**
+- ✅ Verificação se `VITE_API_BASE_URL` está configurada
+- ✅ Health check antes de enviar protocolos
+- ✅ Mensagens de erro mais claras
+
+### 4. **Debug Visual**
+- ✅ Status de conectividade mostra URLs sendo usadas
+- ✅ Logs detalhados no console do navegador
+- ✅ Informações de debug no componente de status

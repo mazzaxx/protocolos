@@ -32,14 +32,21 @@ export function Login({ onLogin }: LoginProps) {
       console.log('🔐 Tentando fazer login em:', loginUrl);
       console.log('📧 Email:', formData.email);
       
-      const response = await fetch(`${apiBaseUrl}/api/login`, {
+      // Configuração otimizada para Railway + Netlify
+      const loginOptions = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
         },
-        credentials: 'include',
+        credentials: 'omit', // Mudança crítica para Railway
+        mode: 'cors',
+        cache: 'no-cache',
         body: JSON.stringify(formData),
-      });
+      };
+      
+      const response = await fetch(`${apiBaseUrl}/api/login`, loginOptions);
 
       console.log('📡 Status da resposta:', response.status);
       
@@ -58,7 +65,7 @@ export function Login({ onLogin }: LoginProps) {
     } catch (err) {
       console.error('❌ Erro de login:', err);
       if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        setError('Erro de conexão com o servidor. Verifique sua conexão com a internet.');
+        setError('ERRO DE CONEXÃO: Não foi possível conectar ao servidor. Verifique sua conexão com a internet ou tente novamente em alguns minutos.');
       } else {
         setError('Erro de conexão. Tente novamente.');
       }

@@ -180,35 +180,12 @@ export function useProtocols() {
         throw new Error('ERRO DE CONFIGURAÇÃO: Backend não configurado. Entre em contato com o administrador.');
       }
       
-      // Teste de conectividade primeiro
-      console.log(`🧪 [${syncId}] Testando conectividade...`);
-      try {
-        const testResponse = await fetch(`${apiBaseUrl}/api/test-connection`, {
-          method: 'GET',
-          headers: {
-            'Origin': window.location.origin,
-            'User-Agent': navigator.userAgent
-          },
-          credentials: 'include',
-          mode: 'cors'
-        });
-        
-        if (testResponse.ok) {
-          const testData = await testResponse.json();
-          console.log(`✅ [${syncId}] Conectividade OK:`, testData);
-        } else {
-          console.warn(`⚠️ [${syncId}] Teste de conectividade falhou:`, testResponse.status);
-        }
-      } catch (testError) {
-        console.error(`❌ [${syncId}] Erro no teste de conectividade:`, testError);
-        throw new Error(`ERRO DE CONECTIVIDADE: Não foi possível conectar ao servidor (${apiBaseUrl}). Verifique sua conexão com a internet.`);
-      }
-      
       const url = `${apiBaseUrl}/api/protocolos`;
       
       console.log(`📡 [${syncId}] Fazendo requisição para:`, url);
       
-      const response = await fetch(url, {
+      // Configuração otimizada para Railway + Netlify
+      const fetchOptions = {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -219,12 +196,17 @@ export function useProtocols() {
           'X-Sync-ID': syncId,
           'X-Client-Time': new Date().toISOString(),
           'X-Force-Refresh': forceRefresh ? '1' : '0',
-          'Origin': window.location.origin,
-          'User-Agent': navigator.userAgent
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
         },
-        credentials: 'include',
-        mode: 'cors'
-      });
+        credentials: 'omit', // Mudança crítica para Railway
+        mode: 'cors',
+        cache: 'no-cache'
+      };
+      
+      console.log(`🔧 [${syncId}] Opções de fetch:`, fetchOptions);
+      
+      const response = await fetch(url, fetchOptions);
       
       const duration = Date.now() - startTime;
       console.log(`📡 [${syncId}] Resposta em ${duration}ms - Status: ${response.status}`);
@@ -472,32 +454,6 @@ export function useProtocols() {
         throw new Error('ERRO DE CONFIGURAÇÃO: Sistema não está configurado para funcionar online. Entre em contato com o administrador.');
       }
       
-      // Verificar se o servidor está acessível antes de tentar enviar
-      console.log('🧪 Testando conectividade antes de enviar protocolo...');
-      try {
-        const testResponse = await fetch(`${apiBaseUrl}/api/test-connection`, {
-          method: 'GET',
-          headers: {
-            'Origin': window.location.origin,
-            'User-Agent': navigator.userAgent
-          },
-          credentials: 'include',
-          mode: 'cors'
-        });
-        
-        if (!testResponse.ok) {
-          const testText = await testResponse.text();
-          console.error('❌ Teste de conectividade falhou:', testResponse.status, testText);
-          throw new Error(`Servidor não está respondendo (Status: ${testResponse.status})`);
-        }
-        
-        const testData = await testResponse.json();
-        console.log('✅ Conectividade OK:', testData);
-      } catch (connectError) {
-        console.error('❌ Servidor inacessível:', connectError);
-        throw new Error(`ERRO DE CONEXÃO: Não foi possível conectar ao servidor.\n\nDetalhes técnicos:\n- URL: ${apiBaseUrl}\n- Erro: ${connectError.message}\n\nVerifique sua conexão com a internet e tente novamente.`);
-      }
-      
       const userEmail = await getUserEmailById(protocol.createdBy);
       
       const protocolData = {
@@ -513,7 +469,8 @@ export function useProtocols() {
         createdBy: protocolData.createdBy
       });
       
-      const response = await fetch(`${apiBaseUrl}/api/protocolos`, {
+      // Configuração otimizada para criação de protocolo
+      const createOptions = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -522,13 +479,18 @@ export function useProtocols() {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
-          'Origin': window.location.origin,
-          'User-Agent': navigator.userAgent
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
         },
-        credentials: 'include',
+        credentials: 'omit', // Mudança crítica para Railway
         mode: 'cors',
+        cache: 'no-cache',
         body: JSON.stringify(protocolData),
-      });
+      };
+      
+      console.log('🔧 Opções de criação:', createOptions);
+      
+      const response = await fetch(`${apiBaseUrl}/api/protocolos`, createOptions);
       
       console.log('📡 Resposta do servidor:', response.status, response.statusText);
       
@@ -623,17 +585,24 @@ export function useProtocols() {
       console.log('🔄 ATUALIZANDO PROTOCOLO:', id);
       lastActivityRef.current = Date.now();
       
-      const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
+      // Configuração otimizada para atualização
+      const updateOptions = {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'X-Sync-Action': 'update-protocol',
           'X-Force-Sync': '1',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
         },
-        credentials: 'include',
+        credentials: 'omit', // Mudança crítica para Railway
+        mode: 'cors',
+        cache: 'no-cache',
         body: JSON.stringify(updateData),
-      });
+      };
+      
+      const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, updateOptions);
       
       if (!response.ok) {
         const errorText = await response.text();

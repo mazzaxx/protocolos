@@ -54,16 +54,19 @@ function ConnectivityStatus() {
         const testUrl = `${apiBaseUrl}/api/test-connection`;
         console.log('🧪 Testando conectividade:', testUrl);
         
-        const response = await fetch(testUrl, { 
+        // Configuração otimizada para Railway + Netlify
+        const testOptions = {
           method: 'GET',
-          credentials: 'include',
+          credentials: 'omit', // Mudança crítica para Railway
           cache: 'no-cache',
           mode: 'cors',
           headers: {
-            'Origin': window.location.origin,
-            'User-Agent': navigator.userAgent
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
           }
-        });
+        };
+        
+        const response = await fetch(testUrl, testOptions);
         
         const responseTime = Date.now() - startTime;
         console.log(`🧪 Teste de conectividade: ${response.status} em ${responseTime}ms`);

@@ -209,7 +209,7 @@ export function ProtocolForm() {
       if (!import.meta.env.VITE_API_BASE_URL) {
         console.error('❌ VITE_API_BASE_URL não configurada');
         console.error('❌ Variáveis disponíveis:', import.meta.env);
-        throw new Error('ERRO DE CONFIGURAÇÃO:\n\nO sistema não está configurado para funcionar online.\n\nEntre em contato com o administrador do sistema.\n\nDetalhes técnicos: VITE_API_BASE_URL não configurada');
+        throw new Error('ERRO DE CONFIGURAÇÃO: O sistema não está configurado para funcionar online. Entre em contato com o administrador do sistema.');
       }
       
       console.log('🔧 Configuração do sistema:');
@@ -332,7 +332,10 @@ export function ProtocolForm() {
             <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
               <p class="text-xs text-yellow-800">
                 <strong>O protocolo NÃO foi salvo.</strong><br>
-                Tente novamente em alguns minutos ou entre em contato com o suporte técnico.
+                Possíveis soluções:<br>
+                • Verifique sua conexão com a internet<br>
+                • Tente novamente em alguns minutos<br>
+                • Se o problema persistir, entre em contato com o suporte
               </p>
             </div>
             <div class="flex justify-center">
