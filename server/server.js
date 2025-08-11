@@ -20,56 +20,41 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'https://ncasistemaprotocolos.netlify.app',
   'https://sistema-protocolos-juridicos-production.up.railway.app',
-  // Permitir qualquer subdomínio do Netlify para flexibilidade
-  /^https:\/\/.*\.netlify\.app$/,
-  // Permitir qualquer subdomínio do Railway para flexibilidade
-  /^https:\/\/.*\.up\.railway\.app$/,
-  // Permitir deploy previews do Netlify
-  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
-  // Permitir branch deploys do Netlify
-  /^https:\/\/.*--.*\.netlify\.app$/,
-  // Permitir domínios personalizados
-  'https://ncasistemaprotocolos.netlify.app',
   'http://ncasistemaprotocolos.netlify.app'
-  // Permitir qualquer subdomínio do Netlify para flexibilidade
-  /^https:\/\/.*\.netlify\.app$/,
-  // Permitir qualquer subdomínio do Railway para flexibilidade
-  /^https:\/\/.*\.up\.railway\.app$/,
-  // Permitir deploy previews do Netlify
-  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
-  // Permitir branch deploys do Netlify
-  /^https:\/\/.*--.*\.netlify\.app$/
 ];
+
+// Função para verificar se uma origin é permitida
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // Permitir requisições sem origin
+  
+  // Verificar origins exatas
+  if (allowedOrigins.includes(origin)) return true;
+  
+  // Verificar padrões com regex
+  const patterns = [
+    /^https:\/\/.*\.netlify\.app$/,
+    /^https:\/\/.*\.up\.railway\.app$/,
+    /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
+    /^https:\/\/.*--.*\.netlify\.app$/
+  ];
+  
+  return patterns.some(pattern => pattern.test(origin));
+};
 
 // Configuração CORS mais permissiva
 const corsOptions = {
   origin: function (origin, callback) {
     // Log detalhado para debug
     console.log('🌐 CORS - Origin recebido:', origin || 'SEM ORIGIN');
-    console.log('🌐 CORS - User-Agent:', req?.headers?.['user-agent']?.substring(0, 50) || 'N/A');
     
-    // Permitir requisições sem origin (ex: Postman, aplicações mobile)
-    if (!origin) {
-      console.log('✅ CORS - Permitindo requisição sem origin');
-      return callback(null, true);
-    }
-    
-    // Verificar se a origin está na lista permitida
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        return allowedOrigin === origin;
-      } else if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
-      }
-      return false;
-    });
+    const isAllowed = isOriginAllowed(origin);
     
     if (isAllowed) {
       console.log('✅ CORS - Origin permitida:', origin);
       callback(null, true);
     } else {
       console.log('❌ CORS - Origin bloqueada:', origin);
-      console.log('📋 Origins permitidas:', allowedOrigins);
+      console.log('📋 Origins permitidas:', allowedOrigins.slice(0, 3), '... e padrões regex');
       // TEMPORÁRIO: Permitir todas as origins para debug
       console.log('⚠️ CORS - Permitindo TODAS as origins para debug');
       callback(null, true);
