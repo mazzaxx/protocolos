@@ -4,78 +4,57 @@ import react from '@vitejs/plugin-react';
 /**
  * CONFIGURAÇÃO VITE PARA SQUARE CLOUD
  * 
- * Configuração otimizada para desenvolvimento e build de produção.
- * Inclui proxy para desenvolvimento local e otimizações para Square Cloud.
- * 
- * HOSPEDAGEM SQUARE CLOUD:
- * - Build otimizado para produção
- * - Proxy configurado para desenvolvimento
- * - Exclusão de dependências server-side
+ * Build otimizado para produção na Square Cloud
+ * Proxy configurado para desenvolvimento local
  */
 export default defineConfig({
   plugins: [react()],
-  // SQUARE CLOUD: Configurações de build otimizadas
-  base: '/', // Base path para Square Cloud
+  
+  // Configurações de desenvolvimento
   server: {
-    host: true, // SQUARE CLOUD: Permite acesso de qualquer IP
+    host: true,
     port: 5173,
     proxy: {
-      // SQUARE CLOUD: Proxy para desenvolvimento local
       '/api': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:80',
         changeOrigin: true,
         secure: false,
-        ws: true,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
-            console.log('[SQUARE CLOUD] proxy error', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('[SQUARE CLOUD] Sending Request to Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('[SQUARE CLOUD] Received Response from Target:', proxyRes.statusCode, req.url);
-          });
-        },
       },
-      // SQUARE CLOUD: Proxy para health check
       '/health': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:80',
         changeOrigin: true,
         secure: false,
       },
     }
   },
+  
+  // Configurações de build para Square Cloud
   build: {
-    outDir: 'dist', // SQUARE CLOUD: Diretório de build
-    emptyOutDir: true, // SQUARE CLOUD: Limpar pasta dist antes do build
-    assetsDir: 'assets', // SQUARE CLOUD: Pasta para assets
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false,
+    minify: 'terser',
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
-      external: ['sqlite3'], // SQUARE CLOUD: Excluir SQLite do bundle frontend
+      external: ['sqlite3'], // Excluir SQLite do bundle frontend
       output: {
-        // SQUARE CLOUD: Otimizações de bundle
         manualChunks: {
           vendor: ['react', 'react-dom'],
-          router: ['react-router-dom']
+          router: ['react-router-dom'],
+          icons: ['lucide-react']
         }
       }
-    },
-    // SQUARE CLOUD: Otimizações para produção
-    minify: 'terser',
-    sourcemap: false, // SQUARE CLOUD: Sem sourcemaps em produção
-    chunkSizeWarningLimit: 1000
+    }
   },
+  
+  // Otimizações
   optimizeDeps: {
-    exclude: ['lucide-react'], // SQUARE CLOUD: Excluir da otimização
+    include: ['react', 'react-dom', 'react-router-dom', 'lucide-react']
   },
-  // SQUARE CLOUD: Configurações de preview
+  
+  // Preview (para testes locais)
   preview: {
     port: 4173,
     host: true
-  },
-  // SQUARE CLOUD: Definir variáveis de ambiente para build
-  define: {
-    __SQUARE_CLOUD__: JSON.stringify(true),
-    __BUILD_TIME__: JSON.stringify(new Date().toISOString())
   }
 });
