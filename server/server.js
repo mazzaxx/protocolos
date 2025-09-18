@@ -59,7 +59,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   
   // SQUARE CLOUD: Domínio principal da aplicação
-  'https://sistema-protocolos.squareweb.app',
+  'https://protocolos.squareweb.app',
   
   // SQUARE CLOUD: Permitir qualquer subdomínio .squareweb.app
   /^https:\/\/.*\.squareweb\.app$/,
@@ -205,11 +205,6 @@ app.get('/api/health-check', (req, res) => {
  * 
  * SQUARE CLOUD: Usado para verificar se a aplicação está online
  */
-app.get('/', (req, res) => {
-  console.log('🏥 [SQUARE CLOUD] Health check solicitado');
-  // SQUARE CLOUD: Servir o frontend React
-  res.sendFile(path.join(distPath, 'index.html'));
-});
 
 /**
  * CONFIGURAÇÃO DAS ROTAS DA API
@@ -273,8 +268,8 @@ app.get('/health', async (req, res) => {
  * Essencial para que o React Router funcione na Square Cloud.
  */
 app.get('*', (req, res) => {
-  // SQUARE CLOUD: Não servir index.html para rotas da API
-  if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
+  // SQUARE CLOUD: Não servir index.html para rotas da API ou health checks
+  if (req.path.startsWith('/api/') || req.path.startsWith('/health') || req.path === '/api/health-check') {
     return res.status(404).json({
       success: false,
       message: 'Rota da API não encontrada',
@@ -285,7 +280,21 @@ app.get('*', (req, res) => {
   }
   
   // SQUARE CLOUD: Servir index.html para todas as outras rotas (React Router)
-  res.sendFile(path.join(distPath, 'index.html'));
+  console.log(`🌐 [SQUARE CLOUD] Servindo frontend para: ${req.path}`);
+  
+  // Verificar se o arquivo index.html existe
+  const indexPath = path.join(distPath, 'index.html');
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    console.error('❌ [SQUARE CLOUD] index.html não encontrado em:', indexPath);
+    res.status(500).json({
+      success: false,
+      message: 'Frontend não encontrado - Execute npm run build',
+      path: indexPath,
+      platform: 'Square Cloud'
+    });
+  }
 });
 
 /**
@@ -348,14 +357,14 @@ async function startServer() {
       console.log(`🌐 Frontend: Servindo React SPA na rota raiz (/)`);
       console.log(`🌐 Porta: ${PORT} (definida automaticamente)`);
       console.log(`🔗 URL local: http://localhost:${PORT}`);
-      console.log(`🌍 URL Square Cloud: https://sistema-protocolos.squareweb.app`);
+      console.log(`🌍 URL Square Cloud: https://protocolos.squareweb.app`);
       console.log(`🗄️ Banco: SQLite Otimizado para Square Cloud`);
       console.log(`⚡ Performance: WAL mode, 15 conexões simultâneas`);
       console.log(`👥 Capacidade: 100+ usuários simultâneos`);
       console.log(`🇧🇷 Região: Brasil (baixa latência)`);
       console.log('=' .repeat(50));
       console.log('📋 API Endpoints disponíveis:');
-      console.log('  GET  / - Health check básico');
+      console.log('  GET  / - Frontend React (SPA)');
       console.log('  GET  /api/health-check - Health check básico');
       console.log('  GET  /health - Health check detalhado');
       console.log('  POST /api/login - Login de usuários');
