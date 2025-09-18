@@ -194,30 +194,8 @@ export function ProtocolForm() {
 
     setIsSubmitting(true);
     console.log('🚀 Iniciando envio do protocolo...');
-    console.log('🌐 Configuração atual:');
-    console.log('   - Backend:', import.meta.env.VITE_API_BASE_URL);
-    console.log('   - Frontend:', window.location.origin);
-    console.log('   - Usuário:', user?.email);
     
     try {
-      // Validação adicional antes do envio
-      if (!user?.id) {
-        throw new Error('Usuário não identificado. Faça login novamente.');
-      }
-      
-      // Verificar se a URL do backend está configurada
-      if (!import.meta.env.VITE_API_BASE_URL) {
-        console.error('❌ VITE_API_BASE_URL não configurada');
-        console.error('❌ Variáveis disponíveis:', import.meta.env);
-        throw new Error('ERRO DE CONFIGURAÇÃO: O sistema não está configurado para funcionar online. Entre em contato com o administrador do sistema.');
-      }
-      
-      console.log('🔧 Configuração do sistema:');
-      console.log('   - Backend:', import.meta.env.VITE_API_BASE_URL);
-      console.log('   - Frontend:', window.location.origin);
-      console.log('   - Usuário:', user?.email);
-      console.log('   - Modo:', import.meta.env.MODE);
-      
       // Converter arquivos de petição para base64
       const petitionProtocolDocuments = await Promise.all(
         petitionDocuments.map(async (file) => ({
@@ -272,11 +250,6 @@ export function ProtocolForm() {
       
       console.log('📋 Dados do protocolo preparados:', protocolData);
       
-      // Verificar se os dados essenciais estão presentes
-      if (!protocolData.createdBy) {
-        throw new Error('Erro interno: ID do usuário não encontrado');
-      }
-      
       const result = await addProtocol(protocolData);
       console.log('✅ Protocolo adicionado:', result);
 
@@ -308,52 +281,7 @@ export function ProtocolForm() {
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
       console.error('❌ Erro ao enviar protocolo:', error);
-      
-      // Mostrar erro mais amigável para o usuário
-      const errorMessage = error.message || 'Erro desconhecido';
-      
-      // Criar modal de erro mais amigável
-      const errorModal = document.createElement('div');
-      errorModal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
-      errorModal.innerHTML = `
-        <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
-          <div class="mt-3">
-            <div class="flex items-center mb-4">
-              <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-                <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-            </div>
-            <h3 class="text-lg font-medium text-gray-900 text-center mb-4">Erro ao Enviar Protocolo</h3>
-            <div class="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-              <p class="text-sm text-red-800 whitespace-pre-line">${errorMessage}</p>
-            </div>
-            <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
-              <p class="text-xs text-yellow-800">
-                <strong>O protocolo NÃO foi salvo.</strong><br>
-                Possíveis soluções:<br>
-                • Verifique sua conexão com a internet<br>
-                • Tente novamente em alguns minutos<br>
-                • Se o problema persistir, entre em contato com o suporte
-              </p>
-            </div>
-            <div class="flex justify-center">
-              <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors">
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(errorModal);
-      
-      // Remover modal após 10 segundos
-      setTimeout(() => {
-        if (errorModal.parentNode) {
-          errorModal.parentNode.removeChild(errorModal);
-        }
-      }, 10000);
+      alert('ERRO CRÍTICO: Não foi possível salvar o protocolo no servidor.\n\nIsso significa que o protocolo NÃO será visível para outros usuários.\n\nVerifique sua conexão com a internet e tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

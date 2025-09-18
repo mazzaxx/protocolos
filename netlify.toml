@@ -11,23 +11,6 @@
   to = "/index.html"
   status = 200
 
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-
-# Headers específicos para API calls
-[[headers]]
-  for = "/api/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "https://sistema-protocolos-juridicos-production.up.railway.app"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, Accept, X-Requested-With, Cache-Control"
-    Access-Control-Max-Age = "86400"
-
 [context.production.environment]
   VITE_API_BASE_URL = "https://sistema-protocolos-juridicos-production.up.railway.app"
 

@@ -1,59 +1,92 @@
 import express from 'express';
 import cors from 'cors';
-import { initializeDb, testConnection, getDatabaseStats, closeConnection, maintenanceDb } from './db.js';
+import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
+import { maintenanceDb } from './db.js';
+
+/**
+ * SERVIDOR PRINCIPAL - SQUARE CLOUD
+ * 
+ * Este é o servidor Express principal que gerencia toda a aplicação.
+ * Configurado especificamente para funcionar na Square Cloud (plataforma brasileira).
+ * 
+ * Funcionalidades principais:
+ * - Autenticação de usuários
+ * - Gerenciamento de protocolos jurídicos
+ * - API REST completa
+ * - Banco SQLite otimizado
+ * - CORS configurado para Square Cloud
+ * 
+ * HOSPEDAGEM SQUARE CLOUD:
+ * - Porta automática (process.env.PORT)
+ * - Domínio: https://seu-app.squareweb.app
+ * - Suporte completo ao Node.js e SQLite
+ * - Deploy automático via Git
+ */
 
 const app = express();
+// SQUARE CLOUD: A porta é definida automaticamente pela plataforma
 const PORT = process.env.PORT || 3000;
 
 console.log('🚀 Iniciando servidor...');
-console.log('🌐 Porta:', PORT);
+console.log('🌐 Porta:', PORT, '(Square Cloud define automaticamente)');
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
-console.log('🗄️ Banco: SQLite Otimizado para 100+ usuários');
+console.log('🗄️ Banco: SQLite Otimizado para Square Cloud');
+console.log('☁️ Plataforma: Square Cloud (Brasil)');
 
-// Lista de origens permitidas para CORS
+/**
+ * CONFIGURAÇÃO DE CORS PARA SQUARE CLOUD
+ * 
+ * Define quais domínios podem acessar a API.
+ * Square Cloud usa domínios .squareweb.app
+ * 
+ * IMPORTANTE PARA HOSPEDAGEM:
+ * - Sempre incluir o domínio da Square Cloud
+ * - Manter localhost para desenvolvimento
+ * - Usar regex para flexibilidade com subdomínios
+ */
 const allowedOrigins = [
+  // Desenvolvimento local
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
+  
+  // SQUARE CLOUD: Domínio principal da aplicação
+  'https://sistema-protocolos.squareweb.app',
+  
+  // SQUARE CLOUD: Permitir qualquer subdomínio .squareweb.app
+  /^https:\/\/.*\.squareweb\.app$/,
+  
+  // Manter compatibilidade com outras plataformas (opcional)
   'https://ncasistemaprotocolos.netlify.app',
-  'https://sistema-protocolos-juridicos-production.up.railway.app',
-  // Permitir qualquer subdomínio do Netlify para flexibilidade
   /^https:\/\/.*\.netlify\.app$/,
-  // Permitir qualquer subdomínio do Railway para flexibilidade
-  /^https:\/\/.*\.up\.railway\.app$/,
-  // Permitir deploy previews do Netlify
-  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
-  // Permitir branch deploys do Netlify
-  /^https:\/\/.*--.*\.netlify\.app$/,
-  // Permitir domínios personalizados
-  'https://ncasistemaprotocolos.netlify.app',
-  'http://ncasistemaprotocolos.netlify.app'
-  // Permitir qualquer subdomínio do Netlify para flexibilidade
-  /^https:\/\/.*\.netlify\.app$/,
-  // Permitir qualquer subdomínio do Railway para flexibilidade
-  /^https:\/\/.*\.up\.railway\.app$/,
-  // Permitir deploy previews do Netlify
-  /^https:\/\/deploy-preview-.*--.*\.netlify\.app$/,
-  // Permitir branch deploys do Netlify
-  /^https:\/\/.*--.*\.netlify\.app$/
+  /^https:\/\/.*\.up\.railway\.app$/
 ];
 
-// Configuração CORS mais permissiva
+/**
+ * CONFIGURAÇÃO CORS OTIMIZADA PARA SQUARE CLOUD
+ * 
+ * Permite requisições do frontend hospedado na Square Cloud
+ * e mantém compatibilidade com desenvolvimento local.
+ */
 const corsOptions = {
   origin: function (origin, callback) {
-    // Log detalhado para debug
-    console.log('🌐 CORS - Origin recebido:', origin || 'SEM ORIGIN');
+    // SQUARE CLOUD: Log apenas em desenvolvimento para economizar recursos
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🌐 CORS - Origin recebido:', origin);
+    }
     
-    // Permitir requisições sem origin (ex: Postman, aplicações mobile)
+    // SQUARE CLOUD: Permitir requisições sem origin (apps mobile, Postman)
     if (!origin) {
-      console.log('✅ CORS - Permitindo requisição sem origin');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ CORS - Permitindo requisição sem origin');
+      }
       return callback(null, true);
     }
     
-    // Verificar se a origin está na lista permitida
+    // Verificar se a origin está na lista permitida (incluindo Square Cloud)
     const isAllowed = allowedOrigins.some(allowedOrigin => {
       if (typeof allowedOrigin === 'string') {
         return allowedOrigin === origin;
@@ -64,17 +97,16 @@ const corsOptions = {
     });
     
     if (isAllowed) {
-      console.log('✅ CORS - Origin permitida:', origin);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ CORS - Origin permitida (Square Cloud):', origin);
+      }
       callback(null, true);
     } else {
-      console.log('❌ CORS - Origin bloqueada:', origin);
-      console.log('📋 Origins permitidas:', allowedOrigins);
-      // TEMPORÁRIO: Permitir todas as origins para debug
-      console.log('⚠️ CORS - Permitindo TODAS as origins para debug');
-      callback(null, true);
+      console.log('❌ CORS - Origin bloqueada (não é Square Cloud):', origin);
+      callback(new Error('Não permitido pelo CORS'));
     }
   },
-  credentials: false, // Mudança crítica para Railway
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Origin',
@@ -84,240 +116,213 @@ const corsOptions = {
     'Authorization',
     'Cache-Control',
     'X-Sync-Mode',
-    'X-Sync-Action',
-    'X-Sync-ID',
-    'X-Client-Time',
-    'X-Force-Refresh',
-    'X-Force-Sync'
+    'X-Sync-Action'
   ],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
-  maxAge: 86400, // 24 horas
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  maxAge: 86400 // SQUARE CLOUD: Cache CORS por 24 horas para performance
 };
 
-// Aplicar CORS
+// Aplicar configuração CORS otimizada para Square Cloud
 app.use(cors(corsOptions));
 
-// Middleware para parsing JSON
+/**
+ * MIDDLEWARE DE PARSING JSON
+ * 
+ * Configura o Express para processar requisições JSON.
+ * Limite de 50MB para upload de documentos.
+ * 
+ * SQUARE CLOUD: Funciona perfeitamente com os limites da plataforma
+ */
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Middleware de logging
+/**
+ * MIDDLEWARE DE LOGGING OTIMIZADO PARA SQUARE CLOUD
+ * 
+ * Registra requisições importantes para monitoramento.
+ * Em produção (Square Cloud), reduz logs para economizar recursos.
+ */
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
-  const syncId = req.headers['x-sync-id'];
-  const origin = req.headers.origin;
   
-  // Log detalhado apenas para operações importantes
+  // SQUARE CLOUD: Log apenas operações importantes em produção
   if (req.path.includes('/api/') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
-    console.log(`📡 ${timestamp} - ${req.method} ${req.path}${syncId ? ` [${syncId}]` : ''}`);
-    console.log('🌐 Origin:', origin || 'SEM ORIGIN');
+    console.log(`📡 [SQUARE CLOUD] ${timestamp} - ${req.method} ${req.path}`);
+    console.log('🌐 Origin:', req.headers.origin);
     
     if (req.method === 'POST' || req.method === 'PUT') {
       const bodySize = JSON.stringify(req.body || {}).length;
-      console.log('📦 Body size:', bodySize, 'chars');
-      
-      // Log crítico para criação de protocolos
-      if (req.path.includes('/protocolos') && req.method === 'POST') {
-        console.log('📋 Dados críticos do protocolo:', {
-          createdBy: req.body?.createdBy,
-          processNumber: req.body?.processNumber,
-          hasDocuments: Array.isArray(req.body?.documents) && req.body.documents.length > 0
-        });
+      if (bodySize > 1000) {
+        console.log('📦 [SQUARE CLOUD] Body size:', bodySize, 'chars');
       }
     }
   } else if (process.env.NODE_ENV !== 'production') {
-    // Log simples em desenvolvimento
-    console.log(`📡 ${req.method} ${req.path}${syncId ? ` [${syncId}]` : ''}`);
-  }
-  
-  // Headers de segurança e CORS para todas as respostas
-  res.header('Access-Control-Allow-Origin', origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'false'); // Mudança crítica
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Sync-Mode, X-Sync-Action, X-Sync-ID, X-Client-Time, X-Force-Refresh, X-Force-Sync');
-  
-  // Responder OPTIONS requests imediatamente
-  if (req.method === 'OPTIONS') {
-    console.log('✅ Respondendo OPTIONS request para:', req.path);
-    return res.status(204).end();
+    // Log simples apenas em desenvolvimento local
+    console.log(`📡 ${req.method} ${req.path}`);
   }
   
   next();
 });
 
-// Middleware específico para tratar preflight requests
-app.options('*', (req, res) => {
-  console.log('✅ Preflight request para:', req.path);
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'false'); // Mudança crítica
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Sync-Mode, X-Sync-Action, X-Sync-ID, X-Client-Time, X-Force-Refresh, X-Force-Sync');
-  res.header('Access-Control-Max-Age', '86400');
-  res.status(204).end();
-});
-
-// Rota de health check
+/**
+ * ROTA DE HEALTH CHECK PRINCIPAL
+ * 
+ * Endpoint básico para verificar se o servidor está funcionando.
+ * Essencial para monitoramento da Square Cloud.
+ * 
+ * SQUARE CLOUD: Usado para verificar se a aplicação está online
+ */
 app.get('/', (req, res) => {
-  // Headers para evitar cache
-  res.set({
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'false'
-  });
-  
-  console.log('🏥 Health check solicitado');
-  console.log('🌐 Origin do health check:', req.headers.origin);
+  console.log('🏥 [SQUARE CLOUD] Health check solicitado');
   res.json({ 
-    message: 'Servidor de autenticação funcionando!',
+    message: 'Sistema Jurídico funcionando na Square Cloud!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     port: PORT,
-    cors: 'enabled',
-    origin: req.headers.origin || 'no-origin'
+    platform: 'Square Cloud',
+    database: 'SQLite',
+    status: 'online'
   });
 });
 
-// Rota de health check específica
+/**
+ * ROTA DE HEALTH CHECK DETALHADA
+ * 
+ * Endpoint completo para monitoramento avançado.
+ * Testa conexão com banco e retorna estatísticas.
+ * 
+ * SQUARE CLOUD: Útil para debugging e monitoramento
+ */
 app.get('/health', async (req, res) => {
-  // Headers para evitar cache
-  res.set({
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'false'
-  });
-  
   if (process.env.NODE_ENV !== 'production') {
-    console.log('🏥 Health check detalhado solicitado');
+    console.log('🏥 [SQUARE CLOUD] Health check detalhado solicitado');
   }
-  console.log('🌐 Origin do health check detalhado:', req.headers.origin);
   
   try {
-    // Testar conexão com banco
+    // SQUARE CLOUD: Testar conexão com SQLite
     await testConnection();
     
-    // Obter estatísticas
+    // Obter estatísticas do banco para monitoramento
     const stats = await getDatabaseStats();
     
     res.json({
       status: 'healthy',
-      message: 'Sistema otimizado para 100+ usuários simultâneos',
-      capacity: '100+ usuários',
-      syncMode: 'real-time',
+      message: 'Sistema funcionando perfeitamente na Square Cloud',
       timestamp: new Date().toISOString(),
       database: 'connected',
       stats: stats,
       environment: process.env.NODE_ENV || 'development',
       port: PORT,
-      cors: 'enabled',
-      origin: req.headers.origin || 'no-origin'
+      platform: 'Square Cloud',
+      region: 'Brasil'
     });
   } catch (error) {
-    console.error('❌ Health check falhou:', error);
+    console.error('❌ [SQUARE CLOUD] Health check falhou:', error);
     res.status(500).json({
       status: 'unhealthy',
-      message: 'Problemas de conectividade',
+      message: 'Problemas de conectividade na Square Cloud',
       error: error.message,
-      timestamp: new Date().toISOString(),
-      cors: 'enabled',
-      origin: req.headers.origin || 'no-origin'
+      timestamp: new Date().toISOString()
     });
   }
 });
 
-// Rota específica para testar conectividade do frontend
-app.get('/api/test-connection', (req, res) => {
-  console.log('🧪 Teste de conectividade do frontend');
-  console.log('🌐 Origin:', req.headers.origin);
-  
-  res.set({
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'false'
-  });
-  
-  res.json({
-    success: true,
-    message: 'Conectividade OK - Sistema funcionando',
-    timestamp: new Date().toISOString(),
-    origin: req.headers.origin || 'no-origin',
-    server: 'Railway',
-    database: 'SQLite',
-    cors: 'enabled'
-  });
-});
-
-// Rotas da API
+/**
+ * CONFIGURAÇÃO DAS ROTAS DA API
+ * 
+ * Define todos os endpoints da aplicação:
+ * - /api/* - Autenticação e protocolos
+ * - /api/admin/* - Administração
+ * 
+ * SQUARE CLOUD: Todas as rotas funcionam perfeitamente
+ */
 app.use('/api', authRoutes);
 app.use('/api', protocolRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Middleware de tratamento de erros
+/**
+ * MIDDLEWARE DE TRATAMENTO DE ERROS GLOBAL
+ * 
+ * Captura e trata todos os erros da aplicação.
+ * Essencial para estabilidade na Square Cloud.
+ */
 app.use((err, req, res, next) => {
-  console.error('❌ Erro no servidor:', err);
+  console.error('❌ [SQUARE CLOUD] Erro no servidor:', err);
   
   if (err.message === 'Não permitido pelo CORS') {
     return res.status(403).json({
       success: false,
-      message: 'Acesso negado por política CORS',
+      message: 'Acesso negado por política CORS (Square Cloud)',
       origin: req.headers.origin
     });
   }
   
   res.status(500).json({
     success: false,
-    message: 'Erro interno do servidor',
+    message: 'Erro interno do servidor (Square Cloud)',
     error: process.env.NODE_ENV === 'development' ? err.message : 'Erro interno'
   });
 });
 
-// Middleware para rotas não encontradas
+/**
+ * MIDDLEWARE PARA ROTAS NÃO ENCONTRADAS (404)
+ * 
+ * Captura requisições para rotas inexistentes.
+ * Importante para debugging na Square Cloud.
+ */
 app.use('*', (req, res) => {
-  console.log('❌ Rota não encontrada:', req.method, req.originalUrl);
+  console.log('❌ [SQUARE CLOUD] Rota não encontrada:', req.method, req.originalUrl);
   res.status(404).json({
     success: false,
     message: 'Rota não encontrada',
     path: req.originalUrl,
-    method: req.method
+    method: req.method,
+    platform: 'Square Cloud'
   });
 });
 
-// Inicializar banco de dados e servidor
+/**
+ * FUNÇÃO PRINCIPAL DE INICIALIZAÇÃO DO SERVIDOR
+ * 
+ * Inicializa o banco SQLite e inicia o servidor Express.
+ * Configurada especificamente para Square Cloud.
+ * 
+ * SQUARE CLOUD:
+ * - Inicialização automática
+ * - Manutenção periódica do banco
+ * - Logs otimizados para produção
+ */
 async function startServer() {
   try {
-    console.log('🗄️ Inicializando banco de dados...');
+    console.log('🗄️ [SQUARE CLOUD] Inicializando banco SQLite...');
     await initializeDb();
-    console.log('✅ Banco de dados inicializado com sucesso!');
+    console.log('✅ [SQUARE CLOUD] Banco SQLite inicializado com sucesso!');
     
-    // Agendar manutenção periódica (a cada 6 horas)
+    // SQUARE CLOUD: Manutenção automática do banco a cada 6 horas
     setInterval(async () => {
-      console.log('🔧 Executando manutenção automática do banco...');
+      console.log('🔧 [SQUARE CLOUD] Manutenção automática do banco...');
       try {
         await maintenanceDb();
-        console.log('✅ Manutenção automática concluída');
+        console.log('✅ [SQUARE CLOUD] Manutenção automática concluída');
       } catch (error) {
-        console.error('❌ Erro na manutenção automática:', error);
+        console.error('❌ [SQUARE CLOUD] Erro na manutenção automática:', error);
       }
-    }, 6 * 60 * 60 * 1000); // 6 horas
+    }, 6 * 60 * 60 * 1000); // SQUARE CLOUD: 6 horas em millisegundos
     
+    // SQUARE CLOUD: Iniciar servidor na porta definida pela plataforma
     app.listen(PORT, '0.0.0.0', () => {
-      console.log('🎉 SERVIDOR INICIADO COM SUCESSO!');
+      console.log('🎉 SERVIDOR INICIADO COM SUCESSO NA SQUARE CLOUD!');
       console.log('=' .repeat(50));
-      console.log(`🌐 Servidor rodando na porta: ${PORT}`);
+      console.log(`☁️ Plataforma: Square Cloud (Brasil)`);
+      console.log(`🌐 Porta: ${PORT} (definida automaticamente)`);
       console.log(`🔗 URL local: http://localhost:${PORT}`);
-      console.log(`🌍 URL Railway: https://sistema-protocolos-juridicos-production.up.railway.app`);
-      console.log(`🎯 Frontend Netlify: https://ncasistemaprotocolos.netlify.app`);
-      console.log(`🗄️ Banco: SQLite Otimizado (WAL mode, 15 conexões)`);
+      console.log(`🌍 URL Square Cloud: https://sistema-protocolos.squareweb.app`);
+      console.log(`🗄️ Banco: SQLite Otimizado para Square Cloud`);
+      console.log(`⚡ Performance: WAL mode, 15 conexões simultâneas`);
       console.log(`👥 Capacidade: 100+ usuários simultâneos`);
+      console.log(`🇧🇷 Região: Brasil (baixa latência)`);
       console.log('=' .repeat(50));
-      console.log('📋 Rotas disponíveis:');
+      console.log('📋 API Endpoints disponíveis:');
       console.log('  GET  / - Health check básico');
       console.log('  GET  /health - Health check detalhado');
       console.log('  POST /api/login - Login de usuários');
@@ -326,50 +331,61 @@ async function startServer() {
       console.log('  PUT  /api/protocolos/:id - Atualizar protocolo');
       console.log('  GET  /api/admin/funcionarios - Listar funcionários');
       console.log('=' .repeat(50));
-      console.log('🔄 Sistema pronto para receber requisições!');
-      console.log('⚡ Performance otimizada para escritório grande');
+      console.log('🔄 Sistema pronto na Square Cloud!');
+      console.log('⚡ Otimizado para escritórios jurídicos brasileiros');
       
-      // Teste de conectividade inicial
+      // SQUARE CLOUD: Teste de conectividade inicial
       testConnection()
-        .then(() => console.log('✅ Teste de conectividade inicial: SUCESSO'))
-        .catch(err => console.error('❌ Teste de conectividade inicial: FALHA', err.message));
+        .then(() => console.log('✅ [SQUARE CLOUD] Conectividade inicial: SUCESSO'))
+        .catch(err => console.error('❌ [SQUARE CLOUD] Conectividade inicial: FALHA', err.message));
     });
   } catch (error) {
-    console.error('❌ ERRO CRÍTICO ao iniciar servidor:', error);
-    console.error('💡 Verifique se o banco de dados está acessível');
+    console.error('❌ [SQUARE CLOUD] ERRO CRÍTICO ao iniciar servidor:', error);
+    console.error('💡 [SQUARE CLOUD] Verifique configurações do banco SQLite');
     process.exit(1);
   }
 }
 
-// Tratamento de sinais do sistema
+/**
+ * TRATAMENTO DE SINAIS DO SISTEMA PARA SQUARE CLOUD
+ * 
+ * Garante que o servidor seja encerrado graciosamente
+ * quando a Square Cloud reinicia ou atualiza a aplicação.
+ */
 process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM recebido, encerrando servidor graciosamente...');
+  console.log('🛑 [SQUARE CLOUD] SIGTERM recebido, encerrando graciosamente...');
   closeConnection().then(() => {
     process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
-  console.log('🛑 SIGINT recebido, encerrando servidor graciosamente...');
+  console.log('🛑 [SQUARE CLOUD] SIGINT recebido, encerrando graciosamente...');
   closeConnection().then(() => {
     process.exit(0);
   });
 });
 
+/**
+ * TRATAMENTO DE ERROS NÃO CAPTURADOS
+ * 
+ * Essencial para estabilidade na Square Cloud.
+ * Evita que a aplicação trave por erros inesperados.
+ */
 process.on('uncaughtException', (error) => {
-  console.error('❌ ERRO NÃO CAPTURADO:', error);
+  console.error('❌ [SQUARE CLOUD] ERRO NÃO CAPTURADO:', error);
   closeConnection().then(() => {
     process.exit(1);
   });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ PROMISE REJEITADA NÃO TRATADA:', reason);
+  console.error('❌ [SQUARE CLOUD] PROMISE REJEITADA NÃO TRATADA:', reason);
   console.error('Promise:', promise);
   closeConnection().then(() => {
     process.exit(1);
   });
 });
 
-// Iniciar o servidor
+// SQUARE CLOUD: Iniciar o servidor automaticamente
 startServer();

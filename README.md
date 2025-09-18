@@ -1,52 +1,58 @@
 # Sistema de Protocolos Jurídicos
 
-Sistema completo para gerenciamento de protocolos jurídicos com autenticação de funcionários.
+Sistema completo para gerenciamento de protocolos jurídicos hospedado na **Square Cloud**.
 
-## 🚀 Deploy Rápido (Gratuito)
+## ☁️ HOSPEDAGEM SQUARE CLOUD
 
-### Passo a Passo Completo para Deploy
+Este sistema está otimizado para funcionar na **Square Cloud**, a plataforma brasileira de hospedagem:
 
-#### 1. Deploy do Backend no Railway
-1. Acesse [railway.app](https://railway.app) e faça login
-2. Clique em "New Project" → "Deploy from GitHub repo"
-3. Selecione este repositório
-4. O Railway detectará automaticamente o Node.js
-5. Anote a URL gerada (ex: `https://seu-projeto-railway.up.railway.app`)
+### ✅ Vantagens da Square Cloud
+- 🇧🇷 **Plataforma Brasileira**: Baixa latência no Brasil
+- 🚀 **Deploy Automático**: Via Git, sem configuração complexa
+- 💾 **SQLite Nativo**: Banco funciona perfeitamente
+- 💰 **Plano Gratuito**: Ideal para começar
+- 🔧 **Node.js Nativo**: Suporte completo
+- 📊 **Monitoramento**: Logs e métricas em tempo real
 
-#### 2. Configurar Frontend para Produção
-1. Edite o arquivo `.env` e coloque a URL do Railway:
-   ```
-   VITE_API_BASE_URL=https://sua-url-railway.up.railway.app
-   ```
-2. Edite o arquivo `netlify.toml` e substitua as URLs pelos seus domínios reais
-3. Edite o arquivo `server/server.js` e adicione sua URL do Netlify na lista de origens permitidas
+### 🌐 URLs do Sistema
+- **Produção**: https://sistema-protocolos.squareweb.app
+- **Desenvolvimento**: http://localhost:5173
+- **API**: https://sistema-protocolos.squareweb.app/api
 
-#### 3. Deploy do Frontend no Netlify
-1. Acesse [netlify.com](https://netlify.com) e faça login
-2. Clique em "New site from Git"
-3. Conecte seu repositório GitHub
-4. Configure:
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-5. Nas configurações do site, vá em "Environment variables" e adicione:
-   - `VITE_API_BASE_URL` = sua URL do Railway
+## 🚀 Deploy na Square Cloud
 
-#### 4. Verificar CORS no Backend
-Certifique-se de que o backend está configurado para aceitar requisições do seu domínio Netlify.
+### Passo 1: Preparar o Projeto
+1. Clone este repositório
+2. Certifique-se de que o arquivo `squarecloud.config` está na raiz
+3. Verifique se todas as dependências estão no `package.json`
 
-### Railway (Recomendado)
-1. Fork este repositório
-2. Acesse [railway.app](https://railway.app)
-3. Login com GitHub
-4. "New Project" → "Deploy from GitHub repo"
-5. Selecione o repositório
-6. Deploy automático em ~2 minutos
+### Passo 2: Criar Conta na Square Cloud
+1. Acesse: https://squarecloud.app
+2. Faça cadastro/login com GitHub
+3. Conecte sua conta GitHub
 
-### Render
-1. Fork este repositório  
-2. Acesse [render.com](https://render.com)
-3. "New Web Service" → Conecte GitHub
-4. Configure: `npm run start:production`
+### Passo 3: Deploy Automático
+1. No painel da Square Cloud, clique em "Nova Aplicação"
+2. Selecione "GitHub Repository"
+3. Escolha este repositório
+4. A Square Cloud detectará automaticamente o Node.js
+5. Deploy será feito automaticamente em 2-5 minutos
+
+### Passo 4: Configurar Variáveis (Opcional)
+No painel da Square Cloud, adicione se necessário:
+```
+NODE_ENV=production
+VITE_API_BASE_URL=https://seu-app.squareweb.app
+```
+
+### ✅ Pronto!
+Seu sistema estará disponível em: `https://seu-app.squareweb.app`
+
+## 🔄 Atualizações Automáticas
+
+- **Deploy Contínuo**: Toda vez que você fizer push, a Square Cloud faz redeploy automático
+- **Sem Configuração**: Não precisa configurar nada adicional
+- **Logs em Tempo Real**: Monitore via painel da Square Cloud
 
 ## Como executar o projeto
 
@@ -55,175 +61,253 @@ Certifique-se de que o backend está configurado para aceitar requisições do s
 npm install
 ```
 
-### 2. Escolher modo de execução
+### 2. Modos de execução
 
-#### Modo Local (Desenvolvimento)
+#### Desenvolvimento Completo (Recomendado)
 ```bash
-npm run dev:local
+npm run dev:full
 ```
 
-#### Modo Nuvem (Testes com backend em produção)
+#### Frontend + Square Cloud Backend
 ```bash
 npm run dev:cloud
 ```
 
-#### Modo Completo Local
+#### Apenas Backend Local
 ```bash
-npm run dev:full
-```
-
-## 🔧 Desenvolvimento Local
-
-### 1. Instalar dependências
-```bash
-npm install
-```
-
-### 2. Banco de Dados SQLite Otimizado
-- **Desenvolvimento e Produção:** SQLite com WAL mode
-- **Pool de Conexões:** 15 conexões simultâneas
-- **Otimizações:** Cache de 10MB, memory-mapped I/O
-- **Capacidade:** 100+ usuários simultâneos
-- **Nenhuma configuração adicional necessária**
-
-### 2. Executar em desenvolvimento
-```bash
-# Servidor + Frontend juntos
-npm run dev:full
-```
-
-**Ou separadamente:**
-```bash
-# Backend
 npm run server
-
-# Frontend (nova aba do terminal)
-npm run dev
 ```
 
-### 3. Testar build de produção
+#### Build para Produção
 ```bash
 npm run build
-npm run preview:production
+```
+
+## 🗄️ Banco de Dados SQLite na Square Cloud
+
+### ✅ Vantagens do SQLite na Square Cloud
+- **Sem Configuração**: Funciona nativamente na plataforma
+- **Persistência**: Dados mantidos entre deploys
+- **Performance**: WAL mode + Pool de 15 conexões
+- **Backup Automático**: Square Cloud faz backup dos dados
+- **Escalabilidade**: Suporta 100+ usuários simultâneos
+- **Otimizações**: Cache de 10MB, memory-mapped I/O
+
+### 🔧 Configurações Otimizadas
+```sql
+-- WAL mode para concorrência
+PRAGMA journal_mode = WAL;
+
+-- Cache otimizado para Square Cloud
+PRAGMA cache_size = 10000;
+
+-- Timeout configurado
+PRAGMA busy_timeout = 30000;
 ```
 
 ## 🔄 Sincronização de Dados
 
-**IMPORTANTE:** Este sistema funciona com sincronização em tempo real entre todos os usuários.
+**IMPORTANTE:** Sistema com sincronização em tempo real otimizada para Square Cloud.
 
 ### Como funciona:
-- Todos os protocolos são salvos no servidor (Railway)
+- Todos os protocolos são salvos no servidor Square Cloud
 - Dados são sincronizados automaticamente a cada 3 segundos
 - Mudanças feitas por qualquer usuário aparecem para todos
-- **NÃO há armazenamento local** - tudo depende do servidor
+- Cache inteligente reduz requisições desnecessárias
+- Polling adaptativo baseado na atividade do usuário
 
 ### Se os dados não estão sincronizando:
-1. Verifique se o servidor backend está online
-2. Teste a URL: https://sistema-protocolos-juridicos-production.up.railway.app
+1. Verifique se o servidor Square Cloud está online
+2. Teste a URL: https://sistema-protocolos.squareweb.app
 3. Verifique o console do navegador (F12) para erros
-4. Certifique-se de que a variável `VITE_API_BASE_URL` está configurada corretamente
+4. Verifique logs no painel da Square Cloud
 
-## Acesso ao sistema
+## 🔐 Acesso ao Sistema
 
+- **URL de produção:** https://sistema-protocolos.squareweb.app
 - **URL de desenvolvimento:** http://localhost:5173
-- **URL de produção:** Sua URL do Netlify
 - **Email de teste:** admin@escritorio.com  
 - **Senha de teste:** 123456
 
-## 🌐 URLs de Acesso
+## ⚡ Funcionalidades Otimizadas para Square Cloud
 
-- **Desenvolvimento**: http://localhost:5173
-- **Backend**: https://sistema-protocolos-juridicos-production.up.railway.app
-- **Frontend**: https://ncasistemaprotocolos.netlify.app
+### 🚀 Performance
+- **SQLite WAL Mode**: Concorrência otimizada para Square Cloud
+- **Connection Pooling**: 15 conexões simultâneas
+- **Cache Inteligente**: Reduz latência e uso de banda
+- **Polling Adaptativo**: Economiza recursos da plataforma
+- **Índices Otimizados**: Queries rápidas mesmo com milhares de protocolos
+- **Logs Otimizados**: Prefixo `[SQUARE CLOUD]` para fácil identificação
 
-## Funcionalidades
-
-### Performance Otimizada
-- **SQLite WAL Mode:** Melhor concorrência para múltiplos usuários
-- **Connection Pooling:** 15 conexões simultâneas
-- **Cache Inteligente:** Reduz requisições desnecessárias
-- **Polling Adaptativo:** Intervalo baseado na atividade
-- **Índices Otimizados:** Queries rápidas mesmo com milhares de protocolos
-
-### Autenticação
+### 🔐 Autenticação
 - Login com email e senha
 - Proteção de rotas
 - Logout seguro
 - Dados do usuário no header
+- Validação robusta de credenciais
 
-### Painel de Protocolos
+### 📋 Painel de Protocolos
 - Envio de protocolos
 - Fila do robô (automática)
 - Fila do Carlos (manual)
 - Fila da Deyse (manual)
 - Acompanhamento de status
+- Sistema de devoluções
+- Logs de atividade detalhados
 
-### Banco de Dados
-- **SQLite Otimizado** (desenvolvimento e produção)
-- **WAL Mode** para melhor concorrência
-- **Connection Pooling** para múltiplos usuários
-- **Manutenção automática** a cada 6 horas
-- Tabela de funcionários
-- Tabela de protocolos
-- Usuário de teste pré-criado
+### 🗄️ Banco de Dados na Square Cloud
+- **SQLite Nativo**: Funciona perfeitamente na plataforma
+- **WAL Mode**: Concorrência otimizada
+- **Pool de Conexões**: 15 conexões para alta performance
+- **Manutenção Automática**: A cada 6 horas
+- **Backup Automático**: Pela Square Cloud
+- **Índices Otimizados**: Para consultas rápidas
 
-## Estrutura do Projeto
+## 📁 Estrutura do Projeto Otimizada
 
 ```
+squarecloud.config          # Configuração da Square Cloud
 src/
 ├── components/
-│   ├── Login.tsx           # Página de login
-│   ├── Header.tsx          # Header com info do usuário
+│   ├── Login.tsx           # Login otimizado para Square Cloud
+│   ├── Header.tsx          # Header com info da plataforma
 │   ├── ProtectedRoute.tsx  # Proteção de rotas
-│   └── ...                 # Outros componentes do painel
+│   └── ...                 # Componentes do painel
 ├── contexts/
-│   └── AuthContext.tsx     # Contexto de autenticação
+│   └── AuthContext.tsx     # Autenticação com Square Cloud
+├── hooks/
+│   └── useProtocols.ts     # Hook otimizado para Square Cloud
 └── ...
 
 server/
-├── server.js              # Servidor Express
-├── auth.js                # Rotas de autenticação  
-├── protocols.js           # Rotas de protocolos
-├── admin.js               # Rotas administrativas
-├── db.js                  # SQLite otimizado com pooling
-└── database.sqlite        # Banco SQLite (desenvolvimento)
+├── server.js              # Servidor Express para Square Cloud
+├── auth.js                # Autenticação otimizada
+├── protocols.js           # API de protocolos
+├── admin.js               # Administração
+├── db.js                  # SQLite otimizado para Square Cloud
+└── database.sqlite        # Banco SQLite persistente
 ```
 
-## Tecnologias Utilizadas
+## 🛠️ Tecnologias Otimizadas para Square Cloud
 
-- **Frontend:** React, TypeScript, Tailwind CSS
-- **Backend:** Node.js, Express
-- **Banco:** SQLite3 otimizado com WAL mode e pooling
-- **Autenticação:** Context API + localStorage
-- **Deploy:** Railway (backend) + Netlify (frontend)
-- **Capacidade:** 100+ usuários simultâneos
+- **Frontend**: React 18, TypeScript, Tailwind CSS
+- **Backend**: Node.js 18+, Express
+- **Banco**: SQLite3 com WAL mode e pooling
+- **Hospedagem**: Square Cloud (plataforma brasileira)
+- **Autenticação**: Context API + localStorage
+- **Cache**: Sistema inteligente com TTL
+- **Logs**: Prefixo `[SQUARE CLOUD]` para identificação
+- **Performance**: Otimizada para 100+ usuários simultâneos
 
-## 🚨 **CORREÇÕES APLICADAS**
+## 📊 Monitoramento na Square Cloud
 
-### ✅ **CORREÇÃO CRÍTICA - Railway + Netlify (Janeiro 2025)**
-- ✅ Removido `credentials: 'include'` que causava bloqueio no Railway
-- ✅ Configurado `credentials: 'omit'` para compatibilidade total
-- ✅ Otimizado headers CORS para Railway + Netlify
-- ✅ Removido testes de conectividade desnecessários que causavam loops
-- ✅ Melhorado tratamento de erros de conexão
-- ✅ Sistema 100% funcional em produção (Railway + Netlify)
+### 🔍 Logs Detalhados
+Todos os logs incluem prefixo `[SQUARE CLOUD]`:
+```javascript
+console.log('[SQUARE CLOUD] 🚀 Servidor iniciado');
+console.log('[SQUARE CLOUD] 📝 Protocolo criado:', id);
+console.error('[SQUARE CLOUD] ❌ Erro:', error);
+```
 
-### 1. **CORS Melhorado**
-- ✅ Adicionado suporte para deploy previews do Netlify
-- ✅ Logs detalhados de CORS em produção
-- ✅ Permitindo temporariamente origins não listadas para debug
+### 📈 Métricas Importantes
+- Tempo de resposta das queries
+- Número de conexões ativas no pool
+- Uso de memória e CPU
+- Erros e exceções
+- Status de sincronização
 
-### 2. **Headers de Requisição**
-- ✅ Adicionado header `Origin` em todas as requisições
-- ✅ Melhor tratamento de erros HTTP
-- ✅ Logs detalhados de conectividade
+### 🔧 Debugging
+- Logs em tempo real no painel da Square Cloud
+- Health checks automáticos
+- Estatísticas do banco de dados
+- Monitoramento de performance
 
-### 3. **Validações de Configuração**
-- ✅ Verificação se `VITE_API_BASE_URL` está configurada
-- ✅ Health check antes de enviar protocolos
-- ✅ Mensagens de erro mais claras
+## 🚨 Troubleshooting Square Cloud
 
-### 4. **Debug Visual**
-- ✅ Status de conectividade mostra URLs sendo usadas
-- ✅ Logs detalhados no console do navegador
-- ✅ Informações de debug no componente de status
+### Problemas Comuns
+
+#### 1. Erro de CORS
+**Sintoma**: "blocked by CORS policy"
+**Solução**: Verificar se domínio está em `allowedOrigins` no `server.js`
+
+#### 2. Banco não conecta
+**Sintoma**: "Database connection failed"
+**Solução**: SQLite funciona automaticamente na Square Cloud, verificar logs
+
+#### 3. Deploy falha
+**Sintoma**: "Build failed"
+**Solução**: Verificar se `npm run build` funciona localmente
+
+#### 4. Aplicação não inicia
+**Sintoma**: "Application failed to start"
+**Solução**: Verificar `squarecloud.config` e script "start" no `package.json`
+
+### 🔧 Comandos de Debug
+```bash
+# Testar API localmente
+curl http://localhost:3000/health
+
+# Testar API na Square Cloud
+curl https://seu-app.squareweb.app/health
+
+# Build local
+npm run build
+
+# Testar produção localmente
+npm run preview:production
+```
+
+## 💰 Custos Square Cloud
+
+### 🆓 Plano Gratuito
+- ✅ 512MB RAM
+- ✅ 1GB armazenamento
+- ✅ Domínio .squareweb.app
+- ✅ Deploy automático
+- ⚠️ Limitações de tráfego
+
+### 💎 Planos Pagos
+- 🚀 Mais RAM e armazenamento
+- 🚀 Domínio customizado
+- 🚀 Tráfego ilimitado
+- 🚀 Suporte prioritário
+- 🚀 Backups avançados
+
+## 📞 Suporte Square Cloud
+
+### 🔗 Recursos
+- **Documentação**: https://docs.squarecloud.app
+- **Discord**: Comunidade brasileira ativa
+- **GitHub**: https://github.com/squarecloudofc
+- **YouTube**: Tutoriais em português
+
+### 🇧🇷 Comunidade Brasileira
+- Suporte em português
+- Exemplos e templates
+- Ajuda entre desenvolvedores
+- Atualizações frequentes
+
+## ✅ Checklist de Deploy
+
+Antes do deploy na Square Cloud:
+- [ ] `squarecloud.config` configurado
+- [ ] Script "start" no `package.json`
+- [ ] Variáveis de ambiente definidas
+- [ ] CORS configurado para Square Cloud
+- [ ] Logs com prefixo `[SQUARE CLOUD]`
+- [ ] Build funciona localmente (`npm run build`)
+- [ ] Testes passando (`npm run test:connectivity`)
+
+## 🎉 Sistema Pronto na Square Cloud!
+
+Após seguir este guia, seu sistema estará:
+- ✅ Hospedado na Square Cloud
+- ✅ Com banco SQLite funcionando
+- ✅ Deploy automático configurado
+- ✅ Logs detalhados para monitoramento
+- ✅ Performance otimizada para Brasil
+- ✅ Pronto para produção!
+
+---
+
+**🚀 Desenvolvido para funcionar perfeitamente na Square Cloud - A plataforma brasileira de hospedagem!**

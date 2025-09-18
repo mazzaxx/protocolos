@@ -16,19 +16,9 @@ function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
   const [lastCheck, setLastCheck] = React.useState<Date>(new Date());
-  const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date, syncCount: number} | null>(null);
-  const [syncCount, setSyncCount] = React.useState(0);
-  const [isMinimized, setIsMinimized] = React.useState(true);
-  const [debugInfo, setDebugInfo] = React.useState<{backendUrl: string, frontendUrl: string} | null>(null);
-  const [connectionError, setConnectionError] = React.useState<string | null>(null);
+  const [performanceInfo, setPerformanceInfo] = React.useState<{responseTime: number, lastSync: Date} | null>(null);
 
   React.useEffect(() => {
-    // Capturar informações de debug
-    setDebugInfo({
-      backendUrl: import.meta.env.VITE_API_BASE_URL || 'NÃO CONFIGURADO',
-      frontendUrl: window.location.origin
-    });
-    
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -39,171 +29,85 @@ function ConnectivityStatus() {
     const checkBackend = async () => {
       setLastCheck(new Date());
       const startTime = Date.now();
-      setConnectionError(null);
       
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+        const healthUrl = `${apiBaseUrl}/health`;
         
-        if (!apiBaseUrl) {
-          console.error('❌ VITE_API_BASE_URL não configurada');
-          setConnectionError('Backend não configurado');
-          setBackendStatus('offline');
-          return;
-        }
-        
-        const testUrl = `${apiBaseUrl}/api/test-connection`;
-        console.log('🧪 Testando conectividade:', testUrl);
-        
-        // Configuração otimizada para Railway + Netlify
-        const testOptions = {
+        const response = await fetch(healthUrl, { 
           method: 'GET',
-          credentials: 'omit', // Mudança crítica para Railway
+          credentials: 'include',
           cache: 'no-cache',
-          mode: 'cors',
-          headers: {
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        };
-        
-        const response = await fetch(testUrl, testOptions);
+          mode: 'cors'
+        });
         
         const responseTime = Date.now() - startTime;
-        console.log(`🧪 Teste de conectividade: ${response.status} em ${responseTime}ms`);
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Conectividade OK:', data);
           setBackendStatus('online');
-          setSyncCount(prev => prev + 1);
           setPerformanceInfo({
             responseTime,
-            lastSync: new Date(),
-            syncCount: syncCount + 1
+            lastSync: new Date()
           });
-          setConnectionError(null);
         } else {
-          console.error('❌ Teste de conectividade falhou:', response.status, response.statusText);
-          setConnectionError(`HTTP ${response.status}: ${response.statusText}`);
           setBackendStatus('offline');
           setPerformanceInfo(null);
         }
       } catch (error) {
-        console.error('❌ Erro no teste de conectividade:', error);
-        setConnectionError(error.message || 'Erro de conexão');
         setBackendStatus('offline');
         setPerformanceInfo(null);
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos
-    
-    // Listener para atualizações de protocolos
-    const handleProtocolUpdate = () => {
-      setSyncCount(prev => prev + 1);
-      setPerformanceInfo(prev => prev ? {
-        ...prev,
-        lastSync: new Date(),
-        syncCount: prev.syncCount + 1
-      } : null);
-    };
-    
-    window.addEventListener('protocolsUpdated', handleProtocolUpdate);
-    window.addEventListener('protocolCreated', handleProtocolUpdate);
-    window.addEventListener('protocolUpdated', handleProtocolUpdate);
+    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
-      window.removeEventListener('protocolsUpdated', handleProtocolUpdate);
-      window.removeEventListener('protocolCreated', handleProtocolUpdate);
-      window.removeEventListener('protocolUpdated', handleProtocolUpdate);
     };
   }, []);
 
-  // Só mostrar se houver problemas de conectividade
   if (!isOnline || backendStatus === 'offline') {
     return (
-      <div className="bg-red-500 text-white px-2 py-1 text-xs text-center">
+      <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
           <span>
             {!isOnline 
-              ? '🔴 SEM INTERNET' 
-              : `🔴 SERVIDOR OFFLINE`
+              ? '🔴 SEM INTERNET - Dados não sincronizados' 
+              : `🔴 SERVIDOR OFFLINE - Sincronização interrompida`
             }
           </span>
-          <span className="text-xs opacity-75 hidden sm:inline">
+          <span className="text-xs opacity-75">
             (última verificação: {lastCheck.toLocaleTimeString()})
           </span>
         </div>
-        {connectionError && (
-          <div className="text-xs opacity-90 mt-1">
-            Erro: {connectionError}
-          </div>
-        )}
-        {debugInfo && (
-          <div className="text-xs opacity-75 mt-1">
-            <div>Frontend: {debugInfo.frontendUrl}</div>
-            <div>Backend: {debugInfo.backendUrl}</div>
-          </div>
-        )}
       </div>
     );
   }
 
   if (backendStatus === 'checking') {
     return (
-      <div className="bg-yellow-500 text-white px-2 py-1 text-xs text-center">
+      <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
-          <div className="animate-spin rounded-full h-2 w-2 border-b-2 border-white"></div>
-          <span>🟡 Conectando...</span>
+          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+          <span>🟡 Conectando ao servidor...</span>
         </div>
-        {debugInfo && (
-          <div className="text-xs opacity-75 mt-1">
-            Testando: {debugInfo.backendUrl}
-          </div>
-        )}
       </div>
     );
   }
 
-  // Status online - mostrar apenas se o usuário clicar para expandir
+  // Mostrar status online com informações de performance
   return (
-    <div className="fixed bottom-4 right-4 z-40">
-      <div className={`transition-all duration-300 ${isMinimized ? 'w-3 h-3' : 'w-auto h-auto'}`}>
-        {isMinimized ? (
-          <button
-            onClick={() => setIsMinimized(false)}
-            className="w-3 h-3 bg-green-500 rounded-full animate-pulse hover:bg-green-600 transition-colors"
-            title="Sistema online - Clique para ver detalhes"
-          />
-        ) : (
-          <div className="bg-green-500 text-white px-3 py-2 rounded-lg shadow-lg text-xs">
-            <div className="flex items-center justify-between space-x-2 mb-1">
-              <span className="font-medium">🟢 Sistema Online</span>
-              <button
-                onClick={() => setIsMinimized(true)}
-                className="text-white hover:text-gray-200 text-xs"
-              >
-                ×
-              </button>
-            </div>
-            {performanceInfo && (
-              <div className="text-xs opacity-90">
-                <div>Latência: {performanceInfo.responseTime}ms</div>
-                <div>Última sync: {performanceInfo.lastSync.toLocaleTimeString()}</div>
-                <div>Syncs: {performanceInfo.syncCount}</div>
-              </div>
-            )}
-            {debugInfo && (
-              <div className="text-xs opacity-75 mt-1 border-t border-green-400 pt-1">
-                <div>Backend: Online</div>
-                <div>Sincronização: Ativa</div>
-              </div>
-            )}
-          </div>
+    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
+      <div className="flex items-center justify-center space-x-4">
+        <span>🟢 SERVIDOR ONLINE - Sincronização ativa</span>
+        {performanceInfo && (
+          <span className="opacity-75">
+            Latência: {performanceInfo.responseTime}ms | Última sync: {performanceInfo.lastSync.toLocaleTimeString()}
+          </span>
         )}
       </div>
     </div>
