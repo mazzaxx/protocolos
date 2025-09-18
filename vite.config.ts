@@ -14,6 +14,10 @@ import react from '@vitejs/plugin-react';
  */
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // SQUARE CLOUD: Garantir que variáveis de ambiente sejam definidas
+    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(process.env.VITE_API_BASE_URL || ''),
+  },
   server: {
     host: true, // SQUARE CLOUD: Permite acesso de qualquer IP
     port: 5173,
