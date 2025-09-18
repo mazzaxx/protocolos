@@ -7,11 +7,11 @@
     "dev": "vite",
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
-    "start": "npm run build && node server/server.js",
+    "start": "node build.js && node server/server.js",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "postinstall": "npm run build"
+    "postinstall": "node build.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

@@ -17,12 +17,12 @@ try {
   // Verificar se node_modules existe
   if (!fs.existsSync('node_modules')) {
     console.log('📦 [SQUARE CLOUD] Instalando dependências...');
-    execSync('npm install', { stdio: 'inherit' });
+    execSync('npm install --production=false', { stdio: 'inherit' });
   }
 
   // Executar build do Vite
   console.log('🔨 [SQUARE CLOUD] Executando build do Vite...');
-  execSync('npm run build', { stdio: 'inherit' });
+  execSync('npx vite build', { stdio: 'inherit' });
 
   // Verificar se a pasta dist foi criada
   const distPath = path.join(__dirname, 'dist');

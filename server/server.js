@@ -94,18 +94,15 @@ app.use(cors(corsOptions));
 const distPath = path.join(__dirname, '..', 'dist');
 console.log('📁 Caminho dos arquivos estáticos:', distPath);
 
-try {
-  const fs = await import('fs');
-  if (!fs.existsSync(distPath)) {
-    console.error('❌ ERRO: Pasta dist não encontrada!');
-    console.error('💡 Execute: npm run build');
-  } else {
-    console.log('✅ Pasta dist encontrada');
-    const files = fs.readdirSync(distPath);
-    console.log('📋 Arquivos na pasta dist:', files);
-  }
-} catch (error) {
-  console.error('❌ Erro ao verificar pasta dist:', error);
+// Verificar se pasta dist existe (sem usar await import)
+import fs from 'fs';
+if (!fs.existsSync(distPath)) {
+  console.error('❌ ERRO: Pasta dist não encontrada!');
+  console.error('💡 Execute: npm run build');
+} else {
+  console.log('✅ Pasta dist encontrada');
+  const files = fs.readdirSync(distPath);
+  console.log('📋 Arquivos na pasta dist:', files);
 }
 
 app.use(express.static(distPath));
@@ -193,21 +190,15 @@ app.get('*', (req, res) => {
   console.log(`🌐 Servindo frontend para: ${req.path}`);
   
   const indexPath = path.join(distPath, 'index.html');
-  try {
-    const fs = await import('fs');
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      console.error('❌ index.html não encontrado em:', indexPath);
-      res.status(500).json({
-        success: false,
-        message: 'Frontend não encontrado - Execute npm run build',
-        path: indexPath,
-      });
-    }
-  } catch (error) {
-    console.error('❌ Erro ao verificar index.html:', error);
+  if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
+  } else {
+    console.error('❌ index.html não encontrado em:', indexPath);
+    res.status(500).json({
+      success: false,
+      message: 'Frontend não encontrado - Execute npm run build',
+      path: indexPath,
+    });
   }
 });
 
