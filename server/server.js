@@ -94,12 +94,93 @@ app.use(cors(corsOptions));
 const distPath = path.join(__dirname, '..', 'dist');
 console.log('📁 Caminho dos arquivos estáticos:', distPath);
 
-// Verificar se pasta dist existe (sem usar await import)
+// SQUARE CLOUD: Verificar se pasta dist existe e criar se necessário
 import fs from 'fs';
 if (!fs.existsSync(distPath)) {
   console.warn('⚠️ AVISO: Pasta dist não encontrada!');
   console.warn('💡 Isso é normal durante o primeiro deploy na Square Cloud');
   console.warn('🔄 O build será executado automaticamente...');
+  
+  // SQUARE CLOUD: Criar estrutura básica se não existir
+  try {
+    fs.mkdirSync(distPath, { recursive: true });
+    fs.writeFileSync(path.join(distPath, 'index.html'), `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Protocolos - Build em Andamento</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+    }
+    .content {
+      text-align: center;
+      background: rgba(255,255,255,0.1);
+      padding: 2rem;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+    }
+    .spinner {
+      border: 4px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top: 4px solid white;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="content">
+      <div class="spinner"></div>
+      <h1>⚖️ Neycampos Advocacia</h1>
+      <h2>🔄 Sistema Inicializando...</h2>
+      <p>O frontend está sendo preparado pela Square Cloud.</p>
+      <p>Aguarde alguns instantes e recarregue a página.</p>
+      <p><small>🌐 Square Cloud - Build em andamento</small></p>
+      <br>
+      <button onclick="location.reload()" style="
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+      ">🔄 Recarregar Página</button>
+    </div>
+  </div>
+  <script>
+    // Auto-reload a cada 10 segundos durante o build
+    setTimeout(() => {
+      location.reload();
+    }, 10000);
+  </script>
+</body>
+</html>
+    `);
+    console.log('✅ Página de build criada temporariamente');
+  } catch (error) {
+    console.error('❌ Erro ao criar página de build:', error);
+  }
 } else {
   console.log('✅ Pasta dist encontrada');
   const files = fs.readdirSync(distPath);
@@ -188,21 +269,78 @@ app.get('*', (req, res) => {
     });
   }
   
-  console.log(`🌐 Servindo frontend para: ${req.path}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🌐 Servindo frontend para: ${req.path}`);
+  }
   
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
-    console.warn('⚠️ index.html não encontrado em:', indexPath);
-    console.warn('🔄 Aguardando build do frontend...');
-    res.status(503).json({
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('⚠️ index.html não encontrado em:', indexPath);
+      console.warn('🔄 Aguardando build do frontend...');
+    }
+    
+    // SQUARE CLOUD: Servir página de build em andamento
+    const buildPagePath = path.join(distPath, 'build-in-progress.html');
+    if (fs.existsSync(buildPagePath)) {
+      res.sendFile(buildPagePath);
+    } else {
+      res.status(503).send(`
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Protocolos - Build em Andamento</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0; padding: 0; color: white;
+    }
+    .container { display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .content { text-align: center; background: rgba(255,255,255,0.1); padding: 2rem; border-radius: 10px; backdrop-filter: blur(10px); }
+    .spinner { border: 4px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 4px solid white; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="content">
+      <div class="spinner"></div>
+      <h1>⚖️ Neycampos Advocacia</h1>
+      <h2>🔄 Build em Andamento...</h2>
+      <p>O sistema está sendo preparado pela Square Cloud.</p>
+      <p>Aguarde alguns instantes e recarregue a página.</p>
+      <button onclick="location.reload()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🔄 Recarregar</button>
+    </div>
+  </div>
+  <script>setTimeout(() => location.reload(), 15000);</script>
+</body>
+</html>
+      `);
+    }
+  }
+});
+
+app.use((err, req, res, next) => {
+  console.error('❌ Erro no servidor:', err);
+  
+  if (err.message === 'Não permitido pelo CORS') {
+    return res.status(403).json({
       success: false,
-      message: 'Frontend sendo preparado - Aguarde alguns instantes e recarregue a página',
-      path: indexPath,
-      status: 'building'
+      message: 'Acesso negado por política CORS',
+      origin: req.headers.origin
     });
   }
+  
+  res.status(500).json({
+    success: false,
+    message: 'Erro interno do servidor',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Erro interno'
+  });
 });
 
 app.use((err, req, res, next) => {

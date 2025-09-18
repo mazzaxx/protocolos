@@ -9,9 +9,12 @@
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "start": "node server/server.js",
     "build": "vite build",
+    "build:squarecloud": "echo 'Building for Square Cloud...' && vite build && echo 'Build completed successfully!'",
     "preview": "vite preview",
     "lint": "eslint .",
-    "postinstall": "npm run build"
+    "postinstall": "echo 'Dependencies installed successfully'",
+    "prebuild": "echo 'Starting build process...'",
+    "postbuild": "echo 'Build process completed!'"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
