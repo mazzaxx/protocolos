@@ -15,9 +15,9 @@ Este sistema está otimizado para funcionar na **Square Cloud**, a plataforma br
 - 📊 **Monitoramento**: Logs e métricas em tempo real
 
 ### 🌐 URLs do Sistema
-- **Produção**: https://sistema-protocolos.squareweb.app
+- **Produção**: https://protocolos.squareweb.app
 - **Desenvolvimento**: http://localhost:5173
-- **API**: https://sistema-protocolos.squareweb.app/api
+- **API**: https://protocolos.squareweb.app/api
 
 ## 🚀 Deploy na Square Cloud
 
@@ -42,11 +42,11 @@ Este sistema está otimizado para funcionar na **Square Cloud**, a plataforma br
 No painel da Square Cloud, adicione se necessário:
 ```
 NODE_ENV=production
-VITE_API_BASE_URL=https://seu-app.squareweb.app
+VITE_API_BASE_URL=https://protocolos.squareweb.app
 ```
 
 ### ✅ Pronto!
-Seu sistema estará disponível em: `https://seu-app.squareweb.app`
+Seu sistema estará disponível em: `https://protocolos.squareweb.app`
 
 ## 🔄 Atualizações Automáticas
 
@@ -70,7 +70,7 @@ npm run dev:full
 
 #### Frontend + Square Cloud Backend
 ```bash
-npm run dev:cloud
+npm run dev:cloud  # Usa https://protocolos.squareweb.app como backend
 ```
 
 #### Apenas Backend Local
@@ -117,14 +117,14 @@ PRAGMA busy_timeout = 30000;
 - Polling adaptativo baseado na atividade do usuário
 
 ### Se os dados não estão sincronizando:
-1. Verifique se o servidor Square Cloud está online
-2. Teste a URL: https://sistema-protocolos.squareweb.app
+1. Verifique se o servidor Square Cloud está online  
+2. Teste a URL: https://protocolos.squareweb.app
 3. Verifique o console do navegador (F12) para erros
 4. Verifique logs no painel da Square Cloud
 
 ## 🔐 Acesso ao Sistema
 
-- **URL de produção:** https://sistema-protocolos.squareweb.app
+- **URL de produção:** https://protocolos.squareweb.app
 - **URL de desenvolvimento:** http://localhost:5173
 - **Email de teste:** admin@escritorio.com  
 - **Senha de teste:** 123456

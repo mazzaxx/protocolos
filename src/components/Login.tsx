@@ -140,7 +140,7 @@ export function Login({ onLogin }: LoginProps) {
             Sistema Jurídico - Square Cloud
           </h1>
           <p className="text-gray-600">
-            Faça login para acessar o painel hospedado na Square Cloud
+            Sistema de Protocolos Jurídicos hospedado na Square Cloud
           </p>
         </div>
 
@@ -244,8 +244,8 @@ export function Login({ onLogin }: LoginProps) {
               <p><strong>Advogado:</strong> advogado@escritorio.com / 123456</p>
             </div>
             <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
-              <strong>Square Cloud:</strong> Sistema hospedado na plataforma brasileira Square Cloud. 
-              Para desenvolvimento local, use <code>npm run dev:full</code>
+              <strong>Square Cloud:</strong> Sistema hospedado na plataforma brasileira. 
+              URL: https://protocolos.squareweb.app
             </div>
           </div>
         </div>

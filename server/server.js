@@ -20,18 +20,18 @@ import { maintenanceDb } from './db.js';
  * - CORS configurado para Square Cloud
  * 
  * HOSPEDAGEM SQUARE CLOUD:
- * - Porta automática (process.env.PORT)
+ * - Porta 80 obrigatória para Square Cloud
  * - Domínio: https://seu-app.squareweb.app
  * - Suporte completo ao Node.js e SQLite
  * - Deploy automático via Git
  */
 
 const app = express();
-// SQUARE CLOUD: A porta é definida automaticamente pela plataforma
-const PORT = process.env.PORT || 3000;
+// SQUARE CLOUD: Porta 80 é obrigatória para a plataforma
+const PORT = 80;
 
 console.log('🚀 Iniciando servidor...');
-console.log('🌐 Porta:', PORT, '(Square Cloud define automaticamente)');
+console.log('🌐 Porta:', PORT, '(Square Cloud exige porta 80)');
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
 console.log('🗄️ Banco: SQLite Otimizado para Square Cloud');
 console.log('☁️ Plataforma: Square Cloud (Brasil)');
@@ -54,15 +54,10 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   
   // SQUARE CLOUD: Domínio principal da aplicação
-  'https://sistema-protocolos.squareweb.app',
+  'https://protocolos.squareweb.app',
   
   // SQUARE CLOUD: Permitir qualquer subdomínio .squareweb.app
   /^https:\/\/.*\.squareweb\.app$/,
-  
-  // Manter compatibilidade com outras plataformas (opcional)
-  'https://ncasistemaprotocolos.netlify.app',
-  /^https:\/\/.*\.netlify\.app$/,
-  /^https:\/\/.*\.up\.railway\.app$/
 ];
 
 /**
@@ -310,13 +305,13 @@ async function startServer() {
     }, 6 * 60 * 60 * 1000); // SQUARE CLOUD: 6 horas em millisegundos
     
     // SQUARE CLOUD: Iniciar servidor na porta definida pela plataforma
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log('🎉 SERVIDOR INICIADO COM SUCESSO NA SQUARE CLOUD!');
       console.log('=' .repeat(50));
       console.log(`☁️ Plataforma: Square Cloud (Brasil)`);
-      console.log(`🌐 Porta: ${PORT} (definida automaticamente)`);
+      console.log(`🌐 Porta: ${PORT} (obrigatória para Square Cloud)`);
       console.log(`🔗 URL local: http://localhost:${PORT}`);
-      console.log(`🌍 URL Square Cloud: https://sistema-protocolos.squareweb.app`);
+      console.log(`🌍 URL Square Cloud: https://protocolos.squareweb.app`);
       console.log(`🗄️ Banco: SQLite Otimizado para Square Cloud`);
       console.log(`⚡ Performance: WAL mode, 15 conexões simultâneas`);
       console.log(`👥 Capacidade: 100+ usuários simultâneos`);
@@ -339,6 +334,11 @@ async function startServer() {
         .then(() => console.log('✅ [SQUARE CLOUD] Conectividade inicial: SUCESSO'))
         .catch(err => console.error('❌ [SQUARE CLOUD] Conectividade inicial: FALHA', err.message));
     });
+    
+    // SQUARE CLOUD: Configurar timeout do servidor para evitar problemas
+    server.timeout = 30000; // 30 segundos
+    server.keepAliveTimeout = 65000; // 65 segundos
+    server.headersTimeout = 66000; // 66 segundos
   } catch (error) {
     console.error('❌ [SQUARE CLOUD] ERRO CRÍTICO ao iniciar servidor:', error);
     console.error('💡 [SQUARE CLOUD] Verifique configurações do banco SQLite');

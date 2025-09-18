@@ -8,7 +8,7 @@
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "dev:local": "cross-env VITE_API_BASE_URL= concurrently \"npm run server\" \"npm run dev\"",
-    "dev:cloud": "cross-env VITE_API_BASE_URL=https://sistema-protocolos-juridicos-production.up.railway.app npm run dev",
+    "dev:cloud": "cross-env VITE_API_BASE_URL=https://protocolos.squareweb.app npm run dev",
     "start": "node server/server.js",
     "squarecloud": "npm run build && node server/server.js",
     "start:production": "node server/server.js",
