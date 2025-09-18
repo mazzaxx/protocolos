@@ -8,11 +8,12 @@
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "start": "node server/server.js",
-    "build:start": "node build-and-start.js",
     "build": "vite build",
+    "build:start": "node build-and-start.js",
     "preview": "vite preview",
     "lint": "eslint .",
-    "postinstall": "echo 'Dependencies installed successfully'"
+    "postinstall": "echo 'Dependencies installed successfully'",
+    "squarecloud": "npm run build && npm run start"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
