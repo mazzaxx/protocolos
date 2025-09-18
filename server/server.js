@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
@@ -25,7 +24,7 @@ import { maintenanceDb } from './db.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
 
 console.log('🚀 Iniciando servidor...');

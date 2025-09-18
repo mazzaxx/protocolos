@@ -1,9 +1,8 @@
 {
-  "name": "sistema-protocolos-juridicos",
+  "name": "vite-react-typescript-starter",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
-  "main": "server/server.js",
   "scripts": {
     "dev": "vite",
     "server": "cross-env PORT=3002 node server/server.js",
@@ -13,8 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "postinstall": "echo 'Dependencies installed successfully'",
-    "squarecloud": "npm run build && npm start"
+    "postinstall": "echo 'Dependencies installed successfully'"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -45,8 +43,5 @@
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
     "vite": "^5.4.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
