@@ -11,11 +11,7 @@ import { ManualQueue } from './components/ManualQueue';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ReturnedQueue } from './components/ReturnedQueue';
 
-/**
- * COMPONENTE DE STATUS DE CONECTIVIDADE - SQUARE CLOUD
- * 
- * Mostra status da conexão com o backend na Square Cloud
- */
+// Componente para mostrar status de conectividade
 function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
@@ -29,14 +25,14 @@ function ConnectivityStatus() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Verificar status do backend Square Cloud
+    // Verificar status do backend
     const checkBackend = async () => {
       setLastCheck(new Date());
       const startTime = Date.now();
       
       try {
-        // Para Square Cloud, usar URL relativa (mesmo domínio)
-        const healthUrl = '/health';
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+        const healthUrl = `${apiBaseUrl}/health`;
         
         const response = await fetch(healthUrl, { 
           method: 'GET',
@@ -54,20 +50,18 @@ function ConnectivityStatus() {
             responseTime,
             lastSync: new Date()
           });
-          console.log('✅ [SQUARE CLOUD] Backend online:', data.platform);
         } else {
           setBackendStatus('offline');
           setPerformanceInfo(null);
         }
       } catch (error) {
-        console.error('❌ [SQUARE CLOUD] Backend offline:', error);
         setBackendStatus('offline');
         setPerformanceInfo(null);
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos
+    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -83,7 +77,7 @@ function ConnectivityStatus() {
           <span>
             {!isOnline 
               ? '🔴 SEM INTERNET - Dados não sincronizados' 
-              : `🔴 SERVIDOR SQUARE CLOUD OFFLINE`
+              : `🔴 SERVIDOR OFFLINE - Sincronização interrompida`
             }
           </span>
           <span className="text-xs opacity-75">
@@ -99,17 +93,17 @@ function ConnectivityStatus() {
       <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-          <span>🟡 Conectando ao Square Cloud...</span>
+          <span>🟡 Conectando ao servidor...</span>
         </div>
       </div>
     );
   }
 
-  // Status online
+  // Mostrar status online com informações de performance
   return (
     <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
       <div className="flex items-center justify-center space-x-4">
-        <span>🟢 SQUARE CLOUD ONLINE - Sistema funcionando</span>
+        <span>🟢 SERVIDOR ONLINE - Sincronização ativa</span>
         {performanceInfo && (
           <span className="opacity-75">
             Latência: {performanceInfo.responseTime}ms | Última sync: {performanceInfo.lastSync.toLocaleTimeString()}
@@ -120,9 +114,6 @@ function ConnectivityStatus() {
   );
 }
 
-/**
- * COMPONENTE PRINCIPAL DO DASHBOARD
- */
 function Dashboard() {
   const { hasPermission, canAccessQueues, canAccessSpecificQueue, canMoveToQueue, user } = useAuth();
   type Tab = 'send' | 'robot' | 'carlos' | 'deyse' | 'tracking' | 'returned' | 'admin';
@@ -143,7 +134,7 @@ function Dashboard() {
   const tabs = allTabs.filter(tab => {
     if (tab.id === 'send') return hasPermission('canSendProtocols');
     if (tab.id === 'tracking') return hasPermission('canViewTracking');
-    if (tab.id === 'returned') return hasPermission('canSendProtocols');
+    if (tab.id === 'returned') return hasPermission('canSendProtocols'); // Todos que podem enviar podem ver devolvidos
     if (tab.id === 'robot') return canAccessSpecificQueue('robot');
     if (tab.id === 'carlos') return canAccessSpecificQueue('carlos');
     if (tab.id === 'deyse') return canAccessSpecificQueue('deyse');
@@ -218,7 +209,7 @@ function Dashboard() {
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-sm text-gray-500">
-            Sistema de Protocolos Jurídicos - Hospedado na Square Cloud 🇧🇷
+            Sistema de Protocolos Jurídicos - Desenvolvido para automação de peticionamento
           </div>
         </div>
       </footer>
@@ -227,14 +218,7 @@ function Dashboard() {
   );
 }
 
-/**
- * COMPONENTE PRINCIPAL DA APLICAÇÃO
- */
 function App() {
-  React.useEffect(() => {
-    console.log('🎉 [SQUARE CLOUD] Sistema Jurídico carregado com sucesso!');
-  }, []);
-
   return (
     <AuthProvider>
       <ProtectedRoute>
