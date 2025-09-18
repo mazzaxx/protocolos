@@ -7,9 +7,8 @@
     "dev": "vite",
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
-    "start": "npm run build && node server/server.js",
+    "start": "node build-and-start.js",
     "build": "vite build",
-    "build:squarecloud": "node build.js",
     "preview": "vite preview",
     "lint": "eslint .",
     "postinstall": "echo 'Dependencies installed successfully'"
