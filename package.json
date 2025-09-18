@@ -14,10 +14,11 @@
     "start:production": "npm run build && node server/server.js",
     "start:server": "cross-env PORT=3002 node server/server.js",
     "build": "vite build",
+    "build:square": "cross-env VITE_API_BASE_URL= vite build",
     "preview": "vite preview",
     "preview:production": "npm run build && npm run start",
     "lint": "eslint .",
-    "postinstall": "npm run build",
+    "postinstall": "npm run build:square",
     "test:server": "curl http://localhost:3002 || echo 'Servidor não está rodando'",
     "debug": "concurrently \"npm run server\" \"npm run dev\" --kill-others-on-fail",
     "test:connectivity": "node server/test-connectivity.js"

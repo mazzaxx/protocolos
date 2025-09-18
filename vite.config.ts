@@ -14,6 +14,8 @@ import react from '@vitejs/plugin-react';
  */
 export default defineConfig({
   plugins: [react()],
+  // SQUARE CLOUD: Configurações de build otimizadas
+  base: '/', // Base path para Square Cloud
   server: {
     host: true, // SQUARE CLOUD: Permite acesso de qualquer IP
     port: 5173,
@@ -46,12 +48,21 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist', // SQUARE CLOUD: Diretório de build
+    emptyOutDir: true, // SQUARE CLOUD: Limpar pasta dist antes do build
+    assetsDir: 'assets', // SQUARE CLOUD: Pasta para assets
     rollupOptions: {
-      external: ['sqlite3'] // SQUARE CLOUD: Excluir SQLite do bundle frontend
+      external: ['sqlite3'], // SQUARE CLOUD: Excluir SQLite do bundle frontend
+      output: {
+        // SQUARE CLOUD: Otimizações de bundle
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom']
+        }
+      }
     },
     // SQUARE CLOUD: Otimizações para produção
     minify: 'terser',
-    sourcemap: false,
+    sourcemap: false, // SQUARE CLOUD: Sem sourcemaps em produção
     chunkSizeWarningLimit: 1000
   },
   optimizeDeps: {
@@ -61,5 +72,10 @@ export default defineConfig({
   preview: {
     port: 4173,
     host: true
+  },
+  // SQUARE CLOUD: Definir variáveis de ambiente para build
+  define: {
+    __SQUARE_CLOUD__: JSON.stringify(true),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString())
   }
 });
