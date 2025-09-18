@@ -137,6 +137,23 @@ app.use(cors(corsOptions));
  * Essencial para que a Square Cloud sirva tanto API quanto frontend.
  */
 const distPath = path.join(__dirname, '..', 'dist');
+console.log('📁 [SQUARE CLOUD] Caminho dos arquivos estáticos:', distPath);
+
+// SQUARE CLOUD: Verificar se a pasta dist existe
+try {
+  const fs = await import('fs');
+  if (!fs.existsSync(distPath)) {
+    console.error('❌ [SQUARE CLOUD] ERRO CRÍTICO: Pasta dist não encontrada!');
+    console.error('💡 [SQUARE CLOUD] Execute: npm run build');
+  } else {
+    console.log('✅ [SQUARE CLOUD] Pasta dist encontrada');
+    const files = fs.readdirSync(distPath);
+    console.log('📋 [SQUARE CLOUD] Arquivos na pasta dist:', files);
+  }
+} catch (error) {
+  console.error('❌ [SQUARE CLOUD] Erro ao verificar pasta dist:', error);
+}
+
 app.use(express.static(distPath));
 
 /**
@@ -184,7 +201,7 @@ app.use((req, res, next) => {
  * IMPORTANTE: Esta rota foi movida para /api/health para não conflitar
  * com o frontend React. A rota raiz (/) agora serve o frontend.
  */
-app.get('/api/health-check', (req, res) => {
+app.get('/health', (req, res) => {
   console.log('🏥 [SQUARE CLOUD] Health check solicitado');
   res.json({ 
     message: 'Sistema Jurídico funcionando na Square Cloud!',
@@ -227,7 +244,7 @@ app.use('/api/admin', adminRoutes);
  * 
  * SQUARE CLOUD: Útil para debugging e monitoramento
  */
-app.get('/health', async (req, res) => {
+app.get('/api/health', async (req, res) => {
   if (process.env.NODE_ENV !== 'production') {
     console.log('🏥 [SQUARE CLOUD] Health check detalhado solicitado');
   }
@@ -268,8 +285,8 @@ app.get('/health', async (req, res) => {
  * Essencial para que o React Router funcione na Square Cloud.
  */
 app.get('*', (req, res) => {
-  // SQUARE CLOUD: Não servir index.html para rotas da API ou health checks
-  if (req.path.startsWith('/api/') || req.path.startsWith('/health') || req.path === '/api/health-check') {
+  // SQUARE CLOUD: Não servir index.html para rotas da API
+  if (req.path.startsWith('/api/') || req.path === '/health') {
     return res.status(404).json({
       success: false,
       message: 'Rota da API não encontrada',
@@ -284,16 +301,22 @@ app.get('*', (req, res) => {
   
   // Verificar se o arquivo index.html existe
   const indexPath = path.join(distPath, 'index.html');
-  if (require('fs').existsSync(indexPath)) {
+  try {
+    const fs = await import('fs');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      console.error('❌ [SQUARE CLOUD] index.html não encontrado em:', indexPath);
+      res.status(500).json({
+        success: false,
+        message: 'Frontend não encontrado - Execute npm run build',
+        path: indexPath,
+        platform: 'Square Cloud'
+      });
+    }
+  } catch (error) {
+    console.error('❌ [SQUARE CLOUD] Erro ao verificar index.html:', error);
     res.sendFile(indexPath);
-  } else {
-    console.error('❌ [SQUARE CLOUD] index.html não encontrado em:', indexPath);
-    res.status(500).json({
-      success: false,
-      message: 'Frontend não encontrado - Execute npm run build',
-      path: indexPath,
-      platform: 'Square Cloud'
-    });
   }
 });
 

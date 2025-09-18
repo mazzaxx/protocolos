@@ -9,7 +9,7 @@
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "dev:local": "cross-env VITE_API_BASE_URL= concurrently \"npm run server\" \"npm run dev\"",
     "dev:cloud": "cross-env VITE_API_BASE_URL=https://protocolos.squareweb.app npm run dev",
-    "start": "node server/server.js",
+    "start": "npm run build && node server/server.js",
     "squarecloud": "npm run build && npm run start",
     "start:production": "npm run build && node server/server.js",
     "start:server": "cross-env PORT=3002 node server/server.js",
@@ -17,7 +17,7 @@
     "preview": "vite preview",
     "preview:production": "npm run build && npm run start",
     "lint": "eslint .",
-    "postinstall": "echo 'Square Cloud deploy complete'",
+    "postinstall": "npm run build",
     "test:server": "curl http://localhost:3002 || echo 'Servidor não está rodando'",
     "debug": "concurrently \"npm run server\" \"npm run dev\" --kill-others-on-fail",
     "test:connectivity": "node server/test-connectivity.js"
