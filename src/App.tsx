@@ -11,7 +11,6 @@ import { ManualQueue } from './components/ManualQueue';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ReturnedQueue } from './components/ReturnedQueue';
 
-// Componente para mostrar status de conectividade
 function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
@@ -25,7 +24,6 @@ function ConnectivityStatus() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Verificar status do backend
     const checkBackend = async () => {
       setLastCheck(new Date());
       const startTime = Date.now();
@@ -61,7 +59,7 @@ function ConnectivityStatus() {
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
+    const interval = setInterval(checkBackend, 10000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -76,8 +74,8 @@ function ConnectivityStatus() {
         <div className="flex items-center justify-center space-x-2">
           <span>
             {!isOnline 
-              ? '🔴 SEM INTERNET - Dados não sincronizados' 
-              : `🔴 SERVIDOR OFFLINE - Sincronização interrompida`
+              ? '🔴 Sem conexão com a internet' 
+              : `🔴 Servidor offline - Sincronização interrompida`
             }
           </span>
           <span className="text-xs opacity-75">
@@ -93,17 +91,16 @@ function ConnectivityStatus() {
       <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-          <span>🟡 Conectando ao servidor...</span>
+          <span>🟡 Verificando conexão...</span>
         </div>
       </div>
     );
   }
 
-  // Mostrar status online com informações de performance
   return (
     <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
       <div className="flex items-center justify-center space-x-4">
-        <span>🟢 SERVIDOR ONLINE - Sincronização ativa</span>
+        <span>🟢 Sistema online - Sincronização ativa</span>
         {performanceInfo && (
           <span className="opacity-75">
             Latência: {performanceInfo.responseTime}ms | Última sync: {performanceInfo.lastSync.toLocaleTimeString()}
@@ -209,7 +206,7 @@ function Dashboard() {
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-sm text-gray-500">
-            Sistema de Protocolos Jurídicos - Desenvolvido para automação de peticionamento
+            Escritório de Advocacia Neycampos - Sistema de Gestão de Protocolos
           </div>
         </div>
       </footer>

@@ -18,7 +18,7 @@ export function Header() {
           <div className="flex items-center">
             <Scale className="h-8 w-8 text-blue-600" />
             <h1 className="ml-3 text-2xl font-bold text-gray-900">
-              Painel de Protocolos Jurídicos
+              Neycampos Advocacia - Protocolos
             </h1>
           </div>
           
