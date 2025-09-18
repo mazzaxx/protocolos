@@ -20,7 +20,7 @@ export default defineConfig({
     proxy: {
       // SQUARE CLOUD: Proxy para desenvolvimento local
       '/api': {
-        target: 'http://localhost:80',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -38,7 +38,7 @@ export default defineConfig({
       },
       // SQUARE CLOUD: Proxy para health check
       '/health': {
-        target: 'http://localhost:80',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
       },

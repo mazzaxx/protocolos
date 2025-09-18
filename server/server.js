@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
@@ -20,18 +21,22 @@ import { maintenanceDb } from './db.js';
  * - CORS configurado para Square Cloud
  * 
  * HOSPEDAGEM SQUARE CLOUD:
- * - Porta 80 obrigatória para Square Cloud
+ * - Porta automática (process.env.PORT)
  * - Domínio: https://seu-app.squareweb.app
  * - Suporte completo ao Node.js e SQLite
  * - Deploy automático via Git
  */
 
 const app = express();
-// SQUARE CLOUD: Porta 80 é obrigatória para a plataforma
-const PORT = 80;
+// SQUARE CLOUD: A porta é definida automaticamente pela plataforma
+const PORT = process.env.PORT || 3000;
+
+// SQUARE CLOUD: Obter __dirname em ES modules
+const __filename = new URL(import.meta.url).pathname;
+const __dirname = path.dirname(__filename);
 
 console.log('🚀 Iniciando servidor...');
-console.log('🌐 Porta:', PORT, '(Square Cloud exige porta 80)');
+console.log('🌐 Porta:', PORT, '(Square Cloud define automaticamente)');
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
 console.log('🗄️ Banco: SQLite Otimizado para Square Cloud');
 console.log('☁️ Plataforma: Square Cloud (Brasil)');
@@ -54,10 +59,15 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   
   // SQUARE CLOUD: Domínio principal da aplicação
-  'https://protocolos.squareweb.app',
+  'https://sistema-protocolos.squareweb.app',
   
   // SQUARE CLOUD: Permitir qualquer subdomínio .squareweb.app
   /^https:\/\/.*\.squareweb\.app$/,
+  
+  // Manter compatibilidade com outras plataformas (opcional)
+  'https://ncasistemaprotocolos.netlify.app',
+  /^https:\/\/.*\.netlify\.app$/,
+  /^https:\/\/.*\.up\.railway\.app$/
 ];
 
 /**
@@ -121,6 +131,15 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 /**
+ * SERVIR ARQUIVOS ESTÁTICOS DO FRONTEND - SQUARE CLOUD
+ * 
+ * Serve os arquivos buildados do React para que o site completo funcione.
+ * Essencial para que a Square Cloud sirva tanto API quanto frontend.
+ */
+const distPath = path.join(__dirname, '..', 'dist');
+app.use(express.static(distPath));
+
+/**
  * MIDDLEWARE DE PARSING JSON
  * 
  * Configura o Express para processar requisições JSON.
@@ -162,12 +181,10 @@ app.use((req, res, next) => {
 /**
  * ROTA DE HEALTH CHECK PRINCIPAL
  * 
- * Endpoint básico para verificar se o servidor está funcionando.
- * Essencial para monitoramento da Square Cloud.
- * 
- * SQUARE CLOUD: Usado para verificar se a aplicação está online
+ * IMPORTANTE: Esta rota foi movida para /api/health para não conflitar
+ * com o frontend React. A rota raiz (/) agora serve o frontend.
  */
-app.get('/', (req, res) => {
+app.get('/api/health-check', (req, res) => {
   console.log('🏥 [SQUARE CLOUD] Health check solicitado');
   res.json({ 
     message: 'Sistema Jurídico funcionando na Square Cloud!',
@@ -182,6 +199,33 @@ app.get('/', (req, res) => {
 
 /**
  * ROTA DE HEALTH CHECK DETALHADA
+ * 
+ * Endpoint básico para verificar se o servidor está funcionando.
+ * Essencial para monitoramento da Square Cloud.
+ * 
+ * SQUARE CLOUD: Usado para verificar se a aplicação está online
+ */
+app.get('/', (req, res) => {
+  console.log('🏥 [SQUARE CLOUD] Health check solicitado');
+  // SQUARE CLOUD: Servir o frontend React
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+/**
+ * CONFIGURAÇÃO DAS ROTAS DA API
+ * 
+ * Define todos os endpoints da aplicação:
+ * - /api/* - Autenticação e protocolos
+ * - /api/admin/* - Administração
+ * 
+ * SQUARE CLOUD: Todas as rotas funcionam perfeitamente
+ */
+app.use('/api', authRoutes);
+app.use('/api', protocolRoutes);
+app.use('/api/admin', adminRoutes);
+
+/**
+ * ROTA DE HEALTH CHECK DETALHADA PARA MONITORAMENTO
  * 
  * Endpoint completo para monitoramento avançado.
  * Testa conexão com banco e retorna estatísticas.
@@ -223,17 +267,26 @@ app.get('/health', async (req, res) => {
 });
 
 /**
- * CONFIGURAÇÃO DAS ROTAS DA API
+ * ROTA CATCH-ALL PARA SPA (SINGLE PAGE APPLICATION)
  * 
- * Define todos os endpoints da aplicação:
- * - /api/* - Autenticação e protocolos
- * - /api/admin/* - Administração
- * 
- * SQUARE CLOUD: Todas as rotas funcionam perfeitamente
+ * Todas as rotas não encontradas retornam o index.html do React.
+ * Essencial para que o React Router funcione na Square Cloud.
  */
-app.use('/api', authRoutes);
-app.use('/api', protocolRoutes);
-app.use('/api/admin', adminRoutes);
+app.get('*', (req, res) => {
+  // SQUARE CLOUD: Não servir index.html para rotas da API
+  if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
+    return res.status(404).json({
+      success: false,
+      message: 'Rota da API não encontrada',
+      path: req.originalUrl,
+      method: req.method,
+      platform: 'Square Cloud'
+    });
+  }
+  
+  // SQUARE CLOUD: Servir index.html para todas as outras rotas (React Router)
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 /**
  * MIDDLEWARE DE TRATAMENTO DE ERROS GLOBAL
@@ -256,23 +309,6 @@ app.use((err, req, res, next) => {
     success: false,
     message: 'Erro interno do servidor (Square Cloud)',
     error: process.env.NODE_ENV === 'development' ? err.message : 'Erro interno'
-  });
-});
-
-/**
- * MIDDLEWARE PARA ROTAS NÃO ENCONTRADAS (404)
- * 
- * Captura requisições para rotas inexistentes.
- * Importante para debugging na Square Cloud.
- */
-app.use('*', (req, res) => {
-  console.log('❌ [SQUARE CLOUD] Rota não encontrada:', req.method, req.originalUrl);
-  res.status(404).json({
-    success: false,
-    message: 'Rota não encontrada',
-    path: req.originalUrl,
-    method: req.method,
-    platform: 'Square Cloud'
   });
 });
 
@@ -305,13 +341,14 @@ async function startServer() {
     }, 6 * 60 * 60 * 1000); // SQUARE CLOUD: 6 horas em millisegundos
     
     // SQUARE CLOUD: Iniciar servidor na porta definida pela plataforma
-    const server = app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log('🎉 SERVIDOR INICIADO COM SUCESSO NA SQUARE CLOUD!');
       console.log('=' .repeat(50));
       console.log(`☁️ Plataforma: Square Cloud (Brasil)`);
-      console.log(`🌐 Porta: ${PORT} (obrigatória para Square Cloud)`);
+      console.log(`🌐 Frontend: Servindo React SPA na rota raiz (/)`);
+      console.log(`🌐 Porta: ${PORT} (definida automaticamente)`);
       console.log(`🔗 URL local: http://localhost:${PORT}`);
-      console.log(`🌍 URL Square Cloud: https://protocolos.squareweb.app`);
+      console.log(`🌍 URL Square Cloud: https://sistema-protocolos.squareweb.app`);
       console.log(`🗄️ Banco: SQLite Otimizado para Square Cloud`);
       console.log(`⚡ Performance: WAL mode, 15 conexões simultâneas`);
       console.log(`👥 Capacidade: 100+ usuários simultâneos`);
@@ -319,6 +356,7 @@ async function startServer() {
       console.log('=' .repeat(50));
       console.log('📋 API Endpoints disponíveis:');
       console.log('  GET  / - Health check básico');
+      console.log('  GET  /api/health-check - Health check básico');
       console.log('  GET  /health - Health check detalhado');
       console.log('  POST /api/login - Login de usuários');
       console.log('  GET  /api/protocolos - Listar protocolos');
@@ -334,11 +372,6 @@ async function startServer() {
         .then(() => console.log('✅ [SQUARE CLOUD] Conectividade inicial: SUCESSO'))
         .catch(err => console.error('❌ [SQUARE CLOUD] Conectividade inicial: FALHA', err.message));
     });
-    
-    // SQUARE CLOUD: Configurar timeout do servidor para evitar problemas
-    server.timeout = 30000; // 30 segundos
-    server.keepAliveTimeout = 65000; // 65 segundos
-    server.headersTimeout = 66000; // 66 segundos
   } catch (error) {
     console.error('❌ [SQUARE CLOUD] ERRO CRÍTICO ao iniciar servidor:', error);
     console.error('💡 [SQUARE CLOUD] Verifique configurações do banco SQLite');

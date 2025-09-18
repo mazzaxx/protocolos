@@ -1,7 +1,8 @@
 // Teste de conectividade para verificar se o servidor está funcionando
 import fetch from 'node-fetch';
 
-const BACKEND_URL = 'https://protocolos.squareweb.app';
+const BACKEND_URL = 'https://sistema-protocolos-juridicos-production.up.railway.app';
+const FRONTEND_URL = 'https://ncasistemaprotocolos.netlify.app';
 
 async function testConnectivity() {
   console.log('🧪 TESTE DE CONECTIVIDADE');

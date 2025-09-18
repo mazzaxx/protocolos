@@ -54,13 +54,13 @@ VITE_API_BASE_URL=https://sistema-protocolos.squareweb.app
 No painel da Square Cloud, adicione:
 ```
 NODE_ENV=production
-VITE_API_BASE_URL=https://protocolos.squareweb.app
+VITE_API_BASE_URL=https://seu-app.squareweb.app
 ```
 
 ### Passo 5: Deploy Automático
 1. A Square Cloud fará o deploy automaticamente
 2. O processo leva cerca de 2-5 minutos
-3. Você receberá uma URL como: `https://protocolos.squareweb.app`
+3. Você receberá uma URL como: `https://seu-app.squareweb.app`
 
 ## 🔄 ATUALIZAÇÕES AUTOMÁTICAS
 
@@ -100,7 +100,7 @@ db.run("PRAGMA busy_timeout = 30000");
 ### Domínios Permitidos
 ```javascript
 const allowedOrigins = [
-  'https://protocolos.squareweb.app',
+  'https://sistema-protocolos.squareweb.app',
   /^https:\/\/.*\.squareweb\.app$/,
   'http://localhost:5173' // Para desenvolvimento
 ];
@@ -151,10 +151,10 @@ npm run preview:production
 ### Variáveis de Ambiente
 ```bash
 # .env.local (desenvolvimento)
-VITE_API_BASE_URL=http://localhost:80
+VITE_API_BASE_URL=http://localhost:3000
 
 # .env.production (Square Cloud)
-VITE_API_BASE_URL=https://protocolos.squareweb.app
+VITE_API_BASE_URL=https://seu-app.squareweb.app
 ```
 
 ## 🚨 TROUBLESHOOTING
@@ -180,10 +180,10 @@ VITE_API_BASE_URL=https://protocolos.squareweb.app
 ### Comandos de Debug
 ```bash
 # Testar conectividade
-curl https://protocolos.squareweb.app/health
+curl https://seu-app.squareweb.app/health
 
 # Testar API
-curl https://protocolos.squareweb.app/api/protocolos
+curl https://seu-app.squareweb.app/api/protocolos
 
 # Ver logs em tempo real
 # (disponível no painel da Square Cloud)
@@ -247,7 +247,7 @@ Antes do deploy, verifique:
 ## 🎉 DEPLOY REALIZADO!
 
 Após o deploy bem-sucedido:
-1. ✅ Aplicação disponível em: `https://protocolos.squareweb.app`
+1. ✅ Aplicação disponível em: `https://seu-app.squareweb.app`
 2. ✅ Banco SQLite funcionando automaticamente
 3. ✅ Logs disponíveis no painel
 4. ✅ Deploy automático configurado
