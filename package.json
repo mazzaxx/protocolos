@@ -7,7 +7,7 @@
     "dev": "vite",
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
-    "start": "node server/server.js",
+    "start": "npm run build && node server/server.js",
     "build": "vite build",
     "build:squarecloud": "node build.js",
     "preview": "vite preview",

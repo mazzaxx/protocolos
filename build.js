@@ -17,12 +17,21 @@ try {
   // Verificar se node_modules existe
   if (!fs.existsSync('node_modules')) {
     console.log('📦 [SQUARE CLOUD] Instalando dependências...');
-    execSync('npm install', { stdio: 'inherit' });
+    execSync('npm install --production=false', { stdio: 'inherit' });
+  }
+
+  // Verificar se Vite está disponível
+  try {
+    execSync('npx vite --version', { stdio: 'pipe' });
+    console.log('✅ [SQUARE CLOUD] Vite encontrado!');
+  } catch (error) {
+    console.log('⚠️ [SQUARE CLOUD] Vite não encontrado, instalando...');
+    execSync('npm install vite --save-dev', { stdio: 'inherit' });
   }
 
   // Executar build do Vite
   console.log('🔨 [SQUARE CLOUD] Executando build do frontend...');
-  execSync('npm run build', { stdio: 'inherit' });
+  execSync('npx vite build', { stdio: 'inherit' });
 
   // Verificar se o build foi bem-sucedido
   const distPath = path.join(__dirname, 'dist');
