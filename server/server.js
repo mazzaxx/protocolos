@@ -97,8 +97,9 @@ console.log('📁 Caminho dos arquivos estáticos:', distPath);
 // Verificar se pasta dist existe (sem usar await import)
 import fs from 'fs';
 if (!fs.existsSync(distPath)) {
-  console.error('❌ ERRO: Pasta dist não encontrada!');
-  console.error('💡 Execute: npm run build');
+  console.warn('⚠️ AVISO: Pasta dist não encontrada!');
+  console.warn('💡 Isso é normal durante o primeiro deploy na Square Cloud');
+  console.warn('🔄 O build será executado automaticamente...');
 } else {
   console.log('✅ Pasta dist encontrada');
   const files = fs.readdirSync(distPath);
@@ -193,11 +194,13 @@ app.get('*', (req, res) => {
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
-    console.error('❌ index.html não encontrado em:', indexPath);
-    res.status(500).json({
+    console.warn('⚠️ index.html não encontrado em:', indexPath);
+    console.warn('🔄 Aguardando build do frontend...');
+    res.status(503).json({
       success: false,
-      message: 'Frontend não encontrado - Execute npm run build',
+      message: 'Frontend sendo preparado - Aguarde alguns instantes e recarregue a página',
       path: indexPath,
+      status: 'building'
     });
   }
 });
