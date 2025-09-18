@@ -31,6 +31,7 @@ console.log('🚀 Iniciando servidor...');
 console.log('🌐 Porta:', PORT);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
 console.log('🗄️ Banco: SQLite Otimizado');
+console.log('🔧 Build: Executado automaticamente na inicialização');
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -94,131 +95,27 @@ app.use(cors(corsOptions));
 const distPath = path.join(__dirname, '..', 'dist');
 console.log('📁 Caminho dos arquivos estáticos:', distPath);
 
-// SQUARE CLOUD: Verificar se pasta dist existe e criar fallback se necessário
+// SQUARE CLOUD: Verificar se pasta dist existe
 import fs from 'fs';
 if (fs.existsSync(distPath)) {
   console.log('✅ Pasta dist encontrada');
   const files = fs.readdirSync(distPath);
   console.log('📋 Arquivos na pasta dist:', files);
+  
+  // Verificar se é um build real do React
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    const indexContent = fs.readFileSync(indexPath, 'utf8');
+    if (indexContent.includes('id="root"') && indexContent.includes('script')) {
+      console.log('✅ Build do React detectado');
+    } else {
+      console.log('⚠️ Fallback HTML detectado - build pode estar incompleto');
+    }
+  }
 } else {
-  console.warn('⚠️ AVISO: Pasta dist não encontrada! Execute npm run build');
-  
-  // SQUARE CLOUD: Criar pasta dist com fallback se não existir
-  console.log('🆘 Criando pasta dist com fallback...');
-  fs.mkdirSync(distPath, { recursive: true });
-  
-  const fallbackHtml = `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Protocolos - Build em Andamento</title>
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        .container { 
-            text-align: center; 
-            padding: 3rem;
-            background: rgba(255,255,255,0.1);
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-            max-width: 500px;
-        }
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 2rem;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .progress {
-            width: 100%;
-            height: 6px;
-            background: rgba(255,255,255,0.3);
-            border-radius: 3px;
-            overflow: hidden;
-            margin: 1rem 0;
-        }
-        .progress-bar {
-            height: 100%;
-            background: white;
-            width: 0%;
-            animation: progress 10s ease-in-out infinite;
-        }
-        @keyframes progress {
-            0% { width: 0%; }
-            50% { width: 70%; }
-            100% { width: 100%; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="spinner"></div>
-        <h1>⚖️ Sistema de Protocolos Jurídicos</h1>
-        <h3>Neycampos Advocacia</h3>
-        <div class="progress">
-            <div class="progress-bar"></div>
-        </div>
-        <p>🔨 Build em andamento na Square Cloud...</p>
-        <p><small>A aplicação será carregada automaticamente em instantes</small></p>
-        <br>
-        <p><small>Powered by Square Cloud 🚀</small></p>
-    </div>
-    <script>
-        let attempts = 0;
-        const maxAttempts = 30; // 5 minutos (10s * 30)
-        
-        function checkAndReload() {
-            attempts++;
-            console.log('Tentativa', attempts, 'de', maxAttempts);
-            
-            if (attempts >= maxAttempts) {
-                document.querySelector('.container').innerHTML = \`
-                    <h2>⚠️ Timeout</h2>
-                    <p>O build está demorando mais que o esperado.</p>
-                    <button onclick="window.location.reload()" style="
-                        padding: 10px 20px; 
-                        background: white; 
-                        color: #667eea; 
-                        border: none; 
-                        border-radius: 5px; 
-                        cursor: pointer;
-                        font-weight: bold;
-                    ">Tentar Novamente</button>
-                \`;
-                return;
-            }
-            
-            // Tentar recarregar a página
-            setTimeout(() => {
-                window.location.reload();
-            }, 10000);
-        }
-        
-        checkAndReload();
-    </script>
-</body>
-</html>`;
-  
-  fs.writeFileSync(path.join(distPath, 'index.html'), fallbackHtml);
-  console.log('🆘 Fallback HTML criado');
+  console.error('❌ ERRO CRÍTICO: Pasta dist não encontrada!');
+  console.error('❌ O build não foi executado corretamente');
+  process.exit(1);
 }
 
 app.use(express.static(distPath));
