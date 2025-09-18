@@ -211,10 +211,10 @@ class SQLitePool {
 /**
  * INSTÂNCIA GLOBAL DO POOL PARA SQUARE CLOUD
  * 
- * Pool otimizado com 5 conexões simultâneas.
+ * Pool otimizado com 15 conexões simultâneas.
  * Suporta 100+ usuários simultâneos na Square Cloud.
  */
-const pool = new SQLitePool(dbPath, 5); // SQUARE CLOUD: 5 conexões para estabilidade
+const pool = new SQLitePool(dbPath, 15); // SQUARE CLOUD: 15 conexões para alta performance
 
 /**
  * FUNÇÃO UNIFICADA PARA EXECUTAR QUERIES

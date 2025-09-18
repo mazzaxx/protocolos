@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
@@ -24,7 +25,7 @@ import { maintenanceDb } from './db.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const __filename = new URL(import.meta.url).pathname;
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 console.log('🚀 Iniciando servidor...');
@@ -92,8 +93,31 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-const files = fs.readdirSync(distPath);
-console.log('📋 Arquivos na pasta dist:', files);
+const distPath = path.join(__dirname, '..', 'dist');
+console.log('📁 Caminho dos arquivos estáticos:', distPath);
+
+// SQUARE CLOUD: Verificar se pasta dist existe
+import fs from 'fs';
+if (fs.existsSync(distPath)) {
+  console.log('✅ Pasta dist encontrada');
+  const files = fs.readdirSync(distPath);
+  console.log('📋 Arquivos na pasta dist:', files);
+  
+  // Verificar se é um build real do React
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    const indexContent = fs.readFileSync(indexPath, 'utf8');
+    if (indexContent.includes('id="root"') && indexContent.includes('script')) {
+      console.log('✅ Build do React detectado');
+    } else {
+      console.log('⚠️ Fallback HTML detectado - build pode estar incompleto');
+    }
+  }
+} else {
+  console.error('❌ ERRO CRÍTICO: Pasta dist não encontrada!');
+  console.error('❌ O build não foi executado corretamente');
+  process.exit(1);
+}
 
 app.use(express.static(distPath));
 

@@ -1,13 +1,14 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "sistema-protocolos-juridicos",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "main": "server/server.js",
   "scripts": {
     "dev": "vite",
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
-    "start": "npm run build && node server/server.js",
+    "start": "node server/server.js",
     "build:start": "node build-and-start.js",
     "build": "vite build",
     "preview": "vite preview",
@@ -26,8 +27,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.7.0",
-    "sqlite3": "^5.1.7",
-    "vite": "^5.4.2"
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
@@ -44,5 +44,9 @@
     "terser": "^5.44.0",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
+    "vite": "^5.4.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

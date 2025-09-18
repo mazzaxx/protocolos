@@ -36,21 +36,32 @@ try {
     fs.rmSync(distPath, { recursive: true, force: true });
   }
   
-  // Executar build com Vite
+  // Tentar diferentes formas de executar o build
   try {
-    console.log('🔨 [SQUARE CLOUD] Executando: npm run build');
+    console.log('🔨 [SQUARE CLOUD] Tentativa 1: npm run build');
     execSync('npm run build', { stdio: 'inherit' });
-    console.log('✅ [SQUARE CLOUD] Build executado com sucesso!');
-  } catch (buildError) {
-    console.error('❌ [SQUARE CLOUD] Erro no build:', buildError.message);
-    
-    // Criar um index.html básico como fallback
-    console.log('🆘 [SQUARE CLOUD] Criando fallback básico...');
-    if (!fs.existsSync(distPath)) {
-      fs.mkdirSync(distPath, { recursive: true });
-    }
-    
-    const fallbackHtml = `
+  } catch (error1) {
+    console.log('⚠️ [SQUARE CLOUD] Tentativa 1 falhou, tentando npx vite build...');
+    try {
+      console.log('🔨 [SQUARE CLOUD] Tentativa 2: npx vite build');
+      execSync('npx vite build', { stdio: 'inherit' });
+    } catch (error2) {
+      console.log('⚠️ [SQUARE CLOUD] Tentativa 2 falhou, tentando ./node_modules/.bin/vite build...');
+      try {
+        execSync('./node_modules/.bin/vite build', { stdio: 'inherit' });
+      } catch (error3) {
+        console.error('❌ [SQUARE CLOUD] Todas as tentativas de build falharam');
+        console.error('Error 1:', error1.message);
+        console.error('Error 2:', error2.message);
+        console.error('Error 3:', error3.message);
+        
+        // Criar um index.html básico como fallback
+        console.log('🆘 [SQUARE CLOUD] Criando fallback básico...');
+        if (!fs.existsSync(distPath)) {
+          fs.mkdirSync(distPath, { recursive: true });
+        }
+        
+        const fallbackHtml = `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -112,17 +123,18 @@ try {
     </div>
 </body>
 </html>`;
-    
-    fs.writeFileSync(indexPath, fallbackHtml);
-    console.log('🆘 [SQUARE CLOUD] Fallback de erro criado');
-    process.exit(1);
+        
+        fs.writeFileSync(indexPath, fallbackHtml);
+        console.log('🆘 [SQUARE CLOUD] Fallback de erro criado');
+      }
+    }
   }
 
   // 4. Verificar se o build foi bem-sucedido
   if (fs.existsSync(indexPath)) {
     const indexContent = fs.readFileSync(indexPath, 'utf8');
     
-    // Verificar se é o build real do React
+    // Verificar se é o build real do React ou fallback
     if (indexContent.includes('id="root"') && indexContent.includes('script')) {
       console.log('✅ [SQUARE CLOUD] Build do React concluído com sucesso!');
       console.log('📁 [SQUARE CLOUD] Arquivos gerados em:', distPath);
@@ -131,11 +143,9 @@ try {
       console.log('📋 [SQUARE CLOUD] Arquivos:', files);
     } else {
       console.log('⚠️ [SQUARE CLOUD] Build incompleto, usando fallback');
-      process.exit(1);
     }
   } else {
     console.error('❌ [SQUARE CLOUD] Nenhum arquivo index.html encontrado após build');
-    process.exit(1);
   }
 
   // 5. Iniciar o servidor
