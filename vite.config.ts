@@ -51,6 +51,9 @@ export default defineConfig({
   build: {
     outDir: 'dist', // SQUARE CLOUD: Diretório de build
     emptyOutDir: true, // SQUARE CLOUD: Limpar diretório antes do build
+    rollupOptions: {
+      external: ['sqlite3'] // SQUARE CLOUD: Excluir SQLite do bundle frontend
+    },
     // SQUARE CLOUD: Otimizações para produção
     minify: 'terser',
     sourcemap: false,
@@ -58,7 +61,7 @@ export default defineConfig({
     // SQUARE CLOUD: Garantir que assets sejam copiados corretamente
     assetsDir: 'assets',
     rollupOptions: {
-      external: ['sqlite3'], // SQUARE CLOUD: Excluir SQLite do bundle frontend
+      external: ['sqlite3'],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
@@ -68,7 +71,7 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    exclude: ['sqlite3'], // SQUARE CLOUD: Excluir da otimização
+    exclude: ['lucide-react'], // SQUARE CLOUD: Excluir da otimização
   },
   // SQUARE CLOUD: Configurações de preview
   preview: {

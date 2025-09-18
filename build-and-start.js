@@ -1,3 +1,12 @@
+#!/usr/bin/env node
+
+/**
+ * SCRIPT DE BUILD E START PARA SQUARE CLOUD - VERSÃO CORRIGIDA
+ * 
+ * Este script garante que o build seja executado corretamente
+ * e depois inicia o servidor na Square Cloud.
+ */
+
 import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -18,7 +27,7 @@ try {
   // 2. Verificar se node_modules existe
   if (!fs.existsSync('node_modules')) {
     console.log('📦 [SQUARE CLOUD] Instalando dependências...');
-    execSync('npm install', { stdio: 'inherit' });
+    execSync('npm install --production=false', { stdio: 'inherit' });
   }
 
   // 3. SEMPRE executar o build em produção
@@ -33,24 +42,56 @@ try {
     fs.rmSync(distPath, { recursive: true, force: true });
   }
   
-  // Executar build com tratamento de erro melhorado
+  // Tentar diferentes formas de executar o build
   try {
-    console.log('🔨 [SQUARE CLOUD] Executando: npm run build');
-    execSync('npm run build', { 
+    console.log('🔨 [SQUARE CLOUD] Tentativa 1: npx vite build --mode production');
+    execSync('npx vite build --mode production', { 
       stdio: 'inherit',
-      env: { ...process.env, NODE_ENV: 'production' }
+      env: { 
+        ...process.env, 
+        NODE_ENV: 'production',
+        VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || ''
+      }
     });
-    console.log('✅ [SQUARE CLOUD] Build concluído com sucesso!');
-  } catch (buildError) {
-    console.error('❌ [SQUARE CLOUD] Erro no build:', buildError.message);
-    
-    // Criar um index.html básico como fallback
-    console.log('🆘 [SQUARE CLOUD] Criando fallback básico...');
-    if (!fs.existsSync(distPath)) {
-      fs.mkdirSync(distPath, { recursive: true });
-    }
-    
-    const fallbackHtml = `
+  } catch (error1) {
+    console.log('⚠️ [SQUARE CLOUD] Tentativa 1 falhou, tentando com npm...');
+    try {
+      console.log('🔨 [SQUARE CLOUD] Tentativa 2: npm run build');
+      execSync('npm run build', { 
+        stdio: 'inherit',
+        env: { 
+          ...process.env, 
+          NODE_ENV: 'production',
+          VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || ''
+        }
+      });
+    } catch (error2) {
+      console.log('⚠️ [SQUARE CLOUD] Tentativa 2 falhou, tentando instalação completa...');
+      try {
+        console.log('📦 [SQUARE CLOUD] Reinstalando dependências completas...');
+        execSync('npm install', { stdio: 'inherit' });
+        console.log('🔨 [SQUARE CLOUD] Tentativa 3: npm run build após reinstalação');
+        execSync('npm run build', { 
+          stdio: 'inherit',
+          env: { 
+            ...process.env, 
+            NODE_ENV: 'production',
+            VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || ''
+          }
+        });
+      } catch (error3) {
+        console.error('❌ [SQUARE CLOUD] Todas as tentativas de build falharam');
+        console.error('Error 1:', error1.message);
+        console.error('Error 2:', error2.message);
+        console.error('Error 3:', error3.message);
+        
+        // Criar um index.html básico como fallback
+        console.log('🆘 [SQUARE CLOUD] Criando fallback básico...');
+        if (!fs.existsSync(distPath)) {
+          fs.mkdirSync(distPath, { recursive: true });
+        }
+        
+        const fallbackHtml = `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -112,15 +153,18 @@ try {
     </div>
 </body>
 </html>`;
-    
-    fs.writeFileSync(indexPath, fallbackHtml);
-    console.log('🆘 [SQUARE CLOUD] Fallback de erro criado');
+        
+        fs.writeFileSync(indexPath, fallbackHtml);
+        console.log('🆘 [SQUARE CLOUD] Fallback de erro criado');
+      }
+    }
   }
 
   // 4. Verificar se o build foi bem-sucedido
   if (fs.existsSync(indexPath)) {
     const indexContent = fs.readFileSync(indexPath, 'utf8');
     
+    // Verificar se é o build real do React ou fallback
     if (indexContent.includes('id="root"') && indexContent.includes('script')) {
       console.log('✅ [SQUARE CLOUD] Build do React concluído com sucesso!');
       console.log('📁 [SQUARE CLOUD] Arquivos gerados em:', distPath);
@@ -134,13 +178,20 @@ try {
     console.error('❌ [SQUARE CLOUD] Nenhum arquivo index.html encontrado após build');
   }
 
-  // 5. Iniciar o servidor
+  // 5. Aguardar um pouco antes de iniciar o servidor para evitar conflitos
+  console.log('⏳ [SQUARE CLOUD] Aguardando 2 segundos antes de iniciar servidor...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // 6. Iniciar o servidor
   console.log('🚀 [SQUARE CLOUD] Iniciando servidor...');
   
   // Usar spawn para manter o processo vivo
   const serverProcess = spawn('node', ['server/server.js'], {
     stdio: 'inherit',
-    env: { ...process.env }
+    env: { 
+      ...process.env,
+      NODE_ENV: 'production'
+    }
   });
 
   // Tratar sinais de encerramento
@@ -157,11 +208,6 @@ try {
   serverProcess.on('close', (code) => {
     console.log(`🔚 [SQUARE CLOUD] Servidor encerrado com código: ${code}`);
     process.exit(code);
-  });
-
-  serverProcess.on('error', (error) => {
-    console.error('❌ [SQUARE CLOUD] Erro no processo do servidor:', error);
-    process.exit(1);
   });
 
 } catch (error) {

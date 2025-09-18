@@ -4,22 +4,34 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 /**
- * MÓDULO DE BANCO DE DADOS SQLITE - SQUARE CLOUD OTIMIZADO
+ * MÓDULO DE BANCO DE DADOS SQLITE - SQUARE CLOUD
  * 
- * Sistema de banco de dados otimizado especificamente para Square Cloud.
- * Reduzido número de conexões para evitar travamentos.
+ * Sistema de banco de dados otimizado para funcionar na Square Cloud.
+ * Utiliza SQLite com WAL mode e pool de conexões para alta performance.
  * 
  * CARACTERÍSTICAS PARA SQUARE CLOUD:
  * - SQLite funciona perfeitamente na plataforma
- * - Pool reduzido para evitar SQLITE_BUSY
- * - WAL mode com configurações conservadoras
- * - Manutenção automática otimizada
+ * - Não requer configuração externa de banco
+ * - Pool de conexões otimizado para múltiplos usuários
+ * - WAL mode para melhor concorrência
+ * - Manutenção automática
+ * 
+ * HOSPEDAGEM SQUARE CLOUD:
+ * - Banco SQLite é salvo no sistema de arquivos
+ * - Persiste entre deploys
+ * - Backup automático pela plataforma
  */
 
 // Obter __dirname em ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * CONFIGURAÇÃO SQLITE OTIMIZADA PARA SQUARE CLOUD
+ * 
+ * Define o caminho do banco e configurações de produção.
+ * Square Cloud mantém arquivos persistentes automaticamente.
+ */
 const isProduction = process.env.NODE_ENV === 'production';
 const dbPath = path.join(__dirname, 'database.sqlite');
 
@@ -29,59 +41,126 @@ console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
 console.log('☁️ Plataforma: Square Cloud - SQLite nativo');
 
 /**
- * CLASSE DE POOL DE CONEXÕES SQLITE OTIMIZADA
+ * CLASSE DE POOL DE CONEXÕES SQLITE
  * 
- * Pool reduzido para evitar conflitos na Square Cloud.
- * Configurações conservadoras para máxima estabilidade.
+ * Simula um pool de conexões para SQLite, otimizado para Square Cloud.
+ * Permite múltiplos usuários simultâneos sem conflitos.
+ * 
+ * FUNCIONALIDADES:
+ * - Até 3 conexões simultâneas (otimizado para Square Cloud)
+ * - WAL mode para concorrência
+ * - Cache de 10MB para performance
+ * - Timeout de 30 segundos
+ * - Otimizações específicas para Square Cloud
  */
 class SQLitePool {
-  constructor(dbPath, maxConnections = 3) { // REDUZIDO para 3 conexões
+  constructor(dbPath, maxConnections = 3) {
     this.dbPath = dbPath;
     this.maxConnections = maxConnections;
     this.connections = [];
     this.activeConnections = 0;
     this.queue = [];
-    this.isClosing = false;
+    this.isInitialized = false;
     
+    // SQUARE CLOUD: Criar conexões iniciais otimizadas
     this.initializePool();
   }
 
-  initializePool() {
+  /**
+   * INICIALIZAÇÃO DO POOL DE CONEXÕES
+   * 
+   * Cria múltiplas conexões SQLite com otimizações específicas
+   * para funcionar perfeitamente na Square Cloud.
+   */
+  async initializePool() {
     console.log(`🔗 [SQUARE CLOUD] Inicializando pool SQLite com ${this.maxConnections} conexões (otimizado)`);
     
+    // SQUARE CLOUD: Aguardar um pouco para evitar conflitos de inicialização
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     for (let i = 0; i < this.maxConnections; i++) {
+      await this.createConnection(i);
+      // SQUARE CLOUD: Aguardar entre criação de conexões para evitar conflitos
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    this.isInitialized = true;
+    console.log(`✅ [SQUARE CLOUD] Pool SQLite inicializado com ${this.maxConnections} conexões`);
+  }
+  
+  /**
+   * CRIAR CONEXÃO INDIVIDUAL COM TRATAMENTO DE ERRO
+   */
+  async createConnection(index) {
+    return new Promise((resolve, reject) => {
       const db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
         if (err) {
-          console.error(`❌ [SQUARE CLOUD] Erro ao criar conexão ${i}:`, err);
+          console.error(`❌ [SQUARE CLOUD] Erro ao criar conexão ${index}:`, err);
+          reject(err);
         } else {
-          console.log(`✅ [SQUARE CLOUD] Conexão SQLite ${i} criada`);
+          console.log(`✅ [SQUARE CLOUD] Conexão SQLite ${index} criada`);
           
-          // SQUARE CLOUD: Configurações conservadoras para estabilidade
+          /**
+           * OTIMIZAÇÕES CRÍTICAS PARA SQUARE CLOUD
+           * 
+           * Configurações específicas para máxima estabilidade
+           * na infraestrutura da Square Cloud.
+           */
           db.serialize(() => {
-            db.run("PRAGMA journal_mode = WAL");
+            // SQUARE CLOUD: Configurações otimizadas para estabilidade
+            db.run("PRAGMA journal_mode = WAL", (err) => {
+              if (err) console.error(`❌ [SQUARE CLOUD] Erro WAL mode conexão ${index}:`, err);
+            });
+            
+            // SQUARE CLOUD: Otimizações de performance mais conservadoras
             db.run("PRAGMA synchronous = NORMAL");
-            db.run("PRAGMA cache_size = 2000"); // Reduzido para 2MB
+            db.run("PRAGMA cache_size = 5000"); // 5MB cache (mais conservador)
             db.run("PRAGMA temp_store = MEMORY");
-            db.run("PRAGMA busy_timeout = 10000"); // Reduzido para 10s
-            db.run("PRAGMA wal_autocheckpoint = 100"); // Mais frequente
+            
+            // SQUARE CLOUD: Timeout mais longo para evitar BUSY
+            db.run("PRAGMA busy_timeout = 60000"); // 60s timeout
+            db.run("PRAGMA wal_autocheckpoint = 100"); // Checkpoint mais frequente
+            
+            // SQUARE CLOUD: Configurações de bloqueio mais permissivas
+            db.run("PRAGMA locking_mode = NORMAL");
+            db.run("PRAGMA read_uncommitted = true");
           });
+          
+          resolve();
         }
       });
       
       this.connections.push({
         db,
         inUse: false,
-        id: i
+        id: index
       });
-    }
+    });
   }
 
+  /**
+   * OBTER CONEXÃO DO POOL
+   * 
+   * Retorna uma conexão disponível ou adiciona à fila de espera.
+   * Sistema de timeout para evitar travamentos na Square Cloud.
+   */
   async getConnection() {
-    if (this.isClosing) {
-      throw new Error('Pool is closing');
+    // SQUARE CLOUD: Aguardar inicialização se necessário
+    if (!this.isInitialized) {
+      await new Promise(resolve => {
+        const checkInit = () => {
+          if (this.isInitialized) {
+            resolve();
+          } else {
+            setTimeout(checkInit, 100);
+          }
+        };
+        checkInit();
+      });
     }
-
+    
     return new Promise((resolve, reject) => {
+      // SQUARE CLOUD: Procurar conexão disponível no pool
       const availableConnection = this.connections.find(conn => !conn.inUse);
       
       if (availableConnection) {
@@ -89,26 +168,32 @@ class SQLitePool {
         this.activeConnections++;
         resolve(availableConnection);
       } else {
+        // SQUARE CLOUD: Adicionar à fila se pool estiver cheio
         this.queue.push({ resolve, reject });
         
-        // Timeout reduzido para evitar travamentos
+        // SQUARE CLOUD: Timeout mais longo para evitar travamento
         setTimeout(() => {
           const index = this.queue.findIndex(item => item.resolve === resolve);
           if (index !== -1) {
             this.queue.splice(index, 1);
-            reject(new Error('Square Cloud: Connection timeout (5s)'));
+            reject(new Error('Square Cloud: Connection timeout após 30s'));
           }
-        }, 5000); // 5 segundos timeout
+        }, 30000); // SQUARE CLOUD: 30 segundos timeout
       }
     });
   }
 
+  /**
+   * LIBERAR CONEXÃO DO POOL
+   * 
+   * Marca conexão como disponível e processa fila de espera.
+   * Essencial para eficiência na Square Cloud.
+   */
   releaseConnection(connection) {
-    if (this.isClosing) return;
-    
     connection.inUse = false;
     this.activeConnections--;
     
+    // SQUARE CLOUD: Processar fila de requisições esperando
     if (this.queue.length > 0) {
       const { resolve } = this.queue.shift();
       connection.inUse = true;
@@ -117,30 +202,25 @@ class SQLitePool {
     }
   }
 
+  /**
+   * FECHAR TODAS AS CONEXÕES
+   * 
+   * Encerra graciosamente todas as conexões do pool.
+   * Importante para reinicializações na Square Cloud.
+   */
   async close() {
     console.log('🔒 [SQUARE CLOUD] Fechando pool de conexões SQLite...');
-    this.isClosing = true;
-    
-    // Rejeitar todas as requisições pendentes
-    this.queue.forEach(({ reject }) => {
-      reject(new Error('Pool is closing'));
-    });
-    this.queue = [];
     
     const closePromises = this.connections.map(conn => {
       return new Promise((resolve) => {
-        if (conn.db) {
-          conn.db.close((err) => {
-            if (err && err.code !== 'SQLITE_MISUSE') {
-              console.error(`❌ [SQUARE CLOUD] Erro ao fechar conexão ${conn.id}:`, err);
-            } else {
-              console.log(`✅ [SQUARE CLOUD] Conexão ${conn.id} fechada`);
-            }
-            resolve();
-          });
-        } else {
+        conn.db.close((err) => {
+          if (err) {
+            console.error(`❌ [SQUARE CLOUD] Erro ao fechar conexão ${conn.id}:`, err);
+          } else {
+            console.log(`✅ [SQUARE CLOUD] Conexão ${conn.id} fechada`);
+          }
           resolve();
-        }
+        });
       });
     });
     
@@ -148,6 +228,12 @@ class SQLitePool {
     console.log('🔒 [SQUARE CLOUD] Todas as conexões SQLite fechadas');
   }
 
+  /**
+   * OBTER ESTATÍSTICAS DO POOL
+   * 
+   * Retorna informações sobre uso do pool para monitoramento.
+   * Útil para debugging na Square Cloud.
+   */
   getStats() {
     return {
       totalConnections: this.connections.length,
@@ -159,45 +245,76 @@ class SQLitePool {
   }
 }
 
-// SQUARE CLOUD: Pool otimizado com apenas 3 conexões
-const pool = new SQLitePool(dbPath, 3);
+/**
+ * INSTÂNCIA GLOBAL DO POOL PARA SQUARE CLOUD
+ * 
+ * Pool otimizado com 3 conexões simultâneas.
+ * Configuração conservadora para máxima estabilidade na Square Cloud.
+ */
+const pool = new SQLitePool(dbPath, 3); // SQUARE CLOUD: 3 conexões para alta estabilidade
 
 /**
- * FUNÇÃO UNIFICADA PARA EXECUTAR QUERIES - OTIMIZADA
+ * FUNÇÃO UNIFICADA PARA EXECUTAR QUERIES
+ * 
+ * Executa queries SQLite com retry automático e tratamento de erros.
+ * Otimizada para funcionar perfeitamente na Square Cloud.
+ * 
+ * FUNCIONALIDADES:
+ * - Retry automático em caso de falha
+ * - Logging de performance
+ * - Tratamento específico para leitura/escrita
+ * - Timeout configurável
  */
-const query = async (sql, params = [], retries = 2) => { // Reduzido para 2 tentativas
+const query = async (sql, params = [], retries = 5) => {
   let connection;
   let attempt = 0;
   
   while (attempt < retries) {
     try {
+      // SQUARE CLOUD: Obter conexão do pool otimizado
       connection = await pool.getConnection();
       
       return await new Promise((resolve, reject) => {
         const startTime = Date.now();
         
         if (sql.toLowerCase().trim().startsWith('select') || sql.toLowerCase().includes('pragma')) {
+          // SQUARE CLOUD: Query de leitura otimizada
           connection.db.all(sql, params, (err, rows) => {
             const duration = Date.now() - startTime;
             
             if (err) {
-              console.error(`❌ [SQUARE CLOUD] Query error (${duration}ms):`, err.message);
+              if (err.code === 'SQLITE_BUSY') {
+                console.warn(`⚠️ [SQUARE CLOUD] Database busy (${duration}ms), tentativa ${attempt + 1}/${retries}`);
+              } else {
+                console.error(`❌ [SQUARE CLOUD] Query error (${duration}ms):`, err.message);
+                console.error(`📝 SQL:`, sql);
+                console.error(`📊 Params:`, params);
+              }
               reject(err);
             } else {
-              if (duration > 2000) { // Aumentado threshold para 2s
+              // SQUARE CLOUD: Log de queries lentas para otimização
+              if (duration > 2000) {
                 console.warn(`⚠️ [SQUARE CLOUD] Slow query (${duration}ms):`, sql.substring(0, 100));
               }
               resolve({ rows: rows || [] });
             }
           });
         } else {
+          // SQUARE CLOUD: Query de escrita otimizada
           connection.db.run(sql, params, function(err) {
             const duration = Date.now() - startTime;
             
             if (err) {
-              console.error(`❌ [SQUARE CLOUD] Query error (${duration}ms):`, err.message);
+              if (err.code === 'SQLITE_BUSY') {
+                console.warn(`⚠️ [SQUARE CLOUD] Database busy (${duration}ms), tentativa ${attempt + 1}/${retries}`);
+              } else {
+                console.error(`❌ [SQUARE CLOUD] Query error (${duration}ms):`, err.message);
+                console.error(`📝 SQL:`, sql);
+                console.error(`📊 Params:`, params);
+              }
               reject(err);
             } else {
+              // SQUARE CLOUD: Log de queries lentas para otimização
               if (duration > 2000) {
                 console.warn(`⚠️ [SQUARE CLOUD] Slow query (${duration}ms):`, sql.substring(0, 100));
               }
@@ -212,14 +329,20 @@ const query = async (sql, params = [], retries = 2) => { // Reduzido para 2 tent
       });
     } catch (error) {
       attempt++;
-      console.error(`❌ [SQUARE CLOUD] Tentativa ${attempt}/${retries} falhou:`, error.message);
+      
+      if (error.code === 'SQLITE_BUSY') {
+        console.warn(`⚠️ [SQUARE CLOUD] Database busy, tentativa ${attempt}/${retries}`);
+      } else {
+        console.error(`❌ [SQUARE CLOUD] Tentativa ${attempt}/${retries} falhou:`, error.message);
+      }
       
       if (attempt >= retries) {
         throw new Error(`[SQUARE CLOUD] Query failed after ${retries} attempts: ${error.message}`);
       }
       
-      // Aguardar antes de retry
-      await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+      // SQUARE CLOUD: Aguardar antes de retry (backoff exponencial mais longo)
+      const delay = Math.min(500 * Math.pow(2, attempt), 5000);
+      await new Promise(resolve => setTimeout(resolve, delay));
     } finally {
       if (connection) {
         pool.releaseConnection(connection);
@@ -229,22 +352,33 @@ const query = async (sql, params = [], retries = 2) => { // Reduzido para 2 tent
 };
 
 /**
- * FUNÇÃO PARA TRANSAÇÕES OTIMIZADA
+ * FUNÇÃO PARA EXECUTAR TRANSAÇÕES SQLITE
+ * 
+ * Executa múltiplas queries em uma transação atômica.
+ * Essencial para consistência de dados na Square Cloud.
+ * 
+ * CARACTERÍSTICAS:
+ * - Rollback automático em caso de erro
+ * - Commit automático quando bem-sucedida
+ * - Tratamento de erros robusto
  */
 const transaction = async (queries) => {
   let connection;
   
   try {
+    // SQUARE CLOUD: Obter conexão exclusiva para transação
     connection = await pool.getConnection();
     
     return await new Promise((resolve, reject) => {
       connection.db.serialize(() => {
+        // SQUARE CLOUD: Iniciar transação
         connection.db.run("BEGIN TRANSACTION");
         
         const results = [];
         let completed = 0;
         let hasError = false;
         
+        // SQUARE CLOUD: Executar todas as queries da transação
         queries.forEach((queryData, index) => {
           if (hasError) return;
           
@@ -253,11 +387,13 @@ const transaction = async (queries) => {
           connection.db.run(sql, params, function(err) {
             if (err && !hasError) {
               hasError = true;
+              // SQUARE CLOUD: Rollback em caso de erro
               connection.db.run("ROLLBACK");
               reject(err);
               return;
             }
             
+            // SQUARE CLOUD: Armazenar resultado da query
             results[index] = {
               rowCount: this.changes,
               insertId: this.lastID
@@ -266,6 +402,7 @@ const transaction = async (queries) => {
             completed++;
             
             if (completed === queries.length) {
+              // SQUARE CLOUD: Commit quando todas as queries completam
               connection.db.run("COMMIT", (commitErr) => {
                 if (commitErr) {
                   reject(commitErr);
@@ -286,16 +423,31 @@ const transaction = async (queries) => {
 };
 
 /**
- * INICIALIZAÇÃO DO BANCO OTIMIZADA
+ * FUNÇÃO PARA INICIALIZAR O BANCO DE DADOS
+ * 
+ * Cria todas as tabelas e índices necessários para o sistema.
+ * Otimizada especificamente para funcionar na Square Cloud.
+ * 
+ * FUNCIONALIDADES:
+ * - Criação de tabelas com índices otimizados
+ * - Triggers para atualização automática
+ * - Usuários de teste pré-criados
+ * - Análise e otimização automática
  */
 export const initializeDb = async () => {
-  console.log('🚀 [SQUARE CLOUD] Inicializando banco SQLite otimizado...');
+  console.log('🚀 [SQUARE CLOUD] Inicializando banco SQLite otimizado para produção...');
   console.log('📊 [SQUARE CLOUD] Configuração para alta estabilidade');
   
+  // SQUARE CLOUD: Aguardar inicialização do pool
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
   try {
-    // Aguardar um pouco para garantir que o pool está pronto
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
+    /**
+     * CRIAÇÃO DA TABELA FUNCIONARIOS
+     * 
+     * Armazena dados dos usuários do sistema (advogados, moderadores, admins).
+     * Otimizada para autenticação rápida na Square Cloud.
+     */
     console.log('📋 [SQUARE CLOUD] Criando tabela funcionarios...');
     await query(`
       CREATE TABLE IF NOT EXISTS funcionarios (
@@ -308,9 +460,16 @@ export const initializeDb = async () => {
       )
     `);
     
+    // SQUARE CLOUD: Índices otimizados para autenticação rápida
     await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_email ON funcionarios(email)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_permissao ON funcionarios(permissao)`);
     
+    /**
+     * CRIAÇÃO DA TABELA PROTOCOLOS
+     * 
+     * Tabela principal que armazena todos os protocolos jurídicos.
+     * Estrutura otimizada para consultas rápidas na Square Cloud.
+     */
     console.log('📋 [SQUARE CLOUD] Criando tabela protocolos...');
     await query(`
       CREATE TABLE IF NOT EXISTS protocolos (
@@ -341,13 +500,27 @@ export const initializeDb = async () => {
       )
     `);
     
+    /**
+     * CRIAÇÃO DE ÍNDICES OTIMIZADOS PARA SQUARE CLOUD
+     * 
+     * Índices estratégicos para consultas rápidas mesmo com milhares de protocolos.
+     * Otimizados para os padrões de uso do sistema jurídico.
+     */
     console.log('🔍 [SQUARE CLOUD] Criando índices otimizados...');
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_status ON protocolos(status)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_assignedTo ON protocolos(assignedTo)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_createdBy ON protocolos(createdBy)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_createdAt ON protocolos(createdAt)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_updatedAt ON protocolos(updatedAt)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_status_assigned ON protocolos(status, assignedTo)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_queue_lookup ON protocolos(status, assignedTo, createdAt)`);
     
+    /**
+     * TRIGGERS PARA ATUALIZAÇÃO AUTOMÁTICA
+     * 
+     * Atualizam automaticamente campos de timestamp quando registros são modificados.
+     * Essencial para auditoria e controle na Square Cloud.
+     */
     await query(`
       CREATE TRIGGER IF NOT EXISTS update_protocolos_timestamp 
       AFTER UPDATE ON protocolos
@@ -364,15 +537,27 @@ export const initializeDb = async () => {
       END
     `);
     
+    // SQUARE CLOUD: Criar usuários de teste para demonstração
     await createTestUsers();
     
+    /**
+     * OTIMIZAÇÃO FINAL DO BANCO
+     * 
+     * Executa análise e otimização das estatísticas do banco.
+     * Melhora performance das consultas na Square Cloud.
+     */
     console.log('⚡ [SQUARE CLOUD] Otimizando banco de dados...');
-    await query(`ANALYZE`);
-    await query(`PRAGMA optimize`);
+    try {
+      await query(`ANALYZE`);
+      await query(`PRAGMA optimize`);
+    } catch (optimizeError) {
+      console.warn('⚠️ [SQUARE CLOUD] Aviso na otimização:', optimizeError.message);
+    }
     
+    // SQUARE CLOUD: Obter estatísticas finais para monitoramento
     const stats = await getDatabaseStats();
     console.log('📊 [SQUARE CLOUD] Estatísticas do banco:', stats);
-    console.log('🎉 [SQUARE CLOUD] Inicialização SQLite concluída com sucesso!');
+    console.log('🎉 [SQUARE CLOUD] Inicialização SQLite concluída com alta estabilidade!');
     
   } catch (error) {
     console.error('❌ [SQUARE CLOUD] Erro na inicialização do banco:', error);
@@ -380,6 +565,12 @@ export const initializeDb = async () => {
   }
 };
 
+/**
+ * FUNÇÃO PARA CRIAR USUÁRIOS DE TESTE
+ * 
+ * Cria usuários padrão para demonstração e testes.
+ * Executada automaticamente na primeira inicialização.
+ */
 const createTestUsers = async () => {
   const testUsers = [
     { email: 'admin@escritorio.com', senha: '123456', permissao: 'admin' },
@@ -397,6 +588,7 @@ const createTestUsers = async () => {
       );
       
       if (existingUser.rows.length === 0) {
+        // SQUARE CLOUD: Criar usuário se não existir
         await query(
           "INSERT INTO funcionarios (email, senha, permissao) VALUES (?, ?, ?)",
           [user.email, user.senha, user.permissao]
@@ -414,6 +606,12 @@ const createTestUsers = async () => {
   }
 };
 
+/**
+ * FUNÇÃO PARA TESTAR CONECTIVIDADE
+ * 
+ * Verifica se o banco SQLite está funcionando corretamente.
+ * Essencial para monitoramento na Square Cloud.
+ */
 export const testConnection = async () => {
   try {
     const result = await query("SELECT 1 as test");
@@ -427,6 +625,12 @@ export const testConnection = async () => {
   }
 };
 
+/**
+ * FUNÇÃO PARA OBTER ESTATÍSTICAS DO BANCO
+ * 
+ * Retorna informações detalhadas sobre o banco para monitoramento.
+ * Útil para acompanhar performance na Square Cloud.
+ */
 export const getDatabaseStats = async () => {
   try {
     const funcionariosResult = await query("SELECT COUNT(*) as count FROM funcionarios");
@@ -451,20 +655,64 @@ export const getDatabaseStats = async () => {
   }
 };
 
+/**
+ * FUNÇÃO PARA MANUTENÇÃO DO BANCO
+ * 
+ * Executa manutenção automática do SQLite para manter performance.
+ * Executada automaticamente a cada 6 horas na Square Cloud.
+ */
 export const maintenanceDb = async () => {
   console.log('🔧 [SQUARE CLOUD] Executando manutenção do banco...');
   
   try {
-    await query("PRAGMA optimize");
+    // SQUARE CLOUD: Manutenção mais conservadora
+    try {
+      await query("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch (checkpointError) {
+      console.warn('⚠️ [SQUARE CLOUD] Aviso no checkpoint:', checkpointError.message);
+    }
+    
+    // SQUARE CLOUD: Vacuum apenas se necessário (pode ser pesado)
+    try {
+      const result = await query("PRAGMA page_count");
+      const pageCount = result.rows[0]?.page_count || 0;
+      if (pageCount > 10000) { // Apenas se banco for grande
+        await query("VACUUM");
+      }
+    } catch (vacuumError) {
+      console.warn('⚠️ [SQUARE CLOUD] Aviso no vacuum:', vacuumError.message);
+    }
+    
+    // SQUARE CLOUD: Análise conservadora
+    try {
+      await query("ANALYZE");
+    } catch (analyzeError) {
+      console.warn('⚠️ [SQUARE CLOUD] Aviso na análise:', analyzeError.message);
+    }
+    
+    // SQUARE CLOUD: Otimização conservadora
+    try {
+      await query("PRAGMA optimize");
+    } catch (optimizeError) {
+      console.warn('⚠️ [SQUARE CLOUD] Aviso na otimização:', optimizeError.message);
+    }
+    
     console.log('✅ [SQUARE CLOUD] Manutenção concluída');
   } catch (error) {
     console.error('❌ [SQUARE CLOUD] Erro na manutenção:', error);
   }
 };
 
+/**
+ * FUNÇÃO PARA FECHAR CONEXÕES (CLEANUP)
+ * 
+ * Encerra graciosamente todas as conexões do banco.
+ * Importante para reinicializações na Square Cloud.
+ */
 export const closeConnection = async () => {
   await pool.close();
 };
 
+// SQUARE CLOUD: Exportar funções principais para uso no sistema
 export { query, transaction };
 export default { query, transaction };
