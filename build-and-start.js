@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * SCRIPT DE BUILD E START PARA SQUARE CLOUD - VERSÃO CORRIGIDA
+ * SCRIPT DE BUILD E START PARA SQUARE CLOUD - VERSÃO OTIMIZADA
  * 
- * Este script garante que o build seja executado corretamente
- * e depois inicia o servidor na Square Cloud.
+ * Este script verifica se o build já existe e inicia o servidor.
+ * O build deve ser feito ANTES do deploy para evitar problemas.
  */
 
-import { execSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,87 +17,34 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-console.log('🚀 [SQUARE CLOUD] Iniciando processo de build e start...');
+console.log('🚀 [SQUARE CLOUD] Iniciando servidor otimizado...');
 
 try {
   // 1. Verificar se estamos na Square Cloud
   const isSquareCloud = process.env.NODE_ENV === 'production';
   console.log(`🌍 [SQUARE CLOUD] Ambiente: ${isSquareCloud ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'}`);
 
-  // 2. Verificar se node_modules existe
-  if (!fs.existsSync('node_modules')) {
-    console.log('📦 [SQUARE CLOUD] Instalando dependências...');
-    execSync('npm install --production=false', { stdio: 'inherit' });
-  }
-
-  // 3. SEMPRE executar o build em produção
+  // 2. Verificar se o build existe
   const distPath = path.join(__dirname, 'dist');
   const indexPath = path.join(distPath, 'index.html');
   
-  console.log('🔨 [SQUARE CLOUD] Executando build obrigatório...');
-  
-  // Remover dist antigo se existir
-  if (fs.existsSync(distPath)) {
-    console.log('🗑️ [SQUARE CLOUD] Removendo build antigo...');
-    fs.rmSync(distPath, { recursive: true, force: true });
-  }
-  
-  // Tentar diferentes formas de executar o build
-  try {
-    console.log('🔨 [SQUARE CLOUD] Tentativa 1: npx vite build --mode production');
-    execSync('npx vite build --mode production', { 
-      stdio: 'inherit',
-      env: { 
-        ...process.env, 
-        NODE_ENV: 'production',
-        VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || ''
-      }
-    });
-  } catch (error1) {
-    console.log('⚠️ [SQUARE CLOUD] Tentativa 1 falhou, tentando com npm...');
-    try {
-      console.log('🔨 [SQUARE CLOUD] Tentativa 2: npm run build');
-      execSync('npm run build', { 
-        stdio: 'inherit',
-        env: { 
-          ...process.env, 
-          NODE_ENV: 'production',
-          VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || ''
-        }
-      });
-    } catch (error2) {
-      console.log('⚠️ [SQUARE CLOUD] Tentativa 2 falhou, tentando instalação completa...');
-      try {
-        console.log('📦 [SQUARE CLOUD] Reinstalando dependências completas...');
-        execSync('npm install', { stdio: 'inherit' });
-        console.log('🔨 [SQUARE CLOUD] Tentativa 3: npm run build após reinstalação');
-        execSync('npm run build', { 
-          stdio: 'inherit',
-          env: { 
-            ...process.env, 
-            NODE_ENV: 'production',
-            VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || ''
-          }
-        });
-      } catch (error3) {
-        console.error('❌ [SQUARE CLOUD] Todas as tentativas de build falharam');
-        console.error('Error 1:', error1.message);
-        console.error('Error 2:', error2.message);
-        console.error('Error 3:', error3.message);
-        
-        // Criar um index.html básico como fallback
-        console.log('🆘 [SQUARE CLOUD] Criando fallback básico...');
-        if (!fs.existsSync(distPath)) {
-          fs.mkdirSync(distPath, { recursive: true });
-        }
-        
-        const fallbackHtml = `
+  if (!fs.existsSync(distPath) || !fs.existsSync(indexPath)) {
+    console.error('❌ [SQUARE CLOUD] ERRO CRÍTICO: Build não encontrado!');
+    console.error('💡 [SQUARE CLOUD] Execute "npm run build" antes do deploy');
+    
+    // Criar um index.html básico como fallback
+    console.log('🆘 [SQUARE CLOUD] Criando fallback básico...');
+    if (!fs.existsSync(distPath)) {
+      fs.mkdirSync(distPath, { recursive: true });
+    }
+    
+    const fallbackHtml = `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Protocolos - Erro de Build</title>
+    <title>Sistema de Protocolos - Build Necessário</title>
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -123,66 +70,53 @@ try {
             font-size: 48px;
             margin-bottom: 1rem;
         }
-        .retry-btn {
-            background: white;
-            color: #667eea;
-            border: none;
-            padding: 12px 24px;
+        .code {
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
             border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 1rem;
-        }
-        .retry-btn:hover {
-            background: #f0f0f0;
+            font-family: monospace;
+            margin: 1rem 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="error">⚠️</div>
+        <div class="error">🔧</div>
         <h1>⚖️ Sistema de Protocolos Jurídicos</h1>
         <h3>Neycampos Advocacia</h3>
-        <p>❌ Erro no build da aplicação</p>
-        <p><small>O build do React falhou na Square Cloud</small></p>
-        <button class="retry-btn" onclick="window.location.reload()">
-            🔄 Tentar Novamente
-        </button>
-        <br><br>
+        <p>❌ Build necessário antes do deploy</p>
+        <div class="code">
+            npm run build
+        </div>
+        <p><small>Execute o comando acima antes de fazer o deploy</small></p>
+        <br>
         <p><small>Powered by Square Cloud 🚀</small></p>
     </div>
 </body>
 </html>`;
-        
-        fs.writeFileSync(indexPath, fallbackHtml);
-        console.log('🆘 [SQUARE CLOUD] Fallback de erro criado');
-      }
-    }
-  }
-
-  // 4. Verificar se o build foi bem-sucedido
-  if (fs.existsSync(indexPath)) {
+    
+    fs.writeFileSync(indexPath, fallbackHtml);
+    console.log('🆘 [SQUARE CLOUD] Fallback criado - Execute npm run build');
+  } else {
+    // Verificar se é um build real do React
     const indexContent = fs.readFileSync(indexPath, 'utf8');
     
-    // Verificar se é o build real do React ou fallback
-    if (indexContent.includes('id="root"') && indexContent.includes('script')) {
-      console.log('✅ [SQUARE CLOUD] Build do React concluído com sucesso!');
+    if (indexContent.includes('id="root"') && indexContent.includes('script') && !indexContent.includes('Build necessário')) {
+      console.log('✅ [SQUARE CLOUD] Build do React encontrado!');
       console.log('📁 [SQUARE CLOUD] Arquivos gerados em:', distPath);
       
       const files = fs.readdirSync(distPath);
       console.log('📋 [SQUARE CLOUD] Arquivos:', files);
     } else {
-      console.log('⚠️ [SQUARE CLOUD] Build incompleto, usando fallback');
+      console.log('⚠️ [SQUARE CLOUD] Build incompleto detectado');
     }
-  } else {
-    console.error('❌ [SQUARE CLOUD] Nenhum arquivo index.html encontrado após build');
   }
 
-  // 5. Aguardar um pouco antes de iniciar o servidor para evitar conflitos
-  console.log('⏳ [SQUARE CLOUD] Aguardando 2 segundos antes de iniciar servidor...');
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  // 3. Aguardar um pouco antes de iniciar o servidor
+  console.log('⏳ [SQUARE CLOUD] Aguardando 1 segundo antes de iniciar servidor...');
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
-  // 6. Iniciar o servidor
+  // 4. Iniciar o servidor
   console.log('🚀 [SQUARE CLOUD] Iniciando servidor...');
   
   // Usar spawn para manter o processo vivo

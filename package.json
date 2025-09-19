@@ -8,13 +8,13 @@
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "start": "node build-and-start.js",
-    "build:start": "node build-and-start.js",
     "build": "vite build",
+    "build:start": "npm run build && node build-and-start.js",
     "preview": "vite preview",
     "lint": "eslint .",
     "postinstall": "echo 'Dependencies installed successfully'",
-    "squarecloud:build": "npm install && npm run build",
-    "squarecloud:start": "node build-and-start.js"
+    "predeploy": "npm run build",
+    "deploy": "echo 'Build concluído - pronto para deploy na Square Cloud'"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
