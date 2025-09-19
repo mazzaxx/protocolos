@@ -9,11 +9,12 @@
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "start": "node build-and-start.js",
     "build": "vite build",
+    "build:force": "rm -rf dist && vite build",
     "build:start": "npm run build && node build-and-start.js",
     "preview": "vite preview",
     "lint": "eslint .",
     "postinstall": "echo 'Dependencies installed successfully'",
-    "predeploy": "npm run build",
+    "predeploy": "npm run build:force",
     "deploy": "echo 'Build concluído - pronto para deploy na Square Cloud'"
   },
   "dependencies": {

@@ -95,27 +95,31 @@ app.use(cors(corsOptions));
 const distPath = path.join(__dirname, '..', 'dist');
 console.log('📁 Caminho dos arquivos estáticos:', distPath);
 
-// SQUARE CLOUD: Verificar se pasta dist existe
+// SQUARE CLOUD: Verificar se pasta dist existe e é válida
 import fs from 'fs';
 if (fs.existsSync(distPath)) {
   console.log('✅ Pasta dist encontrada');
   const files = fs.readdirSync(distPath);
   console.log('📋 Arquivos na pasta dist:', files);
   
-  // Verificar se é um build real do React
+  // Verificar se é um build real do React (mais rigoroso)
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) {
     const indexContent = fs.readFileSync(indexPath, 'utf8');
-    if (indexContent.includes('id="root"') && indexContent.includes('script')) {
+    if (indexContent.includes('id="root"') && 
+        indexContent.includes('script') && 
+        !indexContent.includes('Build necessário') &&
+        !indexContent.includes('Erro de Build') &&
+        (indexContent.includes('/assets/') || indexContent.includes('type="module"'))) {
       console.log('✅ Build do React detectado');
     } else {
-      console.log('⚠️ Fallback HTML detectado - build pode estar incompleto');
+      console.log('⚠️ Build incompleto ou HTML de fallback detectado');
+      console.log('💡 O build será executado automaticamente pelo build-and-start.js');
     }
   }
 } else {
-  console.error('❌ ERRO CRÍTICO: Pasta dist não encontrada!');
-  console.error('❌ O build não foi executado corretamente');
-  process.exit(1);
+  console.warn('⚠️ AVISO: Pasta dist não encontrada!');
+  console.warn('💡 O build será executado automaticamente pelo build-and-start.js');
 }
 
 app.use(express.static(distPath));

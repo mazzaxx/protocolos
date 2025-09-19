@@ -1,54 +1,44 @@
 # 🚀 INSTRUÇÕES DE DEPLOY - SQUARE CLOUD
 
-## ⚠️ IMPORTANTE: BUILD OBRIGATÓRIO ANTES DO DEPLOY
+## ✅ NOVO: BUILD AUTOMÁTICO NA SQUARE CLOUD
 
-Para evitar problemas de build na Square Cloud, **SEMPRE** execute o build localmente antes de fazer o deploy.
+O sistema agora executa o build **AUTOMATICAMENTE** na Square Cloud! Não é mais necessário fazer build manual.
 
 ## 📋 PASSO A PASSO PARA DEPLOY
 
-### 1. Build Local (OBRIGATÓRIO)
+### 1. Commit das Alterações (SIMPLES)
 ```bash
-# Execute o build localmente
-npm run build
-
-# Verificar se a pasta dist foi criada
-ls -la dist/
-```
-
-### 2. Commit das Alterações
-```bash
-# Adicionar arquivos do build
-git add dist/
+# Adicionar arquivos modificados
 git add .
-git commit -m "Build para produção - Square Cloud"
+git commit -m "Atualização do sistema - Square Cloud"
 ```
 
-### 3. Deploy na Square Cloud
+### 2. Deploy na Square Cloud
 1. Faça push para o repositório
 2. A Square Cloud detectará as mudanças
-3. O servidor iniciará automaticamente
+3. O build será executado automaticamente
+4. O servidor iniciará automaticamente
 
 ## 🔧 ESTRUTURA OTIMIZADA
 
 ### Arquivos Importantes:
-- `dist/` - Build do React (DEVE estar commitado)
-- `build-and-start.js` - Script otimizado para Square Cloud
+- `build-and-start.js` - Script que executa build automático
 - `squarecloud.config` - Configuração da plataforma
 - `server/` - Backend Node.js + SQLite
 
 ### Fluxo de Deploy:
-1. **Local**: `npm run build` (cria pasta `dist/`)
-2. **Git**: Commit da pasta `dist/`
-3. **Square Cloud**: Executa `build-and-start.js`
+1. **Git**: Commit das alterações
+2. **Square Cloud**: Executa `build-and-start.js`
+3. **Build**: Executado automaticamente se necessário
 4. **Servidor**: Serve React + API Node.js
 
 ## ✅ VANTAGENS DESTA ABORDAGEM
 
-### 🎯 Build Local:
-- ✅ Evita problemas de dependências na Square Cloud
-- ✅ Build mais rápido e confiável
-- ✅ Controle total sobre o processo
-- ✅ Debugging mais fácil
+### 🎯 Build Automático:
+- ✅ Não precisa fazer build manual
+- ✅ Build sempre atualizado na Square Cloud
+- ✅ Menos chance de erro humano
+- ✅ Deploy mais simples e rápido
 
 ### 🌐 Fullstack em Um Domínio:
 - ✅ Mais simples de gerenciar
