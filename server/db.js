@@ -7,194 +7,139 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Configuração otimizada do SQLite para múltiplos usuários
+// Configuração otimizada do SQLite para Square Cloud
 const isProduction = process.env.NODE_ENV === 'production';
-const isSquareCloud = process.env.SQUARE_CLOUD === 'true' || process.platform === 'linux';
 const dbPath = path.join(__dirname, 'database.sqlite');
 
-console.log('🗄️ Configurando SQLite otimizado para produção');
+console.log('🗄️ Configurando SQLite otimizado para Square Cloud');
 console.log('📍 Caminho do banco:', dbPath);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
-console.log('☁️ Plataforma:', isSquareCloud ? 'Square Cloud' : 'Local/Railway');
 
-// Pool de conexões SQLite simulado
-class SQLitePool {
-  constructor(dbPath, maxConnections = 15) {
+// Conexão única SQLite para evitar locks no Square Cloud
+class SQLiteConnection {
+  constructor(dbPath) {
     this.dbPath = dbPath;
-    // Ajustar conexões baseado na plataforma e RAM disponível
-    this.maxConnections = isSquareCloud ? 8 : maxConnections; // Square Cloud: mais conservador
-    this.connections = [];
-    this.activeConnections = 0;
+    this.db = null;
+    this.isInitialized = false;
     this.queue = [];
-    
-    // Criar conexões iniciais
-    this.initializePool();
+    this.isProcessing = false;
   }
 
-  initializePool() {
-    const platform = isSquareCloud ? 'Square Cloud (4GB RAM)' : 'Railway/Local';
-    console.log(`🔗 Inicializando pool SQLite com ${this.maxConnections} conexões - ${platform}`);
+  async initialize() {
+    if (this.isInitialized) return;
     
-    for (let i = 0; i < this.maxConnections; i++) {
-      const db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-        if (err) {
-          console.error(`❌ Erro ao criar conexão ${i}:`, err);
-        } else {
-          console.log(`✅ Conexão SQLite ${i} criada`);
-          
-          // Otimizações críticas para performance
-          db.serialize(() => {
-            // WAL mode para melhor concorrência
-            db.run("PRAGMA journal_mode = WAL");
-            
-            // Otimizações de performance para 4GB RAM
-            db.run("PRAGMA synchronous = NORMAL"); // Balance entre segurança e performance
-            db.run("PRAGMA cache_size = 20000"); // 20MB de cache (mais RAM disponível)
-            db.run("PRAGMA temp_store = MEMORY"); // Tabelas temporárias em memória
-            db.run("PRAGMA mmap_size = 536870912"); // 512MB memory-mapped I/O (mais RAM)
-            
-            // Otimizações para concorrência
-            db.run("PRAGMA busy_timeout = 30000"); // 30 segundos timeout
-            db.run("PRAGMA wal_autocheckpoint = 2000"); // Checkpoint a cada 2000 páginas (mais RAM)
-            
-            // Otimizações de escrita
-            db.run("PRAGMA optimize"); // Otimizar estatísticas
-          });
-        }
-      });
-      
-      this.connections.push({
-        db,
-        inUse: false,
-        id: i
-      });
-    }
-  }
-
-  async getConnection() {
+    console.log('🔗 Inicializando conexão única SQLite - Square Cloud');
+    
     return new Promise((resolve, reject) => {
-      // Procurar conexão disponível
-      const availableConnection = this.connections.find(conn => !conn.inUse);
-      
-      if (availableConnection) {
-        availableConnection.inUse = true;
-        this.activeConnections++;
-        resolve(availableConnection);
-      } else {
-        // Adicionar à fila se não há conexões disponíveis
-        this.queue.push({ resolve, reject });
+      this.db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
+        if (err) {
+          console.error('❌ Erro ao criar conexão SQLite:', err);
+          reject(err);
+          return;
+        }
         
-        // Timeout para evitar travamento
-        setTimeout(() => {
-          const index = this.queue.findIndex(item => item.resolve === resolve);
-          if (index !== -1) {
-            this.queue.splice(index, 1);
-            reject(new Error('Connection timeout'));
+        console.log('✅ Conexão SQLite única criada');
+        
+        // Configurações otimizadas para Square Cloud
+        this.db.serialize(() => {
+          // WAL mode para melhor concorrência
+          this.db.run("PRAGMA journal_mode = WAL");
+          
+          // Configurações de performance
+          this.db.run("PRAGMA synchronous = NORMAL");
+          this.db.run("PRAGMA cache_size = 10000"); // 10MB de cache
+          this.db.run("PRAGMA temp_store = MEMORY");
+          this.db.run("PRAGMA mmap_size = 268435456"); // 256MB memory-mapped I/O
+          
+          // Configurações de timeout
+          this.db.run("PRAGMA busy_timeout = 30000"); // 30 segundos timeout
+          this.db.run("PRAGMA wal_autocheckpoint = 1000");
+          
+          // Otimizações
+          this.db.run("PRAGMA optimize");
+          
+          console.log('⚙️ Configurações SQLite aplicadas');
+        });
+        
+        this.isInitialized = true;
+        resolve();
+      });
+    });
+  }
+
+  async execute(sql, params = []) {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      
+      if (sql.toLowerCase().trim().startsWith('select') || sql.toLowerCase().includes('pragma')) {
+        // Query de leitura
+        this.db.all(sql, params, (err, rows) => {
+          const duration = Date.now() - startTime;
+          
+          if (err) {
+            console.error(`❌ Query error (${duration}ms):`, err.message);
+            reject(err);
+          } else {
+            if (duration > 2000) {
+              console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
+            }
+            resolve({ rows: rows || [] });
           }
-        }, 10000); // 10 segundos timeout
+        });
+      } else {
+        // Query de escrita
+        this.db.run(sql, params, function(err) {
+          const duration = Date.now() - startTime;
+          
+          if (err) {
+            console.error(`❌ Query error (${duration}ms):`, err.message);
+            reject(err);
+          } else {
+            if (duration > 2000) {
+              console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
+            }
+            resolve({ 
+              rowCount: this.changes,
+              insertId: this.lastID,
+              changes: this.changes
+            });
+          }
+        });
       }
     });
   }
 
-  releaseConnection(connection) {
-    connection.inUse = false;
-    this.activeConnections--;
-    
-    // Processar fila se há requisições esperando
-    if (this.queue.length > 0) {
-      const { resolve } = this.queue.shift();
-      connection.inUse = true;
-      this.activeConnections++;
-      resolve(connection);
-    }
-  }
-
   async close() {
-    console.log('🔒 Fechando pool de conexões SQLite...');
-    
-    const closePromises = this.connections.map(conn => {
+    if (this.db) {
+      console.log('🔒 Fechando conexão SQLite...');
       return new Promise((resolve) => {
-        conn.db.close((err) => {
+        this.db.close((err) => {
           if (err) {
-            console.error(`❌ Erro ao fechar conexão ${conn.id}:`, err);
+            console.error('❌ Erro ao fechar conexão:', err);
           } else {
-            console.log(`✅ Conexão ${conn.id} fechada`);
+            console.log('✅ Conexão SQLite fechada');
           }
           resolve();
         });
       });
-    });
-    
-    await Promise.all(closePromises);
-    console.log('🔒 Todas as conexões SQLite fechadas');
-  }
-
-  getStats() {
-    return {
-      totalConnections: this.connections.length,
-      activeConnections: this.activeConnections,
-      queueLength: this.queue.length,
-      availableConnections: this.connections.length - this.activeConnections,
-      platform: isSquareCloud ? 'Square Cloud' : 'Railway/Local'
-    };
+    }
   }
 }
 
-// Instância global do pool
-const pool = new SQLitePool(dbPath, 20); // 20 conexões com 4GB RAM
+// Instância global da conexão
+const connection = new SQLiteConnection(dbPath);
 
 // Função unificada para executar queries com retry automático
 const query = async (sql, params = [], retries = 3) => {
-  let connection;
   let attempt = 0;
   
   while (attempt < retries) {
     try {
-      connection = await pool.getConnection();
-      
-      return await new Promise((resolve, reject) => {
-        const startTime = Date.now();
-        
-        if (sql.toLowerCase().trim().startsWith('select') || sql.toLowerCase().includes('pragma')) {
-          // Query de leitura
-          connection.db.all(sql, params, (err, rows) => {
-            const duration = Date.now() - startTime;
-            
-            if (err) {
-              console.error(`❌ Query error (${duration}ms):`, err.message);
-              console.error(`📝 SQL:`, sql);
-              console.error(`📊 Params:`, params);
-              reject(err);
-            } else {
-              if (duration > 1000) {
-                console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
-              }
-              resolve({ rows: rows || [] });
-            }
-          });
-        } else {
-          // Query de escrita
-          connection.db.run(sql, params, function(err) {
-            const duration = Date.now() - startTime;
-            
-            if (err) {
-              console.error(`❌ Query error (${duration}ms):`, err.message);
-              console.error(`📝 SQL:`, sql);
-              console.error(`📊 Params:`, params);
-              reject(err);
-            } else {
-              if (duration > 1000) {
-                console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
-              }
-              resolve({ 
-                rowCount: this.changes,
-                insertId: this.lastID,
-                changes: this.changes
-              });
-            }
-          });
-        }
-      });
+      return await connection.execute(sql, params);
     } catch (error) {
       attempt++;
       console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
@@ -204,76 +149,40 @@ const query = async (sql, params = [], retries = 3) => {
       }
       
       // Aguardar antes de tentar novamente
-      await new Promise(resolve => setTimeout(resolve, 100 * attempt));
-    } finally {
-      if (connection) {
-        pool.releaseConnection(connection);
-      }
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
   }
 };
 
 // Função para executar transações
 const transaction = async (queries) => {
-  let connection;
-  
   try {
-    connection = await pool.getConnection();
+    await connection.execute("BEGIN TRANSACTION");
     
-    return await new Promise((resolve, reject) => {
-      connection.db.serialize(() => {
-        connection.db.run("BEGIN TRANSACTION");
-        
-        const results = [];
-        let completed = 0;
-        let hasError = false;
-        
-        queries.forEach((queryData, index) => {
-          if (hasError) return;
-          
-          const { sql, params = [] } = queryData;
-          
-          connection.db.run(sql, params, function(err) {
-            if (err && !hasError) {
-              hasError = true;
-              connection.db.run("ROLLBACK");
-              reject(err);
-              return;
-            }
-            
-            results[index] = {
-              rowCount: this.changes,
-              insertId: this.lastID
-            };
-            
-            completed++;
-            
-            if (completed === queries.length) {
-              connection.db.run("COMMIT", (commitErr) => {
-                if (commitErr) {
-                  reject(commitErr);
-                } else {
-                  resolve(results);
-                }
-              });
-            }
-          });
-        });
-      });
-    });
-  } finally {
-    if (connection) {
-      pool.releaseConnection(connection);
+    const results = [];
+    
+    for (const queryData of queries) {
+      const { sql, params = [] } = queryData;
+      const result = await connection.execute(sql, params);
+      results.push(result);
     }
+    
+    await connection.execute("COMMIT");
+    return results;
+  } catch (error) {
+    await connection.execute("ROLLBACK");
+    throw error;
   }
 };
 
 // Função para inicializar o banco de dados
 export const initializeDb = async () => {
-  console.log('🚀 Inicializando banco SQLite otimizado...');
-  console.log('📊 Configuração para 100+ usuários simultâneos');
+  console.log('🚀 Inicializando banco SQLite para Square Cloud...');
   
   try {
+    // Aguardar inicialização da conexão
+    await connection.initialize();
+    
     // Criar tabelas com índices otimizados
     console.log('📋 Criando tabela funcionarios...');
     await query(`
@@ -406,9 +315,7 @@ const createTestUsers = async () => {
 export const testConnection = async () => {
   try {
     const result = await query("SELECT 1 as test");
-    const stats = pool.getStats();
     console.log('✅ Teste de conectividade bem-sucedido');
-    console.log('📊 Pool stats:', stats);
     return result;
   } catch (error) {
     console.error('❌ Teste de conectividade falhou:', error);
@@ -422,15 +329,13 @@ export const getDatabaseStats = async () => {
     const funcionariosResult = await query("SELECT COUNT(*) as count FROM funcionarios");
     const protocolosResult = await query("SELECT COUNT(*) as count FROM protocolos");
     const aguardandoResult = await query("SELECT COUNT(*) as count FROM protocolos WHERE status = 'Aguardando'");
-    const poolStats = pool.getStats();
     
     const stats = {
       funcionarios: funcionariosResult.rows[0].count,
       protocolos: protocolosResult.rows[0].count,
       protocolosAguardando: aguardandoResult.rows[0].count,
-      databaseType: 'SQLite Otimizado',
-      environment: process.env.NODE_ENV || 'development',
-      poolStats
+      databaseType: 'SQLite Otimizado para Square Cloud',
+      environment: process.env.NODE_ENV || 'development'
     };
     
     return stats;
@@ -465,7 +370,7 @@ export const maintenanceDb = async () => {
 
 // Função para fechar conexões (cleanup)
 export const closeConnection = async () => {
-  await pool.close();
+  await connection.close();
 };
 
 // Exportar funções principais

@@ -7,28 +7,25 @@ import adminRoutes from './admin.js';
 import { maintenanceDb } from './db.js';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 80;
 
 console.log('🚀 Iniciando servidor...');
 console.log('🌐 Porta:', PORT);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
-console.log('🗄️ Banco: SQLite Otimizado para 4GB RAM');
-console.log('💾 RAM Disponível: 4GB (otimizado)');
+console.log('☁️ Plataforma: Square Cloud');
+console.log('🗄️ Banco: SQLite Conexão Única');
 
-// Lista de origens permitidas para CORS
+// Lista de origens permitidas para CORS (Square Cloud)
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-  'https://ncasistemaprotocolos.netlify.app',
-  'https://sistema-protocolos-juridicos-production.up.railway.app',
-  // Permitir qualquer subdomínio do Netlify para flexibilidade
-  /^https:\/\/.*\.netlify\.app$/,
-  // Permitir qualquer subdomínio do Railway para flexibilidade
-  /^https:\/\/.*\.up\.railway\.app$/
+  // Square Cloud domains
+  /^https:\/\/.*\.squarecloud\.app$/,
+  /^https:\/\/.*\.squareweb\.app$/,
 ];
 
-// Configuração CORS mais permissiva
+// Configuração CORS otimizada para Square Cloud
 const corsOptions = {
   origin: function (origin, callback) {
     // Log apenas em desenvolvimento para evitar spam
@@ -88,7 +85,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Middleware de logging
+// Middleware de logging otimizado
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   
@@ -115,9 +112,10 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   console.log('🏥 Health check solicitado');
   res.json({ 
-    message: 'Servidor de autenticação funcionando!',
+    message: 'Sistema de Protocolos Jurídicos funcionando!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
+    platform: 'Square Cloud',
     port: PORT
   });
 });
@@ -142,6 +140,7 @@ app.get('/health', async (req, res) => {
       database: 'connected',
       stats: stats,
       environment: process.env.NODE_ENV || 'development',
+      platform: 'Square Cloud',
       port: PORT
     });
   } catch (error) {
@@ -197,7 +196,7 @@ async function startServer() {
     await initializeDb();
     console.log('✅ Banco de dados inicializado com sucesso!');
     
-    // Agendar manutenção periódica (a cada 6 horas)
+    // Agendar manutenção periódica (a cada 12 horas para Square Cloud)
     setInterval(async () => {
       console.log('🔧 Executando manutenção automática do banco...');
       try {
@@ -206,16 +205,14 @@ async function startServer() {
       } catch (error) {
         console.error('❌ Erro na manutenção automática:', error);
       }
-    }, 6 * 60 * 60 * 1000); // 6 horas
+    }, 12 * 60 * 60 * 1000); // 12 horas
     
     app.listen(PORT, '0.0.0.0', () => {
       console.log('🎉 SERVIDOR INICIADO COM SUCESSO!');
       console.log('=' .repeat(50));
       console.log(`🌐 Servidor rodando na porta: ${PORT}`);
-      console.log(`🔗 URL local: http://localhost:${PORT}`);
-      console.log(`🌍 URL Railway: https://sistema-protocolos-juridicos-production.up.railway.app`);
-      console.log(`🎯 Frontend Netlify: https://ncasistemaprotocolos.netlify.app`);
-      console.log(`🗄️ Banco: SQLite Otimizado (WAL mode, 15 conexões)`);
+      console.log(`☁️ Plataforma: Square Cloud`);
+      console.log(`🗄️ Banco: SQLite Conexão Única`);
       console.log(`👥 Capacidade: 100+ usuários simultâneos`);
       console.log('=' .repeat(50));
       console.log('📋 Rotas disponíveis:');
@@ -228,7 +225,7 @@ async function startServer() {
       console.log('  GET  /api/admin/funcionarios - Listar funcionários');
       console.log('=' .repeat(50));
       console.log('🔄 Sistema pronto para receber requisições!');
-      console.log('⚡ Performance otimizada para escritório grande');
+      console.log('☁️ Otimizado para Square Cloud');
       
       // Teste de conectividade inicial
       testConnection()
