@@ -1,34 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Protocol } from '../types';
 
-/**
- * SISTEMA DE CACHE INTELIGENTE - SQUARE CLOUD
- * 
- * Cache otimizado para funcionar perfeitamente com a Square Cloud.
- * Reduz requisições desnecessárias e melhora performance.
- * 
- * FUNCIONALIDADES:
- * - Cache com TTL (Time To Live)
- * - Detecção de mudanças por hash
- * - Throttling de requisições
- * - Limpeza automática
- * 
- * HOSPEDAGEM SQUARE CLOUD:
- * - Otimizado para latência brasileira
- * - Reduz uso de banda
- * - Melhora experiência do usuário
- */
+// Sistema de cache inteligente para evitar re-renders desnecessários
 class ProtocolCache {
   private cache: Map<string, any> = new Map();
   private lastHash: string = '';
   private lastFetch: number = 0;
   
-  /**
-   * GERAÇÃO DE HASH PARA DETECÇÃO DE MUDANÇAS
-   * 
-   * Cria hash simples dos dados para detectar mudanças reais.
-   * Evita re-renders desnecessários na Square Cloud.
-   */
+  // Gerar hash dos dados para detectar mudanças reais
   private generateHash(data: any): string {
     return JSON.stringify(data).split('').reduce((a, b) => {
       a = ((a << 5) - a) + b.charCodeAt(0);
@@ -36,12 +15,7 @@ class ProtocolCache {
     }, 0).toString();
   }
   
-  /**
-   * VERIFICAÇÃO DE MUDANÇAS
-   * 
-   * Compara hash atual com anterior para detectar mudanças.
-   * Otimização importante para performance na Square Cloud.
-   */
+  // Verificar se os dados mudaram
   hasChanged(data: any): boolean {
     const newHash = this.generateHash(data);
     const changed = newHash !== this.lastHash;
@@ -49,12 +23,7 @@ class ProtocolCache {
     return changed;
   }
   
-  /**
-   * CACHE COM TTL (TIME TO LIVE)
-   * 
-   * Armazena dados com tempo de expiração.
-   * Reduz carga no servidor Square Cloud.
-   */
+  // Cache com TTL
   set(key: string, value: any, ttl: number = 5000) {
     this.cache.set(key, {
       value,
@@ -62,18 +31,11 @@ class ProtocolCache {
     });
   }
   
-  /**
-   * RECUPERAÇÃO DE DADOS DO CACHE
-   * 
-   * Retorna dados do cache se ainda válidos.
-   * Limpa automaticamente dados expirados.
-   */
   get(key: string): any {
     const item = this.cache.get(key);
     if (!item) return null;
     
     if (Date.now() > item.expires) {
-      // SQUARE CLOUD: Limpar dados expirados automaticamente
       this.cache.delete(key);
       return null;
     }
@@ -81,23 +43,12 @@ class ProtocolCache {
     return item.value;
   }
   
-  /**
-   * LIMPEZA COMPLETA DO CACHE
-   * 
-   * Remove todos os dados do cache.
-   * Usado quando forçamos refresh na Square Cloud.
-   */
   clear() {
     this.cache.clear();
     this.lastHash = '';
   }
   
-  /**
-   * CONTROLE DE THROTTLING
-   * 
-   * Evita requisições muito frequentes ao servidor Square Cloud.
-   * Melhora performance e reduz custos.
-   */
+  // Controle de throttling
   canFetch(minInterval: number = 1000): boolean {
     const now = Date.now();
     if (now - this.lastFetch < minInterval) {
@@ -108,15 +59,10 @@ class ProtocolCache {
   }
 }
 
-// SQUARE CLOUD: Instância global do cache otimizado
+// Instância global do cache
 const protocolCache = new ProtocolCache();
 
-/**
- * SISTEMA DE DEBOUNCE PARA SQUARE CLOUD
- * 
- * Evita múltiplas requisições simultâneas ao servidor.
- * Essencial para performance na Square Cloud.
- */
+// Sistema de debounce para evitar múltiplas requisições
 const debounce = (func: Function, wait: number) => {
   let timeout: NodeJS.Timeout;
   return function executedFunction(...args: any[]) {
@@ -129,35 +75,23 @@ const debounce = (func: Function, wait: number) => {
   };
 };
 
-/**
- * FUNÇÃO PARA BUSCAR EMAIL DO USUÁRIO POR ID
- * 
- * Busca dados do usuário com cache otimizado.
- * Reduz consultas desnecessárias à Square Cloud.
- * 
- * SQUARE CLOUD:
- * - Cache de 10 minutos para emails
- * - Fallback para erro de conexão
- * - Headers otimizados
- */
+// Função para buscar email do usuário por ID (com cache)
 const getUserEmailById = async (userId: number): Promise<string> => {
   const cacheKey = `user_email_${userId}`;
   const cached = protocolCache.get(cacheKey);
   if (cached) return cached;
   
   try {
-    // SQUARE CLOUD: URL da API otimizada
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios`, {
       credentials: 'include',
       headers: {
-        'Cache-Control': 'max-age=300', // SQUARE CLOUD: 5 minutos de cache
-        'X-Platform': 'Square Cloud'
+        'Cache-Control': 'max-age=300' // 5 minutos de cache
       }
     });
     
     if (!response.ok) {
-      throw new Error(`[SQUARE CLOUD] HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -166,36 +100,17 @@ const getUserEmailById = async (userId: number): Promise<string> => {
       const user = data.funcionarios.find((f: any) => f.id === userId);
       const email = user ? user.email : 'Usuário não encontrado';
       
-      // SQUARE CLOUD: Cache por 10 minutos
+      // Cache por 10 minutos
       protocolCache.set(cacheKey, email, 600000);
       return email;
     }
-    return 'Email não disponível (Square Cloud)';
+    return 'Email não disponível';
   } catch (error) {
-    console.error('[SQUARE CLOUD] Erro ao buscar email do usuário:', error);
-    return 'Email não disponível (Square Cloud)';
+    console.error('Erro ao buscar email do usuário:', error);
+    return 'Email não disponível';
   }
 };
 
-/**
- * HOOK PRINCIPAL PARA GERENCIAMENTO DE PROTOCOLOS
- * 
- * Hook React otimizado para funcionar com a Square Cloud.
- * Gerencia estado, sincronização e operações CRUD.
- * 
- * FUNCIONALIDADES:
- * - Sincronização em tempo real
- * - Cache inteligente
- * - Retry automático
- * - Polling adaptativo
- * - Tratamento robusto de erros
- * 
- * HOSPEDAGEM SQUARE CLOUD:
- * - Otimizado para latência brasileira
- * - Reduz uso de recursos
- * - Melhora experiência do usuário
- * - Logs detalhados para debugging
- */
 export function useProtocols() {
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [userEmails, setUserEmails] = useState<Record<number, string>>({});
@@ -203,35 +118,27 @@ export function useProtocols() {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   
-  // SQUARE CLOUD: Refs para controle de estado otimizado
+  // Refs para controle de estado
   const isFetchingRef = useRef(false);
   const mountedRef = useRef(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef(0);
   const lastActivityRef = useRef(Date.now());
   
-  /**
-   * FUNÇÃO OTIMIZADA PARA BUSCAR PROTOCOLOS
-   * 
-   * Busca protocolos do servidor Square Cloud com otimizações:
-   * - Cache inteligente
-   * - Throttling de requisições
-   * - Retry automático
-   * - Logs detalhados
-   */
+  // Função otimizada para buscar protocolos
   const fetchProtocols = useCallback(async (forceRefresh = false) => {
-    // SQUARE CLOUD: Verificar se componente ainda está montado
+    // Verificar se o componente ainda está montado
     if (!mountedRef.current) return;
     
-    // SQUARE CLOUD: Evitar múltiplas requisições simultâneas
+    // Evitar múltiplas requisições simultâneas
     if (isFetchingRef.current && !forceRefresh) {
-      console.log('[SQUARE CLOUD] 🔄 Requisição já em andamento, ignorando...');
+      console.log('🔄 Requisição já em andamento, ignorando...');
       return;
     }
     
-    // SQUARE CLOUD: Throttling inteligente para economizar recursos
+    // Throttling inteligente
     if (!forceRefresh && !protocolCache.canFetch(1500)) {
-      console.log('[SQUARE CLOUD] ⏱️ Throttling ativo, aguardando...');
+      console.log('⏱️ Throttling ativo, aguardando...');
       return;
     }
     
@@ -240,10 +147,9 @@ export function useProtocols() {
     setConnectionStatus('checking');
     
     const startTime = Date.now();
-    console.log('[SQUARE CLOUD] 🔄 SINCRONIZAÇÃO INICIADA:', forceRefresh ? 'FORÇADA' : 'AUTOMÁTICA');
+    console.log('🔄 SINCRONIZAÇÃO INICIADA:', forceRefresh ? 'FORÇADA' : 'AUTOMÁTICA');
     
     try {
-      // SQUARE CLOUD: Configurar URL da API
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const url = `${apiBaseUrl}/api/protocolos`;
       
@@ -251,67 +157,58 @@ export function useProtocols() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=30', // SQUARE CLOUD: Cache otimizado
-          'X-Sync-Mode': forceRefresh ? 'force' : 'auto', // SQUARE CLOUD: Modo de sincronização
-          'X-Client-Time': new Date().toISOString(), // SQUARE CLOUD: Timestamp do cliente
-          'X-Platform': 'Square Cloud' // SQUARE CLOUD: Identificação da plataforma
+          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=30',
+          'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
+          'X-Client-Time': new Date().toISOString()
         },
         credentials: 'include',
         mode: 'cors'
       });
       
       const duration = Date.now() - startTime;
-      console.log(`[SQUARE CLOUD] 📡 Resposta recebida em ${duration}ms - Status: ${response.status}`);
+      console.log(`📡 Resposta recebida em ${duration}ms - Status: ${response.status}`);
       
       if (!response.ok) {
-        throw new Error(`[SQUARE CLOUD] HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
       
       if (!data.success || !Array.isArray(data.protocolos)) {
-        throw new Error('[SQUARE CLOUD] Resposta inválida do servidor');
+        throw new Error('Resposta inválida do servidor');
       }
       
-      // SQUARE CLOUD: Verificar se dados realmente mudaram (otimização)
+      // Verificar se os dados realmente mudaram
       if (!forceRefresh && !protocolCache.hasChanged(data.protocolos)) {
-        console.log('[SQUARE CLOUD] 📊 Dados inalterados, mantendo cache');
+        console.log('📊 Dados inalterados, mantendo cache');
         setConnectionStatus('connected');
         setLastSyncTime(new Date());
         retryCountRef.current = 0;
         return;
       }
       
-      /**
-       * PROCESSAMENTO DE PROTOCOLOS COM VALIDAÇÃO
-       * 
-       * Processa dados recebidos da Square Cloud com validação robusta.
-       * Converte tipos e trata erros de parsing.
-       */
+      // Processar protocolos com validação
       const protocolsWithDates = data.protocolos.map((p: any) => {
         try {
           return {
             ...p,
-            // SQUARE CLOUD: Conversão segura de datas
             createdAt: new Date(p.createdAt),
             updatedAt: new Date(p.updatedAt),
-            // SQUARE CLOUD: Validação de arrays
             documents: Array.isArray(p.documents) ? p.documents : [],
             guias: Array.isArray(p.guias) ? p.guias : [],
             activityLog: Array.isArray(p.activityLog) ? p.activityLog : []
           };
         } catch (error) {
-          console.error('[SQUARE CLOUD] ❌ Erro ao processar protocolo:', p.id, error);
+          console.error('❌ Erro ao processar protocolo:', p.id, error);
           return null;
         }
       }).filter(Boolean);
       
-      // SQUARE CLOUD: Logs de sucesso com estatísticas
-      console.log(`[SQUARE CLOUD] ✅ SINCRONIZAÇÃO COMPLETA: ${protocolsWithDates.length} protocolos`);
-      console.log(`[SQUARE CLOUD] 📊 Performance: ${duration}ms`);
-      console.log(`[SQUARE CLOUD] 🎯 Filas: Robô(${protocolsWithDates.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolsWithDates.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolsWithDates.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
+      console.log(`✅ SINCRONIZAÇÃO COMPLETA: ${protocolsWithDates.length} protocolos`);
+      console.log(`📊 Performance: ${duration}ms`);
+      console.log(`🎯 Filas: Robô(${protocolsWithDates.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolsWithDates.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolsWithDates.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
       
-      // SQUARE CLOUD: Atualizar estado apenas se componente montado
+      // Atualizar estado apenas se o componente ainda estiver montado
       if (mountedRef.current) {
         setProtocols(protocolsWithDates);
         setConnectionStatus('connected');
@@ -321,15 +218,15 @@ export function useProtocols() {
       }
       
     } catch (error) {
-      console.error('[SQUARE CLOUD] ❌ ERRO DE SINCRONIZAÇÃO:', error);
+      console.error('❌ ERRO DE SINCRONIZAÇÃO:', error);
       
       if (mountedRef.current) {
         setConnectionStatus('disconnected');
         retryCountRef.current++;
         
-        // SQUARE CLOUD: Estratégia de retry exponencial
+        // Estratégia de retry exponencial
         const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
-        console.log(`[SQUARE CLOUD] 🔄 Tentativa ${retryCountRef.current}, próxima em ${retryDelay}ms`);
+        console.log(`🔄 Tentativa ${retryCountRef.current}, próxima em ${retryDelay}ms`);
         
         setTimeout(() => {
           if (mountedRef.current && retryCountRef.current < 5) {
@@ -339,8 +236,8 @@ export function useProtocols() {
       }
       
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        console.error('[SQUARE CLOUD] 🚨 ERRO CRÍTICO: Backend inacessível');
-        console.error('[SQUARE CLOUD] 🔧 Verifique: https://sistema-protocolos.squareweb.app');
+        console.error('🚨 ERRO CRÍTICO: Backend inacessível');
+        console.error('🔧 Verifique: https://sistema-protocolos-juridicos-production.up.railway.app');
       }
       
     } finally {
@@ -351,31 +248,21 @@ export function useProtocols() {
     }
   }, []);
   
-  // SQUARE CLOUD: Versão com debounce para evitar chamadas excessivas
+  // Debounced version para evitar chamadas excessivas
   const debouncedFetch = useCallback(
     debounce(fetchProtocols, 300),
     [fetchProtocols]
   );
   
-  /**
-   * EFFECT PRINCIPAL PARA INICIALIZAÇÃO E POLLING
-   * 
-   * Configura sincronização automática com a Square Cloud.
-   * Polling adaptativo baseado na atividade do usuário.
-   */
+  // Effect principal para inicialização e polling
   useEffect(() => {
-    console.log('[SQUARE CLOUD] 🚀 useProtocols: Inicializando sistema otimizado...');
-    console.log('[SQUARE CLOUD] 🌐 Backend:', import.meta.env.VITE_API_BASE_URL || 'PROXY LOCAL');
+    console.log('🚀 useProtocols: Inicializando sistema otimizado...');
+    console.log('🌐 Backend:', import.meta.env.VITE_API_BASE_URL || 'PROXY LOCAL');
     
-    // SQUARE CLOUD: Fetch inicial
+    // Fetch inicial
     fetchProtocols(true);
     
-    /**
-     * CONFIGURAÇÃO DE POLLING ADAPTATIVO
-     * 
-     * Ajusta frequência de sincronização baseada na atividade.
-     * Economiza recursos na Square Cloud.
-     */
+    // Configurar polling adaptativo
     const setupPolling = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -384,26 +271,26 @@ export function useProtocols() {
       intervalRef.current = setInterval(() => {
         if (!mountedRef.current) return;
         
-        // SQUARE CLOUD: Polling adaptativo baseado na atividade
+        // Polling adaptativo baseado na atividade
         const timeSinceActivity = Date.now() - lastActivityRef.current;
-        let interval = 3000; // SQUARE CLOUD: 3 segundos padrão
+        let interval = 3000; // 3 segundos padrão
         
         if (timeSinceActivity > 60000) {
-          interval = 10000; // SQUARE CLOUD: 10 segundos se inativo
+          interval = 10000; // 10 segundos se inativo por 1 minuto
         } else if (timeSinceActivity > 30000) {
-          interval = 5000; // SQUARE CLOUD: 5 segundos se pouco ativo
+          interval = 5000; // 5 segundos se inativo por 30 segundos
         }
         
-        console.log(`[SQUARE CLOUD] 🔄 POLLING AUTOMÁTICO (${interval}ms): Verificando atualizações...`);
+        console.log(`🔄 POLLING AUTOMÁTICO (${interval}ms): Verificando atualizações...`);
         debouncedFetch(false);
-      }, 3000); // SQUARE CLOUD: Intervalo base de 3 segundos
+      }, 3000); // Intervalo base de 3 segundos
     };
     
     setupPolling();
     
-    // SQUARE CLOUD: Cleanup para evitar memory leaks
+    // Cleanup
     return () => {
-      console.log('[SQUARE CLOUD] 🛑 useProtocols: Limpando recursos...');
+      console.log('🛑 useProtocols: Limpando recursos...');
       mountedRef.current = false;
       isFetchingRef.current = false;
       
@@ -414,12 +301,7 @@ export function useProtocols() {
     };
   }, [debouncedFetch]);
   
-  /**
-   * EFFECT PARA CARREGAR EMAILS DOS USUÁRIOS
-   * 
-   * Carrega emails dos usuários em lotes para otimizar performance.
-   * Cache inteligente para reduzir requisições à Square Cloud.
-   */
+  // Effect para carregar emails dos usuários
   useEffect(() => {
     const loadUserEmails = async () => {
       if (protocols.length === 0) return;
@@ -427,8 +309,8 @@ export function useProtocols() {
       const uniqueUserIds = [...new Set(protocols.map(p => p.createdBy))];
       const newEmails: Record<number, string> = {};
       
-      // SQUARE CLOUD: Carregar emails em lotes para otimizar
-      const batchSize = 5; // SQUARE CLOUD: Lotes de 5 para não sobrecarregar
+      // Carregar emails em paralelo com limite
+      const batchSize = 5;
       for (let i = 0; i < uniqueUserIds.length; i += batchSize) {
         const batch = uniqueUserIds.slice(i, i + batchSize);
         
@@ -438,8 +320,8 @@ export function useProtocols() {
               const email = await getUserEmailById(userId);
               return { userId, email };
             } catch (error) {
-              console.error(`[SQUARE CLOUD] Erro ao carregar email do usuário ${userId}:`, error);
-              return { userId, email: 'Email não disponível (Square Cloud)' };
+              console.error(`Erro ao carregar email do usuário ${userId}:`, error);
+              return { userId, email: 'Email não disponível' };
             }
           }
           return null;
@@ -461,27 +343,17 @@ export function useProtocols() {
     loadUserEmails();
   }, [protocols, userEmails]);
   
-  /**
-   * FUNÇÃO PARA FORÇAR REFRESH
-   * 
-   * Força sincronização imediata com a Square Cloud.
-   * Limpa cache e atualiza atividade.
-   */
+  // Função para forçar refresh
   const forceRefresh = useCallback(() => {
-    console.log('[SQUARE CLOUD] 🔄 Forçando refresh dos protocolos...');
+    console.log('🔄 Forçando refresh dos protocolos...');
     protocolCache.clear();
     lastActivityRef.current = Date.now();
     fetchProtocols(true);
   }, [fetchProtocols]);
   
-  /**
-   * FUNÇÃO OTIMIZADA PARA ADICIONAR PROTOCOLO
-   * 
-   * Cria novo protocolo na Square Cloud com sincronização automática.
-   * Múltiplas tentativas de sincronização para garantir consistência.
-   */
+  // Função otimizada para adicionar protocolo
   const addProtocol = useCallback(async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
-    console.log('[SQUARE CLOUD] 🚀 CRIANDO PROTOCOLO - Sincronização iniciada');
+    console.log('🚀 CRIANDO PROTOCOLO - Sincronização iniciada');
     lastActivityRef.current = Date.now();
     
     try {
@@ -498,7 +370,6 @@ export function useProtocols() {
         headers: {
           'Content-Type': 'application/json',
           'X-Sync-Action': 'create-protocol',
-          'X-Platform': 'Square Cloud'
         },
         credentials: 'include',
         mode: 'cors',
@@ -507,38 +378,33 @@ export function useProtocols() {
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`[SQUARE CLOUD] HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
       const data = await response.json();
       
       if (data.success) {
-        console.log('[SQUARE CLOUD] 🎉 PROTOCOLO CRIADO COM SUCESSO!');
+        console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
         
-        // SQUARE CLOUD: Invalidar cache e forçar múltiplas sincronizações
+        // Invalidar cache e forçar refresh imediato
         protocolCache.clear();
         
-        // SQUARE CLOUD: Múltiplas sincronizações para garantir consistência
+        // Múltiplas sincronizações para garantir consistência
         setTimeout(() => fetchProtocols(true), 100);
         setTimeout(() => fetchProtocols(true), 500);
         setTimeout(() => fetchProtocols(true), 1000);
         
         return data.protocolo;
       } else {
-        throw new Error(data.message || '[SQUARE CLOUD] Erro ao criar protocolo');
+        throw new Error(data.message || 'Erro ao criar protocolo');
       }
     } catch (error) {
-      console.error('[SQUARE CLOUD] 🚨 ERRO CRÍTICO:', error);
-      throw new Error(`[SQUARE CLOUD] ERRO DE CONEXÃO: ${error.message}`);
+      console.error('🚨 ERRO CRÍTICO:', error);
+      throw new Error(`ERRO DE CONEXÃO: ${error.message}`);
     }
   }, [fetchProtocols]);
   
-  /**
-   * FUNÇÃO OTIMIZADA PARA ATUALIZAR PROTOCOLO
-   * 
-   * Atualiza protocolo na Square Cloud com log de atividades.
-   * Sincronização automática após atualização.
-   */
+  // Função otimizada para atualizar protocolo no servidor
   const updateProtocolInServer = useCallback(async (id: string, updates: any, performedBy?: string) => {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
@@ -548,12 +414,12 @@ export function useProtocols() {
         updateData.newLogEntry = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'status_changed',
-          description: `[SQUARE CLOUD] Status alterado para: ${updates.status || 'atualizado'}`,
+          description: `Status alterado para: ${updates.status || 'atualizado'}`,
           performedBy
         };
       }
       
-      console.log('[SQUARE CLOUD] 🔄 ATUALIZANDO PROTOCOLO:', id);
+      console.log('🔄 ATUALIZANDO PROTOCOLO:', id);
       lastActivityRef.current = Date.now();
       
       const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
@@ -561,7 +427,6 @@ export function useProtocols() {
         headers: {
           'Content-Type': 'application/json',
           'X-Sync-Action': 'update-protocol',
-          'X-Platform': 'Square Cloud'
         },
         credentials: 'include',
         body: JSON.stringify(updateData),
@@ -569,48 +434,40 @@ export function useProtocols() {
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`[SQUARE CLOUD] HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
       const data = await response.json();
       
       if (data.success) {
-        console.log('[SQUARE CLOUD] ✅ PROTOCOLO ATUALIZADO - Sincronizando...');
+        console.log('✅ PROTOCOLO ATUALIZADO - Sincronizando...');
         
-        // SQUARE CLOUD: Invalidar cache e sincronizar
+        // Invalidar cache e sincronizar
         protocolCache.clear();
         setTimeout(() => fetchProtocols(true), 200);
         
         return true;
       } else {
-        throw new Error(data.message || '[SQUARE CLOUD] Erro ao atualizar protocolo');
+        throw new Error(data.message || 'Erro ao atualizar protocolo');
       }
     } catch (error) {
-      console.error('[SQUARE CLOUD] 🚨 ERRO DE ATUALIZAÇÃO:', error);
+      console.error('🚨 ERRO DE ATUALIZAÇÃO:', error);
       return false;
     }
   }, [fetchProtocols]);
   
-  /**
-   * FUNÇÕES ESPECÍFICAS PARA OPERAÇÕES
-   * 
-   * Wrappers otimizados para operações específicas na Square Cloud.
-   * Cada função inclui tratamento de erro e logs específicos.
-   */
-  
-  // SQUARE CLOUD: Atualizar status do protocolo
+  // Funções específicas para operações
   const updateProtocolStatus = useCallback(async (id: string, status: Protocol['status'], performedBy?: string) => {
     const success = await updateProtocolInServer(id, { status }, performedBy);
     if (!success) {
-      throw new Error('[SQUARE CLOUD] Falha ao atualizar status no servidor');
+      throw new Error('Falha ao atualizar status no servidor');
     }
   }, [updateProtocolInServer]);
   
-  // SQUARE CLOUD: Devolver protocolo com motivo
   const returnProtocol = useCallback(async (id: string, returnReason: string, performedBy?: string) => {
     const foundProtocol = protocols.find(p => p.id === id);
     if (!foundProtocol) {
-      throw new Error('[SQUARE CLOUD] Protocolo não encontrado');
+      throw new Error('Protocolo não encontrado');
     }
     
     let updates: any = {};
@@ -619,11 +476,11 @@ export function useProtocols() {
       updates = {
         status: 'Aguardando',
         assignedTo: 'Carlos',
-        returnReason: `[SQUARE CLOUD] Devolvido pelo Robô: ${returnReason}`,
+        returnReason: `Devolvido pelo Robô: ${returnReason}`,
         newLogEntry: {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'returned',
-          description: '[SQUARE CLOUD] Protocolo devolvido pelo Robô para fila do Carlos',
+          description: 'Protocolo devolvido pelo Robô para fila do Carlos',
           performedBy: performedBy || 'Sistema',
           details: returnReason
         }
@@ -636,7 +493,7 @@ export function useProtocols() {
         newLogEntry: {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'returned',
-          description: '[SQUARE CLOUD] Protocolo devolvido',
+          description: 'Protocolo devolvido',
           performedBy: performedBy || 'Sistema',
           details: returnReason
         }
@@ -645,87 +502,82 @@ export function useProtocols() {
     
     const success = await updateProtocolInServer(id, updates);
     if (!success) {
-      throw new Error('[SQUARE CLOUD] Falha ao devolver protocolo no servidor');
+      throw new Error('Falha ao devolver protocolo no servidor');
     }
     
-    // SQUARE CLOUD: Notificação visual se suportada
+    // Notificação visual
     if (foundProtocol && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification('[SQUARE CLOUD] Protocolo Devolvido', {
-        body: `[SQUARE CLOUD] Protocolo ${foundProtocol.processNumber} foi devolvido: ${returnReason}`,
+      new Notification('Protocolo Devolvido', {
+        body: `Protocolo ${foundProtocol.processNumber} foi devolvido: ${returnReason}`,
         icon: '/favicon.ico'
       });
     }
   }, [protocols, updateProtocolInServer]);
   
-  // SQUARE CLOUD: Mover protocolo entre filas
   const moveProtocolToQueue = useCallback(async (id: string, assignedTo: Protocol['assignedTo'], performedBy?: string) => {
     const updates = {
       assignedTo,
       newLogEntry: {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'moved_to_queue',
-        description: `[SQUARE CLOUD] Movido para: ${assignedTo ? `Fila do ${assignedTo}` : 'Fila do Robô'}`,
+        description: `Movido para: ${assignedTo ? `Fila do ${assignedTo}` : 'Fila do Robô'}`,
         performedBy: performedBy || 'Sistema'
       }
     };
     
     const success = await updateProtocolInServer(id, updates);
     if (!success) {
-      throw new Error('[SQUARE CLOUD] Falha ao mover protocolo no servidor');
+      throw new Error('Falha ao mover protocolo no servidor');
     }
   }, [updateProtocolInServer]);
   
-  // SQUARE CLOUD: Mover múltiplos protocolos em lotes
   const moveMultipleProtocols = useCallback(async (ids: string[], assignedTo: Protocol['assignedTo'], performedBy?: string) => {
-    console.log(`[SQUARE CLOUD] 🔄 Movendo ${ids.length} protocolos para ${assignedTo || 'Robô'}`);
+    console.log(`🔄 Movendo ${ids.length} protocolos para ${assignedTo || 'Robô'}`);
     
-    // SQUARE CLOUD: Processar em lotes para evitar sobrecarga
-    const batchSize = 5; // SQUARE CLOUD: Lotes de 5 para otimizar
+    // Processar em lotes para evitar sobrecarga
+    const batchSize = 5;
     for (let i = 0; i < ids.length; i += batchSize) {
       const batch = ids.slice(i, i + batchSize);
       await Promise.all(batch.map(id => moveProtocolToQueue(id, assignedTo, performedBy)));
     }
     
-    console.log('[SQUARE CLOUD] ✅ Movimentação em lote concluída');
+    console.log('✅ Movimentação em lote concluída');
   }, [moveProtocolToQueue]);
   
-  // SQUARE CLOUD: Cancelar protocolo
   const cancelProtocol = useCallback(async (id: string, performedBy?: string) => {
     const updates = {
       status: 'Cancelado',
       newLogEntry: {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'status_changed',
-        description: '[SQUARE CLOUD] Protocolo cancelado',
+        description: 'Protocolo cancelado',
         performedBy: performedBy || 'Sistema'
       }
     };
     
     const success = await updateProtocolInServer(id, updates);
     if (!success) {
-      throw new Error('[SQUARE CLOUD] Falha ao cancelar protocolo no servidor');
+      throw new Error('Falha ao cancelar protocolo no servidor');
     }
   }, [updateProtocolInServer]);
   
-  // SQUARE CLOUD: Atualizar protocolo completo
   const updateProtocol = useCallback(async (id: string, updates: Partial<Protocol>, performedBy?: string) => {
     const updateData = {
       ...updates,
       newLogEntry: {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'resubmitted',
-        description: '[SQUARE CLOUD] Protocolo editado e reenviado',
+        description: 'Protocolo editado e reenviado',
         performedBy: performedBy || 'Usuário'
       }
     };
     
     const success = await updateProtocolInServer(id, updateData);
     if (!success) {
-      throw new Error('[SQUARE CLOUD] Falha ao atualizar protocolo no servidor');
+      throw new Error('Falha ao atualizar protocolo no servidor');
     }
   }, [updateProtocolInServer]);
   
-  // SQUARE CLOUD: Retornar todas as funções e estados
   return {
     protocols,
     userEmails,
@@ -740,8 +592,5 @@ export function useProtocols() {
     moveMultipleProtocols,
     cancelProtocol,
     updateProtocol,
-    // SQUARE CLOUD: Metadados da plataforma
-    platform: 'Square Cloud',
-    isSquareCloud: true
   };
 }

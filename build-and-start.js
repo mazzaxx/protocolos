@@ -1,343 +1,337 @@
 #!/usr/bin/env node
 
-/**
- * SCRIPT DE BUILD E START PARA SQUARE CLOUD - VERSÃO OTIMIZADA PARA 1024MB
- * 
- * Este script executa o build automaticamente se necessário e inicia o servidor.
- * Otimizado para funcionar com apenas 1024MB de RAM na Square Cloud.
- */
-
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
-// Obter __dirname em ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const execAsync = promisify(exec);
 
-console.log('🚀 [SQUARE CLOUD] Iniciando sistema otimizado para 1024MB...');
+console.log('🚀 [SQUARE CLOUD] Iniciando build otimizado para 4GB RAM...');
+console.log('💾 [SQUARE CLOUD] Configuração: 4096MB RAM disponível');
 
-async function executeCommand(command, args = [], options = {}) {
-  return new Promise((resolve, reject) => {
-    console.log(`🔧 [SQUARE CLOUD] Executando: ${command} ${args.join(' ')}`);
-    
-    const process = spawn(command, args, {
-      stdio: 'inherit',
-      ...options
-    });
-
-    process.on('close', (code) => {
-      if (code === 0) {
-        console.log(`✅ [SQUARE CLOUD] Comando executado com sucesso: ${command}`);
-        resolve(code);
-      } else {
-        console.error(`❌ [SQUARE CLOUD] Comando falhou com código ${code}: ${command}`);
-        reject(new Error(`Command failed with code ${code}`));
+// Função para executar comandos com melhor tratamento de erro
+async function runCommand(command, description) {
+  console.log(`🔧 [SQUARE CLOUD] ${description}...`);
+  console.log(`🔧 [SQUARE CLOUD] Executando: ${command}`);
+  
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+      env: {
+        ...process.env,
+        NODE_OPTIONS: '--max-old-space-size=3072', // 3GB para build
+        NODE_ENV: 'production'
       }
     });
-
-    process.on('error', (error) => {
-      console.error(`❌ [SQUARE CLOUD] Erro ao executar comando:`, error);
-      reject(error);
-    });
-  });
+    
+    if (stdout) console.log(`✅ [SQUARE CLOUD] ${stdout}`);
+    if (stderr && !stderr.includes('warn')) console.log(`⚠️ [SQUARE CLOUD] ${stderr}`);
+    
+    console.log(`✅ [SQUARE CLOUD] Comando executado com sucesso: ${command.split(' ')[0]}`);
+    return true;
+  } catch (error) {
+    console.log(`❌ [SQUARE CLOUD] Comando falhou com código ${error.code}: ${command.split(' ')[0]}`);
+    if (error.stdout) console.log(`📤 [SQUARE CLOUD] stdout: ${error.stdout}`);
+    if (error.stderr) console.log(`📤 [SQUARE CLOUD] stderr: ${error.stderr}`);
+    return false;
+  }
 }
 
-async function checkAndBuild() {
-  try {
-    // 1. Verificar se estamos na Square Cloud
-    const isSquareCloud = process.env.NODE_ENV === 'production';
-    console.log(`🌍 [SQUARE CLOUD] Ambiente: ${isSquareCloud ? 'PRODUÇÃO (1024MB)' : 'DESENVOLVIMENTO'}`);
+// Função para verificar se o build foi bem-sucedido
+function checkBuildSuccess() {
+  const distPath = path.join(process.cwd(), 'dist');
+  const indexPath = path.join(distPath, 'index.html');
+  
+  if (!fs.existsSync(distPath)) {
+    console.log('❌ [SQUARE CLOUD] Pasta dist não encontrada');
+    return false;
+  }
+  
+  if (!fs.existsSync(indexPath)) {
+    console.log('❌ [SQUARE CLOUD] index.html não encontrado');
+    return false;
+  }
+  
+  // Verificar se o index.html não é apenas um fallback de erro
+  const indexContent = fs.readFileSync(indexPath, 'utf8');
+  if (indexContent.includes('Erro durante o build automático') || indexContent.length < 500) {
+    console.log('❌ [SQUARE CLOUD] Build incompleto detectado');
+    return false;
+  }
+  
+  const files = fs.readdirSync(distPath);
+  console.log('📁 [SQUARE CLOUD] Arquivos no dist:', files);
+  
+  // Verificar se há arquivos JS e CSS
+  const hasJS = files.some(file => file.endsWith('.js'));
+  const hasCSS = files.some(file => file.endsWith('.css'));
+  
+  if (!hasJS || !hasCSS) {
+    console.log('⚠️ [SQUARE CLOUD] Build pode estar incompleto (faltam JS/CSS)');
+    return false;
+  }
+  
+  console.log('✅ [SQUARE CLOUD] Build verificado com sucesso');
+  return true;
+}
 
-    // 2. Verificar se o build existe e é válido
-    const distPath = path.join(__dirname, 'dist');
-    const indexPath = path.join(distPath, 'index.html');
-    
-    let needsBuild = false;
-    
-    if (!fs.existsSync(distPath) || !fs.existsSync(indexPath)) {
-      console.log('❌ [SQUARE CLOUD] Build não encontrado, será executado automaticamente');
-      needsBuild = true;
-    } else {
-      // Verificar se é um build real do React
-      const indexContent = fs.readFileSync(indexPath, 'utf8');
-      
-      if (!indexContent.includes('id="root"') || 
-          !indexContent.includes('script') || 
-          indexContent.includes('Build necessário') ||
-          indexContent.includes('Erro durante o build')) {
-        console.log('❌ [SQUARE CLOUD] Build incompleto detectado, será refeito');
-        needsBuild = true;
-      } else {
-        console.log('✅ [SQUARE CLOUD] Build válido encontrado!');
-      }
-    }
-
-    // 3. Executar build se necessário
-    if (needsBuild) {
-      console.log('🔨 [SQUARE CLOUD] Executando build do React (otimizado para 1024MB)...');
-      
-      // Remover pasta dist antiga se existir
-      if (fs.existsSync(distPath)) {
-        fs.rmSync(distPath, { recursive: true, force: true });
-        console.log('🗑️ [SQUARE CLOUD] Pasta dist antiga removida');
-      }
-      
-      try {
-        // SQUARE CLOUD: Usar npx para garantir que o Vite seja encontrado
-        console.log('🔧 [SQUARE CLOUD] Usando npx vite para build (compatível com 1024MB)...');
-        await executeCommand('npx', ['vite', 'build', '--mode', 'production'], {
-          env: { 
-            ...process.env,
-            NODE_ENV: 'production',
-            // SQUARE CLOUD: Otimizações para 1024MB
-            NODE_OPTIONS: '--max-old-space-size=768', // Usar apenas 768MB para build
-            VITE_BUILD_CHUNK_SIZE_LIMIT: '500', // Chunks menores
-            VITE_BUILD_ROLLUP_OPTIONS_EXTERNAL: 'true' // Externalizar dependências grandes
-          }
-        });
-      } catch (buildError) {
-        console.error('❌ [SQUARE CLOUD] Build com npx falhou, tentando com npm...');
-        
-        try {
-          // Fallback: tentar com npm run build
-          await executeCommand('npm', ['run', 'build'], {
-            env: { 
-              ...process.env,
-              NODE_ENV: 'production',
-              NODE_OPTIONS: '--max-old-space-size=768'
-            }
-          });
-        } catch (npmError) {
-          console.error('❌ [SQUARE CLOUD] Build com npm também falhou, tentando instalação local...');
-          
-          // Último recurso: instalar vite localmente e tentar build
-          try {
-            console.log('📦 [SQUARE CLOUD] Instalando Vite localmente...');
-            await executeCommand('npm', ['install', 'vite@latest', '--no-save'], {
-              env: { 
-                ...process.env,
-                NODE_OPTIONS: '--max-old-space-size=512'
-              }
-            });
-            
-            console.log('🔧 [SQUARE CLOUD] Tentando build com Vite local...');
-            await executeCommand('npx', ['vite', 'build'], {
-              env: { 
-                ...process.env,
-                NODE_ENV: 'production',
-                NODE_OPTIONS: '--max-old-space-size=768'
-              }
-            });
-          } catch (localError) {
-            throw new Error(`Todos os métodos de build falharam: ${localError.message}`);
-          }
-        }
-      }
-      
-      // Verificar se o build foi bem-sucedido
-      if (!fs.existsSync(indexPath)) {
-        throw new Error('Build falhou - index.html não foi criado');
-      }
-      
-      const newIndexContent = fs.readFileSync(indexPath, 'utf8');
-      if (!newIndexContent.includes('id="root"') || !newIndexContent.includes('script')) {
-        throw new Error('Build falhou - conteúdo inválido no index.html');
-      }
-      
-      console.log('✅ [SQUARE CLOUD] Build executado com sucesso (1024MB)!');
-      
-      // Listar arquivos criados
-      const files = fs.readdirSync(distPath);
-      console.log('📋 [SQUARE CLOUD] Arquivos do build:', files);
-    }
-
-    // 4. Aguardar um pouco antes de iniciar o servidor
-    console.log('⏳ [SQUARE CLOUD] Aguardando 1 segundo antes de iniciar servidor...');
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // 5. Iniciar o servidor
-    console.log('🚀 [SQUARE CLOUD] Iniciando servidor Express...');
-    
-    // Usar spawn para manter o processo vivo
-    const serverProcess = spawn('node', ['server/server.js'], {
-      stdio: 'inherit',
-      env: { 
-        ...process.env,
-        NODE_ENV: 'production',
-        // SQUARE CLOUD: Otimizações de memória para servidor
-        NODE_OPTIONS: '--max-old-space-size=256' // Servidor usa apenas 256MB
-      }
-    });
-
-    // Tratar sinais de encerramento
-    process.on('SIGTERM', () => {
-      console.log('🛑 [SQUARE CLOUD] Recebido SIGTERM, encerrando servidor...');
-      serverProcess.kill('SIGTERM');
-    });
-
-    process.on('SIGINT', () => {
-      console.log('🛑 [SQUARE CLOUD] Recebido SIGINT, encerrando servidor...');
-      serverProcess.kill('SIGINT');
-    });
-
-    serverProcess.on('close', (code) => {
-      console.log(`🔚 [SQUARE CLOUD] Servidor encerrado com código: ${code}`);
-      process.exit(code);
-    });
-
-    serverProcess.on('error', (error) => {
-      console.error('❌ [SQUARE CLOUD] Erro no servidor:', error);
-      process.exit(1);
-    });
-
-  } catch (error) {
-    console.error('❌ [SQUARE CLOUD] Erro crítico:', error.message);
-    console.error('Stack:', error.stack);
-    
-    // Em caso de erro, criar um HTML de erro mais informativo
-    const distPath = path.join(__dirname, 'dist');
-    const indexPath = path.join(distPath, 'index.html');
-    
-    if (!fs.existsSync(distPath)) {
-      fs.mkdirSync(distPath, { recursive: true });
-    }
-    
-    const errorHtml = `
-<!DOCTYPE html>
+// Função para criar HTML de fallback em caso de erro
+function createFallbackHTML() {
+  const distPath = path.join(process.cwd(), 'dist');
+  const indexPath = path.join(distPath, 'index.html');
+  
+  if (!fs.existsSync(distPath)) {
+    fs.mkdirSync(distPath, { recursive: true });
+  }
+  
+  const fallbackHTML = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Protocolos - Erro de Build</title>
+    <title>Sistema de Protocolos Jurídicos - Neycampos Advocacia</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             color: white;
+            padding: 20px;
         }
         .container { 
-            text-align: center; 
-            padding: 3rem;
             background: rgba(255,255,255,0.1);
-            border-radius: 20px;
             backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
             max-width: 600px;
             border: 1px solid rgba(255,255,255,0.2);
         }
-        .error {
-            color: #ff6b6b;
-            font-size: 48px;
-            margin-bottom: 1rem;
+        .icon { font-size: 4rem; margin-bottom: 20px; }
+        h1 { font-size: 2rem; margin-bottom: 10px; font-weight: 600; }
+        h2 { font-size: 1.2rem; margin-bottom: 30px; opacity: 0.9; font-weight: 400; }
+        .error { 
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
         }
-        .code {
-            background: rgba(0,0,0,0.3);
-            padding: 1rem;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            margin: 1rem 0;
-            font-size: 14px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .details {
-            background: rgba(255,255,255,0.1);
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
+        .info { 
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
             text-align: left;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.1);
         }
-        .refresh-btn {
-            background: #4CAF50;
+        .warning { 
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .btn { 
+            background: #10b981;
             color: white;
             border: none;
             padding: 12px 24px;
             border-radius: 8px;
+            font-size: 1rem;
             cursor: pointer;
-            font-size: 16px;
-            margin-top: 1rem;
-            transition: background 0.3s;
+            margin: 10px;
+            transition: all 0.3s;
         }
-        .refresh-btn:hover {
-            background: #45a049;
-        }
-        .memory-info {
-            background: rgba(255,165,0,0.2);
-            border: 1px solid rgba(255,165,0,0.3);
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
-            font-size: 13px;
-        }
+        .btn:hover { background: #059669; transform: translateY(-2px); }
+        .footer { margin-top: 30px; opacity: 0.7; font-size: 0.9rem; }
+        ul { text-align: left; margin: 10px 0; }
+        li { margin: 5px 0; }
+        .timestamp { font-size: 0.8rem; opacity: 0.6; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="error">🔧</div>
-        <h1>⚖️ Sistema de Protocolos Jurídicos</h1>
-        <h3>Neycampos Advocacia</h3>
-        <p>❌ Erro durante o build automático</p>
+        <div class="icon">⚖️</div>
+        <h1>Sistema de Protocolos Jurídicos</h1>
+        <h2>Neycampos Advocacia</h2>
         
-        <div class="memory-info">
-            <strong>⚠️ Limitação de Memória Detectada</strong><br>
-            Configuração: 1024MB RAM<br>
-            O build pode falhar devido à limitação de memória da hospedagem.
+        <div class="error">
+            <h3>❌ Erro durante o build automático</h3>
         </div>
         
-        <div class="details">
-            <strong>Erro:</strong> ${error.message}<br>
-            <strong>Timestamp:</strong> ${new Date().toLocaleString('pt-BR')}<br>
-            <strong>Ambiente:</strong> Square Cloud Production (1024MB)<br>
-            <strong>Solução:</strong> Considere upgrade para plano com mais memória
+        <div class="warning">
+            <h3>⚠️ Limitação de Memória Detectada</h3>
+            <p><strong>Configuração:</strong> 4096MB RAM</p>
+            <p>O build pode falhar devido à limitação de memória da hospedagem.</p>
         </div>
         
-        <div class="code">
-            Tentativa de build automático falhou.<br>
-            Possíveis soluções:<br>
-            1. Upgrade para plano com mais RAM (recomendado: 2048MB)<br>
-            2. Fazer build local e commitar pasta dist/<br>
-            3. Otimizar dependências do projeto
+        <div class="info">
+            <p><strong>Erro:</strong> Todos os métodos de build falharam: Command failed with code 1</p>
+            <p><strong>Timestamp:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+            <p><strong>Ambiente:</strong> Square Cloud Production (4096MB)</p>
+            <p><strong>Solução:</strong> Considere upgrade para plano com mais memória</p>
         </div>
         
-        <button class="refresh-btn" onclick="window.location.reload()">
-            🔄 Tentar Novamente
-        </button>
+        <div class="info">
+            <h4>Tentativa de build automático falhou.</h4>
+            <p><strong>Possíveis soluções:</strong></p>
+            <ul>
+                <li>1. Upgrade para plano com mais RAM (recomendado: 4096MB+)</li>
+                <li>2. Fazer build local e commitar pasta dist/</li>
+                <li>3. Otimizar dependências do projeto</li>
+            </ul>
+        </div>
         
-        <br><br>
-        <p><small>Powered by Square Cloud 🚀</small></p>
-        <p><small>Se o problema persistir, considere upgrade de plano</small></p>
+        <button class="btn" onclick="window.location.reload()">🔄 Tentar Novamente</button>
+        
+        <div class="footer">
+            <p>Powered by Square Cloud 🚀</p>
+            <p>Se o problema persistir, considere upgrade de plano</p>
+            <div class="timestamp">Build falhou em: ${new Date().toISOString()}</div>
+        </div>
     </div>
 </body>
 </html>`;
-    
-    fs.writeFileSync(indexPath, errorHtml);
-    console.log('🆘 [SQUARE CLOUD] HTML de erro criado (limitação de memória)');
-    
-    // Ainda assim, tentar iniciar o servidor
-    console.log('🚀 [SQUARE CLOUD] Tentando iniciar servidor mesmo com erro...');
-    const serverProcess = spawn('node', ['server/server.js'], {
-      stdio: 'inherit',
-      env: { 
-        ...process.env,
-        NODE_ENV: 'production',
-        NODE_OPTIONS: '--max-old-space-size=256'
-      }
-    });
+  
+  fs.writeFileSync(indexPath, fallbackHTML);
+  console.log('🆘 [SQUARE CLOUD] HTML de erro criado (4GB RAM disponível)');
+}
 
-    serverProcess.on('close', (code) => {
+// Função principal de build
+async function checkAndBuild() {
+  console.log('🔍 [SQUARE CLOUD] Verificando se build é necessário...');
+  
+  // Verificar se já existe um build válido
+  if (checkBuildSuccess()) {
+    console.log('✅ [SQUARE CLOUD] Build válido encontrado, pulando rebuild');
+    return true;
+  }
+  
+  console.log('🔨 [SQUARE CLOUD] Iniciando processo de build otimizado...');
+  console.log('💾 [SQUARE CLOUD] RAM disponível: 4096MB');
+  console.log('⚙️ [SQUARE CLOUD] Node options: --max-old-space-size=3072');
+  
+  // Limpar cache antes do build
+  console.log('🧹 [SQUARE CLOUD] Limpando cache...');
+  try {
+    await execAsync('rm -rf node_modules/.vite dist');
+    console.log('✅ [SQUARE CLOUD] Cache limpo');
+  } catch (error) {
+    console.log('⚠️ [SQUARE CLOUD] Erro ao limpar cache (continuando...)');
+  }
+  
+  // Método 1: Tentar com npx vite build
+  console.log('🔧 [SQUARE CLOUD] Método 1: Build com npx vite...');
+  const method1 = await runCommand('npx vite build', 'Build com npx vite');
+  
+  if (method1 && checkBuildSuccess()) {
+    console.log('✅ [SQUARE CLOUD] Build bem-sucedido com npx vite!');
+    return true;
+  }
+  
+  // Método 2: Tentar com npm run build
+  console.log('🔧 [SQUARE CLOUD] Método 2: Build com npm...');
+  const method2 = await runCommand('npm run build', 'Build com npm');
+  
+  if (method2 && checkBuildSuccess()) {
+    console.log('✅ [SQUARE CLOUD] Build bem-sucedido com npm!');
+    return true;
+  }
+  
+  // Método 3: Instalar vite localmente e tentar novamente
+  console.log('📦 [SQUARE CLOUD] Método 3: Instalando Vite localmente...');
+  const installVite = await runCommand('npm install vite@latest --no-save', 'Instalação do Vite');
+  
+  if (installVite) {
+    console.log('🔧 [SQUARE CLOUD] Tentando build com Vite local...');
+    const method3 = await runCommand('npx vite build', 'Build com Vite local');
+    
+    if (method3 && checkBuildSuccess()) {
+      console.log('✅ [SQUARE CLOUD] Build bem-sucedido com Vite local!');
+      return true;
+    }
+  }
+  
+  // Método 4: Build com mais memória
+  console.log('🔧 [SQUARE CLOUD] Método 4: Build com configuração de memória otimizada...');
+  const method4 = await runCommand('NODE_OPTIONS="--max-old-space-size=3072" npx vite build', 'Build com mais memória');
+  
+  if (method4 && checkBuildSuccess()) {
+    console.log('✅ [SQUARE CLOUD] Build bem-sucedido com configuração otimizada!');
+    return true;
+  }
+  
+  // Se todos os métodos falharam
+  console.log('❌ [SQUARE CLOUD] Todos os métodos de build falharam');
+  createFallbackHTML();
+  throw new Error('Todos os métodos de build falharam: Command failed with code 1');
+}
+
+// Função para iniciar o servidor
+function startServer() {
+  console.log('🚀 [SQUARE CLOUD] Iniciando servidor...');
+  
+  const server = spawn('node', ['server/server.js'], {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: process.env.PORT || 80,
+      SQUARE_CLOUD: 'true'
+    }
+  });
+  
+  server.on('error', (error) => {
+    console.error('❌ [SQUARE CLOUD] Erro ao iniciar servidor:', error);
+    process.exit(1);
+  });
+  
+  server.on('exit', (code) => {
+    console.log(`🛑 [SQUARE CLOUD] Servidor encerrado com código: ${code}`);
+    if (code !== 0) {
       process.exit(code);
-    });
+    }
+  });
+  
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('🛑 [SQUARE CLOUD] SIGTERM recebido, encerrando...');
+    server.kill('SIGTERM');
+  });
+  
+  process.on('SIGINT', () => {
+    console.log('🛑 [SQUARE CLOUD] SIGINT recebido, encerrando...');
+    server.kill('SIGINT');
+  });
+}
+
+// Execução principal
+async function main() {
+  try {
+    console.log('🎯 [SQUARE CLOUD] Iniciando deploy otimizado para 4GB RAM...');
+    console.log('📊 [SQUARE CLOUD] Configurações:');
+    console.log('   - RAM: 4096MB');
+    console.log('   - Node Memory: 3072MB');
+    console.log('   - Build: Automático otimizado');
+    console.log('   - Cache: Habilitado');
+    
+    await checkAndBuild();
+    console.log('✅ [SQUARE CLOUD] Build concluído, iniciando servidor...');
+    startServer();
+  } catch (error) {
+    console.error('❌ [SQUARE CLOUD] Erro crítico:', error.message);
+    console.error('Stack:', error.stack);
+    createFallbackHTML();
+    console.log('🚀 [SQUARE CLOUD] Tentando iniciar servidor mesmo com erro...');
+    startServer();
   }
 }
 
-// Executar função principal
-checkAndBuild();
+// Iniciar
+main();

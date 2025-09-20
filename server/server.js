@@ -1,60 +1,50 @@
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
 import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
 import { maintenanceDb } from './db.js';
 
-/**
- * SERVIDOR PRINCIPAL
- * 
- * Servidor Express principal para o sistema de protocolos jurídicos.
- * Otimizado para funcionar na Square Cloud.
- * 
- * Funcionalidades principais:
- * - Autenticação de usuários
- * - Gerenciamento de protocolos jurídicos
- * - API REST completa
- * - Banco SQLite otimizado
- * - CORS configurado
- */
-
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-const __filename = new URL(import.meta.url).pathname;
-const __dirname = path.dirname(__filename);
 
 console.log('🚀 Iniciando servidor...');
 console.log('🌐 Porta:', PORT);
 console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
-console.log('🗄️ Banco: SQLite Otimizado');
-console.log('🔧 Build: Executado automaticamente na inicialização');
+console.log('🗄️ Banco: SQLite Otimizado para 4GB RAM');
+console.log('💾 RAM Disponível: 4GB (otimizado)');
 
+// Lista de origens permitidas para CORS
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-  
-  // Square Cloud domains
-  /^https:\/\/.*\.squareweb\.app$/,
+  'https://ncasistemaprotocolos.netlify.app',
+  'https://sistema-protocolos-juridicos-production.up.railway.app',
+  // Permitir qualquer subdomínio do Netlify para flexibilidade
+  /^https:\/\/.*\.netlify\.app$/,
+  // Permitir qualquer subdomínio do Railway para flexibilidade
+  /^https:\/\/.*\.up\.railway\.app$/
 ];
 
+// Configuração CORS mais permissiva
 const corsOptions = {
   origin: function (origin, callback) {
+    // Log apenas em desenvolvimento para evitar spam
     if (process.env.NODE_ENV !== 'production') {
-      console.log('🌐 Origin recebido:', origin);
+      console.log('🌐 CORS - Origin recebido:', origin);
     }
     
+    // Permitir requisições sem origin (ex: Postman, aplicações mobile)
     if (!origin) {
       if (process.env.NODE_ENV !== 'production') {
-        console.log('✅ Permitindo requisição sem origin');
+        console.log('✅ CORS - Permitindo requisição sem origin');
       }
       return callback(null, true);
     }
     
+    // Verificar se a origin está na lista permitida
     const isAllowed = allowedOrigins.some(allowedOrigin => {
       if (typeof allowedOrigin === 'string') {
         return allowedOrigin === origin;
@@ -66,11 +56,12 @@ const corsOptions = {
     
     if (isAllowed) {
       if (process.env.NODE_ENV !== 'production') {
-        console.log('✅ Origin permitida:', origin);
+        console.log('✅ CORS - Origin permitida:', origin);
       }
       callback(null, true);
     } else {
-      console.log('❌ Origin bloqueada:', origin);
+      console.log('❌ CORS - Origin bloqueada:', origin);
+      console.log('📋 Origins permitidas:', allowedOrigins);
       callback(new Error('Não permitido pelo CORS'));
     }
   },
@@ -87,49 +78,21 @@ const corsOptions = {
     'X-Sync-Action'
   ],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
-  maxAge: 86400
+  maxAge: 86400 // 24 horas
 };
 
+// Aplicar CORS
 app.use(cors(corsOptions));
 
-const distPath = path.join(__dirname, '..', 'dist');
-console.log('📁 Caminho dos arquivos estáticos:', distPath);
-
-// SQUARE CLOUD: Verificar se pasta dist existe e é válida
-import fs from 'fs';
-if (fs.existsSync(distPath)) {
-  console.log('✅ Pasta dist encontrada');
-  const files = fs.readdirSync(distPath);
-  console.log('📋 Arquivos na pasta dist:', files);
-  
-  // Verificar se é um build real do React (mais rigoroso)
-  const indexPath = path.join(distPath, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    const indexContent = fs.readFileSync(indexPath, 'utf8');
-    if (indexContent.includes('id="root"') && 
-        indexContent.includes('script') && 
-        !indexContent.includes('Build necessário') &&
-        !indexContent.includes('Erro de Build') &&
-        (indexContent.includes('/assets/') || indexContent.includes('type="module"'))) {
-      console.log('✅ Build do React detectado');
-    } else {
-      console.log('⚠️ Build incompleto ou HTML de fallback detectado');
-      console.log('💡 O build será executado automaticamente pelo build-and-start.js');
-    }
-  }
-} else {
-  console.warn('⚠️ AVISO: Pasta dist não encontrada!');
-  console.warn('💡 O build será executado automaticamente pelo build-and-start.js');
-}
-
-app.use(express.static(distPath));
-
+// Middleware para parsing JSON
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Middleware de logging
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   
+  // Log detalhado apenas para operações importantes
   if (req.path.includes('/api/') && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
     console.log(`📡 ${timestamp} - ${req.method} ${req.path}`);
     console.log('🌐 Origin:', req.headers.origin);
@@ -141,47 +104,45 @@ app.use((req, res, next) => {
       }
     }
   } else if (process.env.NODE_ENV !== 'production') {
+    // Log simples em desenvolvimento
     console.log(`📡 ${req.method} ${req.path}`);
   }
   
   next();
 });
 
-app.get('/health', (req, res) => {
+// Rota de health check
+app.get('/', (req, res) => {
   console.log('🏥 Health check solicitado');
   res.json({ 
-    message: 'Sistema de Protocolos Jurídicos funcionando!',
+    message: 'Servidor de autenticação funcionando!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    port: PORT,
-    database: 'SQLite',
-    status: 'online'
+    port: PORT
   });
 });
 
-
-app.use('/api', authRoutes);
-app.use('/api', protocolRoutes);
-app.use('/api/admin', adminRoutes);
-
-app.get('/api/health', async (req, res) => {
+// Rota de health check específica
+app.get('/health', async (req, res) => {
   if (process.env.NODE_ENV !== 'production') {
     console.log('🏥 Health check detalhado solicitado');
   }
   
   try {
+    // Testar conexão com banco
     await testConnection();
     
+    // Obter estatísticas
     const stats = await getDatabaseStats();
     
     res.json({
       status: 'healthy',
-      message: 'Sistema funcionando perfeitamente',
+      message: 'Servidor funcionando perfeitamente',
       timestamp: new Date().toISOString(),
       database: 'connected',
       stats: stats,
       environment: process.env.NODE_ENV || 'development',
-      port: PORT,
+      port: PORT
     });
   } catch (error) {
     console.error('❌ Health check falhou:', error);
@@ -194,29 +155,12 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/') || req.path === '/health') {
-    return res.status(404).json({
-      success: false,
-      message: 'Rota da API não encontrada',
-      path: req.originalUrl,
-      method: req.method,
-    });
-  }
-  
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`🌐 Servindo frontend para: ${req.path}`);
-  }
-  
-  const indexPath = path.join(distPath, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    console.warn('⚠️ index.html não encontrado em:', indexPath);
-    res.status(404).send('Frontend não encontrado. Execute npm run build');
-  }
-});
+// Rotas da API
+app.use('/api', authRoutes);
+app.use('/api', protocolRoutes);
+app.use('/api/admin', adminRoutes);
 
+// Middleware de tratamento de erros
 app.use((err, req, res, next) => {
   console.error('❌ Erro no servidor:', err);
   
@@ -235,53 +179,47 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.use((err, req, res, next) => {
-  console.error('❌ Erro no servidor:', err);
-  
-  if (err.message === 'Não permitido pelo CORS') {
-    return res.status(403).json({
-      success: false,
-      message: 'Acesso negado por política CORS',
-      origin: req.headers.origin
-    });
-  }
-  
-  res.status(500).json({
+// Middleware para rotas não encontradas
+app.use('*', (req, res) => {
+  console.log('❌ Rota não encontrada:', req.method, req.originalUrl);
+  res.status(404).json({
     success: false,
-    message: 'Erro interno do servidor',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Erro interno'
+    message: 'Rota não encontrada',
+    path: req.originalUrl,
+    method: req.method
   });
 });
 
+// Inicializar banco de dados e servidor
 async function startServer() {
   try {
-    console.log('🗄️ Inicializando banco SQLite...');
+    console.log('🗄️ Inicializando banco de dados...');
     await initializeDb();
-    console.log('✅ Banco SQLite inicializado com sucesso!');
+    console.log('✅ Banco de dados inicializado com sucesso!');
     
+    // Agendar manutenção periódica (a cada 6 horas)
     setInterval(async () => {
-      console.log('🔧 Manutenção automática do banco...');
+      console.log('🔧 Executando manutenção automática do banco...');
       try {
         await maintenanceDb();
         console.log('✅ Manutenção automática concluída');
       } catch (error) {
         console.error('❌ Erro na manutenção automática:', error);
       }
-    }, 6 * 60 * 60 * 1000);
+    }, 6 * 60 * 60 * 1000); // 6 horas
     
     app.listen(PORT, '0.0.0.0', () => {
       console.log('🎉 SERVIDOR INICIADO COM SUCESSO!');
       console.log('=' .repeat(50));
-      console.log(`🏢 Escritório: Neycampos Advocacia`);
-      console.log(`🌐 Frontend: Servindo React SPA na rota raiz (/)`);
-      console.log(`🌐 Porta: ${PORT}`);
+      console.log(`🌐 Servidor rodando na porta: ${PORT}`);
       console.log(`🔗 URL local: http://localhost:${PORT}`);
-      console.log(`🗄️ Banco: SQLite Otimizado`);
-      console.log(`⚡ Performance: WAL mode, 15 conexões simultâneas`);
+      console.log(`🌍 URL Railway: https://sistema-protocolos-juridicos-production.up.railway.app`);
+      console.log(`🎯 Frontend Netlify: https://ncasistemaprotocolos.netlify.app`);
+      console.log(`🗄️ Banco: SQLite Otimizado (WAL mode, 15 conexões)`);
       console.log(`👥 Capacidade: 100+ usuários simultâneos`);
       console.log('=' .repeat(50));
-      console.log('📋 API Endpoints disponíveis:');
-      console.log('  GET  / - Frontend React (SPA)');
+      console.log('📋 Rotas disponíveis:');
+      console.log('  GET  / - Health check básico');
       console.log('  GET  /health - Health check detalhado');
       console.log('  POST /api/login - Login de usuários');
       console.log('  GET  /api/protocolos - Listar protocolos');
@@ -289,29 +227,31 @@ async function startServer() {
       console.log('  PUT  /api/protocolos/:id - Atualizar protocolo');
       console.log('  GET  /api/admin/funcionarios - Listar funcionários');
       console.log('=' .repeat(50));
-      console.log('🔄 Sistema pronto!');
-      console.log('⚖️ Neycampos Advocacia - Sistema de Protocolos');
+      console.log('🔄 Sistema pronto para receber requisições!');
+      console.log('⚡ Performance otimizada para escritório grande');
       
+      // Teste de conectividade inicial
       testConnection()
-        .then(() => console.log('✅ Conectividade inicial: SUCESSO'))
-        .catch(err => console.error('❌ Conectividade inicial: FALHA', err.message));
+        .then(() => console.log('✅ Teste de conectividade inicial: SUCESSO'))
+        .catch(err => console.error('❌ Teste de conectividade inicial: FALHA', err.message));
     });
   } catch (error) {
     console.error('❌ ERRO CRÍTICO ao iniciar servidor:', error);
-    console.error('💡 Verifique configurações do banco SQLite');
+    console.error('💡 Verifique se o banco de dados está acessível');
     process.exit(1);
   }
 }
 
+// Tratamento de sinais do sistema
 process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM recebido, encerrando graciosamente...');
+  console.log('🛑 SIGTERM recebido, encerrando servidor graciosamente...');
   closeConnection().then(() => {
     process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
-  console.log('🛑 SIGINT recebido, encerrando graciosamente...');
+  console.log('🛑 SIGINT recebido, encerrando servidor graciosamente...');
   closeConnection().then(() => {
     process.exit(0);
   });
@@ -332,4 +272,5 @@ process.on('unhandledRejection', (reason, promise) => {
   });
 });
 
+// Iniciar o servidor
 startServer();

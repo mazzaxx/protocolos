@@ -1,128 +1,94 @@
-# 🚀 INSTRUÇÕES DE DEPLOY - SQUARE CLOUD
+# 🚀 Instruções Completas de Deploy
 
-## ⚠️ LIMITAÇÃO DE MEMÓRIA: 1024MB
+## ✅ CONFIGURAÇÃO ATUAL: Railway + Netlify
 
-**IMPORTANTE:** Com apenas 1024MB de RAM, o build automático pode falhar. Existem 3 soluções:
+Seu projeto está configurado para:
+- **Backend:** Railway (Node.js + Express + SQLite)
+- **Frontend:** Netlify (React + Vite)
 
-### 🚀 Solução 1: Upgrade de Plano (RECOMENDADO)
-- Upgrade para plano com 2048MB+ de RAM
-- Build automático funcionará perfeitamente
-- Melhor performance geral
+## 🔧 PASSOS PARA RESOLVER "Rota não encontrada":
 
-### 🔧 Solução 2: Build Local
-```bash
-# Fazer build localmente
-npm run build
+### 1. **Obter URLs reais**
+Você precisa das URLs reais dos seus deploys:
 
-# Commitar a pasta dist
-git add dist/
-git commit -m "Add build files"
-git push
+**Railway:**
+- Acesse seu projeto no Railway
+- Copie a URL (ex: `https://sistema-juridico-production-a1b2.up.railway.app`)
+
+**Netlify:**
+- Acesse seu projeto no Netlify
+- Copie a URL (ex: `https://sistema-juridico-abc123.netlify.app`)
+
+### 2. **Configurar CORS no Railway**
+No arquivo `server/server.js`, linha 15, substitua:
+```javascript
+// JÁ CONFIGURADO:
+'https://ncasistemaprotocolos.netlify.app',
 ```
 
-### ⚡ Solução 3: Build Otimizado
-O sistema tenta automaticamente:
-1. Build com npx vite (mais eficiente)
-2. Build com npm run build (fallback)
-3. Instalação local do Vite + build
-4. HTML de erro se tudo falhar
+### 3. **Configurar variável de ambiente no Netlify**
+1. Netlify Dashboard → Seu site → Site settings → Environment variables
+2. Adicione/edite:
+   - **Key:** `VITE_API_BASE_URL`
+   - **Value:** `https://sistema-protocolos-juridicos-production.up.railway.app`
 
-## 📋 PASSO A PASSO PARA DEPLOY
-
-### 1. Commit das Alterações (SIMPLES)
-```bash
-# Adicionar arquivos modificados
-git add .
-git commit -m "Atualização do sistema - Square Cloud"
+### 4. **Atualizar netlify.toml**
+No arquivo `netlify.toml`, linhas 12 e 15, substitua:
+```toml
+VITE_API_BASE_URL = "https://sistema-protocolos-juridicos-production.up.railway.app"
 ```
 
-### 2. Deploy na Square Cloud
-1. Faça push para o repositório
-2. A Square Cloud detectará as mudanças
-3. O build será executado automaticamente
-4. O servidor iniciará automaticamente
+### 5. **Fazer redeploy**
+- **Railway:** Faça push das mudanças ou redeploy manual
+- **Netlify:** Trigger deploy ou faça push das mudanças
 
-## 🔧 ESTRUTURA OTIMIZADA
+## 🧪 COMO TESTAR:
 
-### Arquivos Importantes:
-- `build-and-start.js` - Script que executa build automático
-- `squarecloud.config` - Configuração da plataforma
-- `server/` - Backend Node.js + SQLite
+### 1. **Teste o backend Railway:**
+Acesse: `https://sistema-protocolos-juridicos-production.up.railway.app`
+Deve retornar: `{"message":"Servidor de autenticação funcionando!"}`
 
-### Fluxo de Deploy:
-1. **Git**: Commit das alterações
-2. **Square Cloud**: Executa `build-and-start.js`
-3. **Build**: Executado automaticamente se necessário
-4. **Servidor**: Serve React + API Node.js
+### 2. **Teste a API:**
+Acesse: `https://sistema-protocolos-juridicos-production.up.railway.app/api/admin/funcionarios`
+Deve retornar lista de funcionários
 
-## ✅ VANTAGENS DESTA ABORDAGEM
+### 3. **Teste o frontend:**
+1. Acesse: `https://ncasistemaprotocolos.netlify.app`
+2. Abra F12 (Console do navegador)
+3. Tente fazer login com: `admin@escritorio.com` / `123456`
+4. Verifique se não há erros de CORS no console
 
-### 🎯 Build Automático:
-- ✅ Não precisa fazer build manual
-- ✅ Build sempre atualizado na Square Cloud
-- ✅ Menos chance de erro humano
-- ✅ Deploy mais simples e rápido
+## 🚨 ERROS COMUNS:
 
-### 🌐 Fullstack em Um Domínio:
-- ✅ Mais simples de gerenciar
-- ✅ Sem problemas de CORS
-- ✅ Um único deploy
-- ✅ Custo menor
+1. **"blocked by CORS policy"**
+   → Adicione sua URL do Netlify no `allowedOrigins` do server.js
 
-### 🚀 Square Cloud Otimizada:
-- ✅ SQLite funciona perfeitamente
-- ✅ Servidor Node.js nativo
-- ✅ Domínio brasileiro (.squareweb.app)
-- ✅ Deploy automático via Git
+2. **"Failed to fetch"**
+   → Verifique se a variável `VITE_API_BASE_URL` está correta no Netlify
 
-## 🔄 COMANDOS ÚTEIS
+3. **"Rota não encontrada"**
+   → Verifique se o Railway está rodando e acessível
 
-```bash
-# Desenvolvimento local completo
-npm run dev:full
+## 📝 EXEMPLO DE CONFIGURAÇÃO:
 
-# Build para produção
-npm run build
+Se suas URLs forem:
+- Railway: `https://meu-backend-abc123.up.railway.app`
+- Netlify: `https://meu-frontend-xyz789.netlify.app`
 
-# Testar build localmente
-npm run preview
-
-# Build + Start (para testar localmente)
-npm run build:start
+Então configure:
+```javascript
+// server/server.js
+const allowedOrigins = [
+  'https://meu-frontend-xyz789.netlify.app',
+  // ... outras URLs
+];
 ```
 
-## 🚨 TROUBLESHOOTING
+```bash
+# Netlify Environment Variables
+VITE_API_BASE_URL=https://meu-backend-abc123.up.railway.app
+```
 
-### Problema: "Build não encontrado"
-**Solução**: Execute `npm run build` antes do deploy
+**🎯 Depois dessas configurações, o erro "Rota não encontrada" deve ser resolvido!**
 
-### Problema: "Vite not found"
-**Solução**: O build local resolve isso automaticamente
-
-### Problema: "Fallback HTML"
-**Solução**: Significa que o build não foi feito. Execute `npm run build`
-
-## 📊 MONITORAMENTO
-
-### Logs da Square Cloud:
-- ✅ "Build do React encontrado!" = Sucesso
-- ⚠️ "Build incompleto detectado" = Execute npm run build
-- ❌ "Build não encontrado" = Faltou fazer o build
-
-### URLs Importantes:
-- **Aplicação**: https://seu-app.squareweb.app
-- **Health Check**: https://seu-app.squareweb.app/health
-- **API**: https://seu-app.squareweb.app/api/protocolos
-
-## 🎉 RESULTADO FINAL
-
-Após seguir estas instruções:
-1. ✅ Sistema funcionando na Square Cloud
-2. ✅ React + Node.js em um domínio
-3. ✅ SQLite persistente
-4. ✅ Deploy automático
-5. ✅ Performance otimizada
-
----
-
-**🚀 Agora execute: `npm run build` e faça o deploy!**
+**💡 Dica:** Use F12 no navegador para ver exatamente qual URL está falhando e ajustar conforme necessário.

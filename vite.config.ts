@@ -1,83 +1,79 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-/**
- * CONFIGURAÇÃO VITE PARA SQUARE CLOUD
- * 
- * Configuração otimizada para desenvolvimento e build de produção.
- * Inclui proxy para desenvolvimento local e otimizações para Square Cloud.
- * 
- * HOSPEDAGEM SQUARE CLOUD:
- * - Build otimizado para produção
- * - Proxy configurado para desenvolvimento
- * - Exclusão de dependências server-side
- */
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   define: {
-    // SQUARE CLOUD: Garantir que variáveis de ambiente sejam definidas
-    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(process.env.VITE_API_BASE_URL || ''),
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+  },
+  esbuild: {
+    // Otimizações para build mais rápido
+    target: 'es2020',
+    minify: true,
   },
   server: {
-    host: true, // SQUARE CLOUD: Permite acesso de qualquer IP
+    host: true, // Permite acesso de qualquer IP
     port: 5173,
     proxy: {
-      // SQUARE CLOUD: Proxy para desenvolvimento local
       '/api': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
         ws: true,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
-            console.log('[SQUARE CLOUD] proxy error', err);
+            console.log('proxy error', err);
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('[SQUARE CLOUD] Sending Request to Target:', req.method, req.url);
+            console.log('Sending Request to the Target:', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('[SQUARE CLOUD] Received Response from Target:', proxyRes.statusCode, req.url);
+            console.log('Received Response from Target:', proxyRes.statusCode, req.url);
           });
         },
       },
-      // SQUARE CLOUD: Proxy para health check
       '/health': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
       },
     }
   },
   build: {
-    outDir: 'dist', // SQUARE CLOUD: Diretório de build
-    emptyOutDir: true, // SQUARE CLOUD: Limpar diretório antes do build
-    // SQUARE CLOUD: Otimizações para 1024MB
-    minify: 'terser',
-    sourcemap: false,
-    chunkSizeWarningLimit: 500, // SQUARE CLOUD: Chunks menores para 1024MB
-    // SQUARE CLOUD: Garantir que assets sejam copiados corretamente
-    assetsDir: 'assets',
+    outDir: 'dist',
+    // Otimizações para 4GB RAM
+    chunkSizeWarningLimit: 2000,
+    minify: 'esbuild',
+    target: 'es2020',
+    sourcemap: false, // Desabilitar sourcemaps em produção para economizar espaço
     rollupOptions: {
-      external: ['sqlite3'], // SQUARE CLOUD: Excluir SQLite do bundle frontend
+      external: ['sqlite3'],
       output: {
-        // SQUARE CLOUD: Otimizações para memória limitada
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            return 'vendor';
-          }
+        // Otimizar chunks para melhor performance
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          utils: ['lucide-react'],
         },
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]'
       }
-    }
+    },
+    // Configurações para usar mais RAM disponível
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.logs em produção
+        drop_debugger: true,
+      },
+    },
   },
   optimizeDeps: {
-    exclude: ['lucide-react'], // SQUARE CLOUD: Excluir da otimização
+    exclude: ['lucide-react'],
+    include: ['react', 'react-dom'],
+    // Usar mais cache com mais RAM
+    force: false,
   },
-  // SQUARE CLOUD: Configurações de preview
-  preview: {
-    port: 4173,
-    host: true
-  }
+  // Cache mais agressivo com mais RAM
+  cacheDir: 'node_modules/.vite',
 });
