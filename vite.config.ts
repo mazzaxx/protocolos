@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
   },
   css: {
-    postcss: './postcss.config.js',
+    postcss: './postcss.config.cjs',
   },
   build: {
     outDir: 'dist',
