@@ -1,10 +1,16 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeDb, testConnection, getDatabaseStats, closeConnection } from './db.js';
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
 import { maintenanceDb } from './db.js';
+
+// Obter __dirname em ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -80,6 +86,11 @@ const corsOptions = {
 
 // Aplicar CORS
 app.use(cors(corsOptions));
+
+// Servir arquivos estáticos do frontend (após build)
+const distPath = path.join(__dirname, '..', 'dist');
+console.log('📁 Caminho dos arquivos estáticos:', distPath);
+app.use(express.static(distPath));
 
 // Middleware para parsing JSON
 app.use(express.json({ limit: '50mb' }));
@@ -159,6 +170,32 @@ app.use('/api', authRoutes);
 app.use('/api', protocolRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Servir o frontend React para todas as rotas não-API (SPA routing)
+app.get('*', (req, res) => {
+  // Não interceptar rotas da API
+  if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
+    return res.status(404).json({
+      success: false,
+      message: 'Rota da API não encontrada',
+      path: req.originalUrl,
+      method: req.method
+    });
+  }
+  
+  const indexPath = path.join(distPath, 'index.html');
+  console.log('🌐 Servindo frontend para:', req.path);
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error('❌ Erro ao servir index.html:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao carregar aplicação frontend',
+        error: 'Arquivos do frontend não encontrados'
+      });
+    }
+  });
+});
+
 // Middleware de tratamento de erros
 app.use((err, req, res, next) => {
   console.error('❌ Erro no servidor:', err);
@@ -175,17 +212,6 @@ app.use((err, req, res, next) => {
     success: false,
     message: 'Erro interno do servidor',
     error: process.env.NODE_ENV === 'development' ? err.message : 'Erro interno'
-  });
-});
-
-// Middleware para rotas não encontradas
-app.use('*', (req, res) => {
-  console.log('❌ Rota não encontrada:', req.method, req.originalUrl);
-  res.status(404).json({
-    success: false,
-    message: 'Rota não encontrada',
-    path: req.originalUrl,
-    method: req.method
   });
 });
 
