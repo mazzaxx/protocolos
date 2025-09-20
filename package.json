@@ -8,14 +8,16 @@
     "server": "cross-env PORT=3002 node server/server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "start": "node build-and-start.js",
-    "build": "vite build",
+    "build": "NODE_OPTIONS='--max-old-space-size=768' vite build",
     "build:force": "rm -rf dist && vite build",
     "build:start": "npm run build && node build-and-start.js",
+    "build:memory-safe": "NODE_OPTIONS='--max-old-space-size=512' npx vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint .",
     "postinstall": "echo 'Dependencies installed successfully'",
     "predeploy": "npm run build:force",
-    "deploy": "echo 'Build concluído - pronto para deploy na Square Cloud'"
+    "deploy": "echo 'Build concluído - pronto para deploy na Square Cloud'",
+    "square-cloud": "npm run build:memory-safe && node server/server.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

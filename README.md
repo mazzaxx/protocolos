@@ -16,6 +16,22 @@ Este sistema está otimizado para funcionar na **Square Cloud**, a plataforma br
 
 ## 🔧 Como executar o projeto
 
+### ⚠️ Limitação de Memória na Square Cloud
+
+**IMPORTANTE:** Se sua hospedagem tem apenas 1024MB de RAM:
+
+1. **Opção A - Build Local (Recomendado):**
+```bash
+npm run build
+git add dist/
+git commit -m "Add build files"
+git push
+```
+
+2. **Opção B - Upgrade de Plano:**
+   - Upgrade para 2048MB+ de RAM
+   - Build automático funcionará perfeitamente
+
 ### 1. Instalar dependências
 ```bash
 npm install
@@ -28,7 +44,7 @@ npm run dev:full
 
 ### 3. Build para produção
 ```bash
-npm run build
+npm run build:memory-safe  # Otimizado para 1024MB
 ```
 
 ### 4. Executar em produção

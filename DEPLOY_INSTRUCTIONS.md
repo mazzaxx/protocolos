@@ -1,8 +1,31 @@
 # 🚀 INSTRUÇÕES DE DEPLOY - SQUARE CLOUD
 
-## ✅ NOVO: BUILD AUTOMÁTICO NA SQUARE CLOUD
+## ⚠️ LIMITAÇÃO DE MEMÓRIA: 1024MB
 
-O sistema agora executa o build **AUTOMATICAMENTE** na Square Cloud! Não é mais necessário fazer build manual.
+**IMPORTANTE:** Com apenas 1024MB de RAM, o build automático pode falhar. Existem 3 soluções:
+
+### 🚀 Solução 1: Upgrade de Plano (RECOMENDADO)
+- Upgrade para plano com 2048MB+ de RAM
+- Build automático funcionará perfeitamente
+- Melhor performance geral
+
+### 🔧 Solução 2: Build Local
+```bash
+# Fazer build localmente
+npm run build
+
+# Commitar a pasta dist
+git add dist/
+git commit -m "Add build files"
+git push
+```
+
+### ⚡ Solução 3: Build Otimizado
+O sistema tenta automaticamente:
+1. Build com npx vite (mais eficiente)
+2. Build com npm run build (fallback)
+3. Instalação local do Vite + build
+4. HTML de erro se tudo falhar
 
 ## 📋 PASSO A PASSO PARA DEPLOY
 

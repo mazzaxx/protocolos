@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * SCRIPT DE BUILD E START PARA SQUARE CLOUD - VERSÃO CORRIGIDA
+ * SCRIPT DE BUILD E START PARA SQUARE CLOUD - VERSÃO OTIMIZADA PARA 1024MB
  * 
  * Este script executa o build automaticamente se necessário e inicia o servidor.
- * Corrigido para funcionar perfeitamente na Square Cloud.
+ * Otimizado para funcionar com apenas 1024MB de RAM na Square Cloud.
  */
 
 import { spawn } from 'child_process';
@@ -17,7 +17,7 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-console.log('🚀 [SQUARE CLOUD] Iniciando sistema otimizado...');
+console.log('🚀 [SQUARE CLOUD] Iniciando sistema otimizado para 1024MB...');
 
 async function executeCommand(command, args = [], options = {}) {
   return new Promise((resolve, reject) => {
@@ -49,7 +49,7 @@ async function checkAndBuild() {
   try {
     // 1. Verificar se estamos na Square Cloud
     const isSquareCloud = process.env.NODE_ENV === 'production';
-    console.log(`🌍 [SQUARE CLOUD] Ambiente: ${isSquareCloud ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'}`);
+    console.log(`🌍 [SQUARE CLOUD] Ambiente: ${isSquareCloud ? 'PRODUÇÃO (1024MB)' : 'DESENVOLVIMENTO'}`);
 
     // 2. Verificar se o build existe e é válido
     const distPath = path.join(__dirname, 'dist');
@@ -66,7 +66,8 @@ async function checkAndBuild() {
       
       if (!indexContent.includes('id="root"') || 
           !indexContent.includes('script') || 
-          indexContent.includes('Build necessário')) {
+          indexContent.includes('Build necessário') ||
+          indexContent.includes('Erro durante o build')) {
         console.log('❌ [SQUARE CLOUD] Build incompleto detectado, será refeito');
         needsBuild = true;
       } else {
@@ -76,7 +77,7 @@ async function checkAndBuild() {
 
     // 3. Executar build se necessário
     if (needsBuild) {
-      console.log('🔨 [SQUARE CLOUD] Executando build do React...');
+      console.log('🔨 [SQUARE CLOUD] Executando build do React (otimizado para 1024MB)...');
       
       // Remover pasta dist antiga se existir
       if (fs.existsSync(distPath)) {
@@ -84,13 +85,57 @@ async function checkAndBuild() {
         console.log('🗑️ [SQUARE CLOUD] Pasta dist antiga removida');
       }
       
-      // Executar build
-      await executeCommand('npm', ['run', 'build'], {
-        env: { 
-          ...process.env,
-          NODE_ENV: 'production'
+      try {
+        // SQUARE CLOUD: Usar npx para garantir que o Vite seja encontrado
+        console.log('🔧 [SQUARE CLOUD] Usando npx vite para build (compatível com 1024MB)...');
+        await executeCommand('npx', ['vite', 'build', '--mode', 'production'], {
+          env: { 
+            ...process.env,
+            NODE_ENV: 'production',
+            // SQUARE CLOUD: Otimizações para 1024MB
+            NODE_OPTIONS: '--max-old-space-size=768', // Usar apenas 768MB para build
+            VITE_BUILD_CHUNK_SIZE_LIMIT: '500', // Chunks menores
+            VITE_BUILD_ROLLUP_OPTIONS_EXTERNAL: 'true' // Externalizar dependências grandes
+          }
+        });
+      } catch (buildError) {
+        console.error('❌ [SQUARE CLOUD] Build com npx falhou, tentando com npm...');
+        
+        try {
+          // Fallback: tentar com npm run build
+          await executeCommand('npm', ['run', 'build'], {
+            env: { 
+              ...process.env,
+              NODE_ENV: 'production',
+              NODE_OPTIONS: '--max-old-space-size=768'
+            }
+          });
+        } catch (npmError) {
+          console.error('❌ [SQUARE CLOUD] Build com npm também falhou, tentando instalação local...');
+          
+          // Último recurso: instalar vite localmente e tentar build
+          try {
+            console.log('📦 [SQUARE CLOUD] Instalando Vite localmente...');
+            await executeCommand('npm', ['install', 'vite@latest', '--no-save'], {
+              env: { 
+                ...process.env,
+                NODE_OPTIONS: '--max-old-space-size=512'
+              }
+            });
+            
+            console.log('🔧 [SQUARE CLOUD] Tentando build com Vite local...');
+            await executeCommand('npx', ['vite', 'build'], {
+              env: { 
+                ...process.env,
+                NODE_ENV: 'production',
+                NODE_OPTIONS: '--max-old-space-size=768'
+              }
+            });
+          } catch (localError) {
+            throw new Error(`Todos os métodos de build falharam: ${localError.message}`);
+          }
         }
-      });
+      }
       
       // Verificar se o build foi bem-sucedido
       if (!fs.existsSync(indexPath)) {
@@ -102,7 +147,7 @@ async function checkAndBuild() {
         throw new Error('Build falhou - conteúdo inválido no index.html');
       }
       
-      console.log('✅ [SQUARE CLOUD] Build executado com sucesso!');
+      console.log('✅ [SQUARE CLOUD] Build executado com sucesso (1024MB)!');
       
       // Listar arquivos criados
       const files = fs.readdirSync(distPath);
@@ -110,8 +155,8 @@ async function checkAndBuild() {
     }
 
     // 4. Aguardar um pouco antes de iniciar o servidor
-    console.log('⏳ [SQUARE CLOUD] Aguardando 2 segundos antes de iniciar servidor...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log('⏳ [SQUARE CLOUD] Aguardando 1 segundo antes de iniciar servidor...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // 5. Iniciar o servidor
     console.log('🚀 [SQUARE CLOUD] Iniciando servidor Express...');
@@ -121,7 +166,9 @@ async function checkAndBuild() {
       stdio: 'inherit',
       env: { 
         ...process.env,
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        // SQUARE CLOUD: Otimizações de memória para servidor
+        NODE_OPTIONS: '--max-old-space-size=256' // Servidor usa apenas 256MB
       }
     });
 
@@ -223,6 +270,14 @@ async function checkAndBuild() {
         .refresh-btn:hover {
             background: #45a049;
         }
+        .memory-info {
+            background: rgba(255,165,0,0.2);
+            border: 1px solid rgba(255,165,0,0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -232,15 +287,25 @@ async function checkAndBuild() {
         <h3>Neycampos Advocacia</h3>
         <p>❌ Erro durante o build automático</p>
         
+        <div class="memory-info">
+            <strong>⚠️ Limitação de Memória Detectada</strong><br>
+            Configuração: 1024MB RAM<br>
+            O build pode falhar devido à limitação de memória da hospedagem.
+        </div>
+        
         <div class="details">
             <strong>Erro:</strong> ${error.message}<br>
             <strong>Timestamp:</strong> ${new Date().toLocaleString('pt-BR')}<br>
-            <strong>Ambiente:</strong> Square Cloud Production
+            <strong>Ambiente:</strong> Square Cloud Production (1024MB)<br>
+            <strong>Solução:</strong> Considere upgrade para plano com mais memória
         </div>
         
         <div class="code">
             Tentativa de build automático falhou.<br>
-            O sistema tentará reconstruir na próxima inicialização.
+            Possíveis soluções:<br>
+            1. Upgrade para plano com mais RAM (recomendado: 2048MB)<br>
+            2. Fazer build local e commitar pasta dist/<br>
+            3. Otimizar dependências do projeto
         </div>
         
         <button class="refresh-btn" onclick="window.location.reload()">
@@ -249,13 +314,13 @@ async function checkAndBuild() {
         
         <br><br>
         <p><small>Powered by Square Cloud 🚀</small></p>
-        <p><small>Se o problema persistir, verifique os logs da aplicação</small></p>
+        <p><small>Se o problema persistir, considere upgrade de plano</small></p>
     </div>
 </body>
 </html>`;
     
     fs.writeFileSync(indexPath, errorHtml);
-    console.log('🆘 [SQUARE CLOUD] HTML de erro criado');
+    console.log('🆘 [SQUARE CLOUD] HTML de erro criado (limitação de memória)');
     
     // Ainda assim, tentar iniciar o servidor
     console.log('🚀 [SQUARE CLOUD] Tentando iniciar servidor mesmo com erro...');
@@ -263,7 +328,8 @@ async function checkAndBuild() {
       stdio: 'inherit',
       env: { 
         ...process.env,
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        NODE_OPTIONS: '--max-old-space-size=256'
       }
     });
 

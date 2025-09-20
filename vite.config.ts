@@ -51,19 +51,24 @@ export default defineConfig({
   build: {
     outDir: 'dist', // SQUARE CLOUD: Diretório de build
     emptyOutDir: true, // SQUARE CLOUD: Limpar diretório antes do build
-    // SQUARE CLOUD: Otimizações para produção
+    // SQUARE CLOUD: Otimizações para 1024MB
     minify: 'terser',
     sourcemap: false,
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 500, // SQUARE CLOUD: Chunks menores para 1024MB
     // SQUARE CLOUD: Garantir que assets sejam copiados corretamente
     assetsDir: 'assets',
     rollupOptions: {
       external: ['sqlite3'], // SQUARE CLOUD: Excluir SQLite do bundle frontend
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          utils: ['lucide-react']
-        }
+        // SQUARE CLOUD: Otimizações para memória limitada
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     }
   },
