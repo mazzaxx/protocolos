@@ -22,6 +22,29 @@ console.log('✅ Arquivos buildados:', hasBuiltFiles ? 'SIM' : 'NÃO');
 if (!hasBuiltFiles) {
   console.log('🔨 Buildando frontend...');
   
+  // Instalar dependências primeiro
+  const installProcess = spawn('npm', ['install'], {
+    stdio: 'inherit',
+    shell: true
+  });
+  
+  installProcess.on('close', (installCode) => {
+    if (installCode === 0) {
+      console.log('✅ Dependências instaladas!');
+      buildFrontend();
+    } else {
+      console.error('❌ Erro na instalação das dependências');
+      process.exit(1);
+    }
+  });
+} else {
+  console.log('✅ Arquivos do frontend já existem');
+  startServer();
+}
+
+function buildFrontend() {
+  console.log('🔨 Iniciando build do frontend...');
+  
   const buildProcess = spawn('npm', ['run', 'build'], {
     stdio: 'inherit',
     shell: true
@@ -36,9 +59,6 @@ if (!hasBuiltFiles) {
       process.exit(1);
     }
   });
-} else {
-  console.log('✅ Arquivos do frontend já existem');
-  startServer();
 }
 
 function startServer() {

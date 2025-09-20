@@ -8,11 +8,15 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+  css: {
+    postcss: './postcss.config.js',
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,
     minify: 'terser',
     assetsDir: 'assets',
+    cssCodeSplit: true,
     rollupOptions: {
       external: ['sqlite3'],
       output: {
