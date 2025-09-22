@@ -68,6 +68,8 @@ export function AdminDashboard() {
 
   useEffect(() => {
     fetchEmployees();
+    // Forçar refresh inicial para garantir dados atualizados
+    handleRefresh();
   }, []);
 
   const fetchEmployees = async () => {
@@ -231,7 +233,8 @@ export function AdminDashboard() {
   const getFilteredEmployees = () => {
     let filtered = employees.filter(employee => {
       const matchesSearch = employee.email.toLowerCase().includes(employeeFilters.searchTerm.toLowerCase());
-      const matchesTeam = !employeeFilters.selectedTeam || employee.equipe === employeeFilters.selectedTeam;
+      const matchesTeam = !employeeFilters.selectedTeam || 
+        (employeeFilters.selectedTeam === 'sem-equipe' ? (!employee.equipe || employee.equipe === '') : employee.equipe === employeeFilters.selectedTeam);
       const matchesPermission = !employeeFilters.selectedPermission || employee.permissao === employeeFilters.selectedPermission;
       
       return matchesSearch && matchesTeam && matchesPermission;
@@ -327,14 +330,24 @@ export function AdminDashboard() {
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Painel Administrativo</h2>
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Atualizando...' : 'Atualizar'}
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="flex items-center px-3 py-2 text-sm font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors"
+            title="Recarregar página completamente"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Completo
+          </button>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -576,6 +589,35 @@ export function AdminDashboard() {
 
           {/* Filtros de Funcionários */}
           <div className="bg-white rounded-lg shadow p-4">
+            {/* Indicador de filtros ativos */}
+            {(employeeFilters.searchTerm || employeeFilters.selectedTeam || employeeFilters.selectedPermission) && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Filter className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">Filtros ativos:</span>
+                    <div className="flex space-x-2">
+                      {employeeFilters.searchTerm && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Email: "{employeeFilters.searchTerm}"
+                        </span>
+                      )}
+                      {employeeFilters.selectedTeam && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Equipe: {employeeFilters.selectedTeam === 'sem-equipe' ? 'Sem equipe' : employeeFilters.selectedTeam}
+                        </span>
+                      )}
+                      {employeeFilters.selectedPermission && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          Permissão: {employeeFilters.selectedPermission}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
