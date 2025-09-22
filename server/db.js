@@ -180,6 +180,9 @@ export const initializeDb = async () => {
   console.log('🚀 Inicializando banco SQLite para Square Cloud...');
   
   try {
+    // Verificar se existe backup para restaurar
+    await checkAndRestoreFromBackup();
+    
     // Aguardar inicialização da conexão
     await connection.initialize();
     

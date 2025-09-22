@@ -1,242 +1,577 @@
-import fs from 'fs';
+import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+// Obter __dirname em ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Configurações de backup
-const BACKUP_DIR = path.join(__dirname, 'backups');
-const DB_PATH = path.join(__dirname, 'database.sqlite');
-const MAX_BACKUPS = 10; // Manter apenas os 10 backups mais recentes
+// Configuração otimizada do SQLite para Square Cloud
+const isProduction = process.env.NODE_ENV === 'production';
+const dbPath = path.join(__dirname, 'database.sqlite');
 
-// Criar diretório de backup se não existir
-if (!fs.existsSync(BACKUP_DIR)) {
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  console.log('📁 Diretório de backup criado:', BACKUP_DIR);
+console.log('🗄️ Configurando SQLite otimizado para Square Cloud');
+console.log('📍 Caminho do banco:', dbPath);
+console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
+
+// Conexão única SQLite para evitar locks no Square Cloud
+class SQLiteConnection {
+  constructor(dbPath) {
+    this.dbPath = dbPath;
+    this.db = null;
+    this.isInitialized = false;
+    this.queue = [];
+    this.isProcessing = false;
+  }
+
+  async initialize() {
+    if (this.isInitialized) return;
+    
+    console.log('🔗 Inicializando conexão única SQLite - Square Cloud');
+    
+    return new Promise((resolve, reject) => {
+      this.db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
+        if (err) {
+          console.error('❌ Erro ao criar conexão SQLite:', err);
+          reject(err);
+          return;
+        }
+        
+        console.log('✅ Conexão SQLite única criada');
+        
+        // Configurações otimizadas para Square Cloud
+        this.db.serialize(() => {
+          // WAL mode para melhor concorrência
+          this.db.run("PRAGMA journal_mode = WAL");
+          
+          // Configurações de performance
+          this.db.run("PRAGMA synchronous = NORMAL");
+          this.db.run("PRAGMA cache_size = 10000"); // 10MB de cache
+          this.db.run("PRAGMA temp_store = MEMORY");
+          this.db.run("PRAGMA mmap_size = 268435456"); // 256MB memory-mapped I/O
+          
+          // Configurações de timeout
+          this.db.run("PRAGMA busy_timeout = 30000"); // 30 segundos timeout
+          this.db.run("PRAGMA wal_autocheckpoint = 1000");
+          
+          // Otimizações
+          this.db.run("PRAGMA optimize");
+          
+          console.log('⚙️ Configurações SQLite aplicadas');
+        });
+        
+        this.isInitialized = true;
+        resolve();
+      });
+    });
+  }
+
+  async execute(sql, params = []) {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      
+      if (sql.toLowerCase().trim().startsWith('select') || sql.toLowerCase().includes('pragma')) {
+        // Query de leitura
+        this.db.all(sql, params, (err, rows) => {
+          const duration = Date.now() - startTime;
+          
+          if (err) {
+            console.error(`❌ Query error (${duration}ms):`, err.message);
+            reject(err);
+          } else {
+            if (duration > 2000) {
+              console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
+            }
+            resolve({ rows: rows || [] });
+          }
+        });
+      } else {
+        // Query de escrita
+        this.db.run(sql, params, function(err) {
+          const duration = Date.now() - startTime;
+          
+          if (err) {
+            console.error(`❌ Query error (${duration}ms):`, err.message);
+            reject(err);
+          } else {
+            if (duration > 2000) {
+              console.warn(`⚠️ Slow query (${duration}ms):`, sql.substring(0, 100));
+            }
+            resolve({ 
+              rowCount: this.changes,
+              insertId: this.lastID,
+              changes: this.changes
+            });
+          }
+        });
+      }
+    });
+  }
+
+  async close() {
+    if (this.db) {
+      console.log('🔒 Fechando conexão SQLite...');
+      return new Promise((resolve) => {
+        this.db.close((err) => {
+          if (err) {
+            console.error('❌ Erro ao fechar conexão:', err);
+          } else {
+            console.log('✅ Conexão SQLite fechada');
+          }
+          resolve();
+        });
+      });
+    }
+  }
 }
 
-/**
- * Criar backup do banco de dados
- */
-export const createBackup = async () => {
-  try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFileName = `database-backup-${timestamp}.sqlite`;
-    const backupPath = path.join(BACKUP_DIR, backupFileName);
-    
-    console.log('💾 Iniciando backup do banco de dados...');
-    console.log('📍 Origem:', DB_PATH);
-    console.log('📍 Destino:', backupPath);
-    
-    // Verificar se o banco existe
-    if (!fs.existsSync(DB_PATH)) {
-      throw new Error('Banco de dados não encontrado');
-    }
-    
-    // Copiar arquivo do banco
-    fs.copyFileSync(DB_PATH, backupPath);
-    
-    // Verificar se o backup foi criado
-    const stats = fs.statSync(backupPath);
-    const sizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-    
-    console.log('✅ Backup criado com sucesso!');
-    console.log(`📊 Tamanho: ${sizeInMB} MB`);
-    console.log(`📅 Data: ${new Date().toLocaleString('pt-BR')}`);
-    
-    // Limpar backups antigos
-    await cleanOldBackups();
-    
-    return {
-      success: true,
-      fileName: backupFileName,
-      path: backupPath,
-      size: stats.size,
-      timestamp: new Date()
-    };
-    
-  } catch (error) {
-    console.error('❌ Erro ao criar backup:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
+// Instância global da conexão
+const connection = new SQLiteConnection(dbPath);
 
-/**
- * Limpar backups antigos (manter apenas os mais recentes)
- */
-const cleanOldBackups = async () => {
-  try {
-    const files = fs.readdirSync(BACKUP_DIR)
-      .filter(file => file.startsWith('database-backup-') && file.endsWith('.sqlite'))
-      .map(file => ({
-        name: file,
-        path: path.join(BACKUP_DIR, file),
-        mtime: fs.statSync(path.join(BACKUP_DIR, file)).mtime
-      }))
-      .sort((a, b) => b.mtime - a.mtime); // Mais recentes primeiro
-    
-    if (files.length > MAX_BACKUPS) {
-      const filesToDelete = files.slice(MAX_BACKUPS);
+// Função unificada para executar queries com retry automático
+const query = async (sql, params = [], retries = 3) => {
+  let attempt = 0;
+  
+  while (attempt < retries) {
+    try {
+      return await connection.execute(sql, params);
+    } catch (error) {
+      attempt++;
+      console.error(`❌ Tentativa ${attempt}/${retries} falhou:`, error.message);
       
-      for (const file of filesToDelete) {
-        fs.unlinkSync(file.path);
-        console.log(`🗑️ Backup antigo removido: ${file.name}`);
+      if (attempt >= retries) {
+        throw new Error(`Query failed after ${retries} attempts: ${error.message}`);
       }
       
-      console.log(`🧹 ${filesToDelete.length} backup(s) antigo(s) removido(s)`);
+      // Aguardar antes de tentar novamente
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+};
+
+// Função para executar transações
+const transaction = async (queries) => {
+  try {
+    await connection.execute("BEGIN TRANSACTION");
+    
+    const results = [];
+    
+    for (const queryData of queries) {
+      const { sql, params = [] } = queryData;
+      const result = await connection.execute(sql, params);
+      results.push(result);
     }
     
+    await connection.execute("COMMIT");
+    return results;
   } catch (error) {
-    console.error('❌ Erro ao limpar backups antigos:', error);
+    await connection.execute("ROLLBACK");
+    throw error;
+  }
+};
+
+// Função para inicializar o banco de dados
+export const initializeDb = async () => {
+  console.log('🚀 Inicializando banco SQLite para Square Cloud...');
+  
+  try {
+    // Aguardar inicialização da conexão
+    await connection.initialize();
+    
+    // Verificar se o banco está funcionando
+    console.log('🔍 Testando conectividade básica...');
+    await query('SELECT 1 as test');
+    console.log('✅ Conectividade básica confirmada');
+    
+    // Criar tabelas com índices otimizados
+    console.log('📋 Criando tabela funcionarios...');
+    await query(`
+      CREATE TABLE IF NOT EXISTS funcionarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        senha TEXT NOT NULL,
+        permissao TEXT NOT NULL DEFAULT 'advogado',
+        equipe TEXT DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Verificar se a coluna equipe existe, se não existir, adicionar
+    console.log('🔧 Verificando estrutura da tabela funcionarios...');
+    try {
+      await query(`SELECT equipe FROM funcionarios LIMIT 1`);
+      console.log('✅ Coluna equipe já existe');
+    } catch (error) {
+      if (error.message.includes('no such column: equipe') || error.message.includes('has no column named equipe')) {
+        console.log('➕ Adicionando coluna equipe à tabela funcionarios...');
+        await query(`ALTER TABLE funcionarios ADD COLUMN equipe TEXT DEFAULT NULL`);
+        console.log('✅ Coluna equipe adicionada com sucesso');
+      } else {
+        console.error('❌ Erro inesperado ao verificar coluna equipe:', error);
+      }
+    }
+    
+    // Índices para funcionarios
+    await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_email ON funcionarios(email)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_permissao ON funcionarios(permissao)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_equipe ON funcionarios(equipe)`);
+    
+    console.log('📋 Criando tabela protocolos...');
+    await query(`
+      CREATE TABLE IF NOT EXISTS protocolos (
+        id TEXT PRIMARY KEY,
+        processNumber TEXT NOT NULL DEFAULT '',
+        court TEXT NOT NULL DEFAULT '',
+        system TEXT NOT NULL DEFAULT '',
+        jurisdiction TEXT NOT NULL DEFAULT '',
+        processType TEXT NOT NULL DEFAULT 'civel',
+        isFatal INTEGER NOT NULL DEFAULT 0,
+        needsProcuration INTEGER NOT NULL DEFAULT 0,
+        procurationType TEXT DEFAULT '',
+        needsGuia INTEGER NOT NULL DEFAULT 0,
+        guias TEXT NOT NULL DEFAULT '[]',
+        petitionType TEXT NOT NULL DEFAULT '',
+        observations TEXT DEFAULT '',
+        documents TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'Aguardando',
+        assignedTo TEXT DEFAULT NULL,
+        createdBy INTEGER NOT NULL,
+        returnReason TEXT DEFAULT NULL,
+        isDistribution INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        queuePosition INTEGER NOT NULL DEFAULT 1,
+        activityLog TEXT NOT NULL DEFAULT '[]',
+        FOREIGN KEY (createdBy) REFERENCES funcionarios (id)
+      )
+    `);
+    
+    // Índices críticos para performance
+    console.log('🔍 Criando índices otimizados...');
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_status ON protocolos(status)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_assignedTo ON protocolos(assignedTo)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_createdBy ON protocolos(createdBy)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_createdAt ON protocolos(createdAt)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_updatedAt ON protocolos(updatedAt)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_status_assigned ON protocolos(status, assignedTo)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_protocolos_queue_lookup ON protocolos(status, assignedTo, createdAt)`);
+    
+    // Trigger para atualizar updated_at automaticamente
+    await query(`
+      CREATE TRIGGER IF NOT EXISTS update_protocolos_timestamp 
+      AFTER UPDATE ON protocolos
+      BEGIN
+        UPDATE protocolos SET updatedAt = datetime('now') WHERE id = NEW.id;
+      END
+    `);
+    
+    await query(`
+      CREATE TRIGGER IF NOT EXISTS update_funcionarios_timestamp 
+      AFTER UPDATE ON funcionarios
+      BEGIN
+        UPDATE funcionarios SET updated_at = datetime('now') WHERE id = NEW.id;
+      END
+    `);
+    
+    // Criar usuários de teste
+    console.log('👥 Iniciando processo de criação de usuários...');
+    await createTestUsers();
+    console.log('✅ Processo de criação de usuários concluído');
+    
+    // Otimizar banco após criação
+    console.log('⚡ Otimizando banco de dados...');
+    await query(`ANALYZE`);
+    await query(`PRAGMA optimize`);
+    
+    // Estatísticas finais
+    const stats = await getDatabaseStats();
+    console.log('📊 Estatísticas do banco:', stats);
+    console.log('🎉 Inicialização SQLite concluída com sucesso!');
+    
+  } catch (error) {
+    console.error('❌ Erro na inicialização do banco:', error);
+    console.error('📋 Stack trace:', error.stack);
+    throw error;
+  }
+};
+
+// Função para criar usuários de teste
+const createTestUsers = async () => {
+  console.log('👥 Iniciando criação de usuários de teste...');
+  
+  // Definir equipes
+  const equipes = {
+    'Equipe Rahner': [
+      "Maísa Abreu", "Tais Brandão", "Ana Catarina",
+      "Angélica Andrade", "Dayane Cristina", "Isabela Dornelas",
+      "Layla Oliveira", "Thaisa Gomes", "Rafael Rahner"
+    ],
+    'Equipe Mayssa': [
+      "Camila Pimenta", "Carolina Vieira", "Diná Souza",
+      "Nathalia Cristina", "Stefani Caroline", "Mayssa Marcela"
+    ],
+    'Equipe Juacy': [
+      "Adriana Xavier", "Amanda Marques", "André Alencar", "Daiane Alves",
+      "Eloízio Andrade", "Gabriel Augusto", "Natalia Ferreira", "Priscila Alves",
+      "Ramon Alves", "Rejane Oliveira", "Thalita Gonzaga", "Thiago Paiva", "Juacy Leal"
+    ],
+    'Equipe Johnson': [
+      "Ana Marinho", "Audrey Roberto", "Dayane Machado", "Isabela Nogueira",
+      "Izadora Feital", "Jéssica Oliveira", "Lucas Barroso", "Paloma Teodoro",
+      "Pedro Gama", "Sabrina Alves", "Talita Freitas", "Thiago Johnson"
+    ],
+    'Equipe Flaviana': [
+      "Arthur Ferreira", "Clara Pires", "Deivison José", "Idaelly Dutra",
+      "João Pedro Sales", "Juliana Ferreira", "Priscila Cristina",
+      "Rinara de Sá", "Vandressa Barroso", "Flaviana Estevam"
+    ]
+  };
+
+  const testUsers = [
+    { email: 'admin@escritorio.com', senha: '123456', permissao: 'admin', equipe: null },
+    { email: 'mod@escritorio.com', senha: '123456', permissao: 'mod', equipe: null },
+    { email: 'advogado@escritorio.com', senha: '123456', permissao: 'advogado', equipe: null }
+  ];
+
+  // Adicionar usuários das equipes
+  Object.entries(equipes).forEach(([nomeEquipe, membros]) => {
+    membros.forEach(nome => {
+      const email = nome.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/\s+/g, '.')
+        .replace(/[^a-z0-9.]/g, '') + '@nca.com';
+      
+      testUsers.push({
+        email,
+        senha: '123456',
+        permissao: 'advogado',
+        equipe: nomeEquipe
+      });
+    });
+  });
+
+  let usersCreated = 0;
+
+  for (const user of testUsers) {
+    // Log detalhado para debug
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🔍 Tentando criar usuário: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
+    }
+    
+    try {
+      const existingUser = await query(
+        "SELECT email FROM funcionarios WHERE email = ?",
+        [user.email]
+      );
+      
+      if (existingUser.rows.length === 0) {
+        const result = await query(
+          "INSERT INTO funcionarios (email, senha, permissao, equipe) VALUES (?, ?, ?, ?)",
+          [user.email, user.senha, user.permissao, user.equipe || null]
+        );
+        
+        if (result.changes > 0) {
+          console.log(`✅ Usuário criado: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
+          usersCreated++;
+        } else {
+          console.warn(`⚠️ Usuário não foi criado (sem mudanças): ${user.email}`);
+        }
+      } else {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`ℹ️ Usuário já existe: ${user.email}`);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao criar usuário ${user.email}:`, error.message);
+      console.error(`📋 Dados do usuário:`, {
+        email: user.email,
+        permissao: user.permissao,
+        equipe: user.equipe || 'null'
+      });
+    }
+  }
+
+  if (usersCreated > 0) {
+    console.log(`🆕 ${usersCreated} usuários criados nesta inicialização`);
+  } else {
+    console.log(`ℹ️ Nenhum usuário novo foi criado (todos já existem)`);
+  }
+  
+  // Verificar total de usuários após criação
+  try {
+    const totalResult = await query('SELECT COUNT(*) as count FROM funcionarios');
+    const total = totalResult.rows[0].count;
+    console.log(`📊 Total de funcionários no banco: ${total}`);
+  } catch (error) {
+    console.error('❌ Erro ao contar funcionários:', error);
+  }
+};
+
+// Função para testar conectividade
+export const testConnection = async () => {
+  try {
+    const result = await query("SELECT 1 as test");
+    console.log('✅ Teste de conectividade bem-sucedido');
+    return result;
+  } catch (error) {
+    console.error('❌ Teste de conectividade falhou:', error);
+    throw error;
+  }
+};
+
+// Função para obter estatísticas do banco
+export const getDatabaseStats = async () => {
+  try {
+    const funcionariosResult = await query("SELECT COUNT(*) as count FROM funcionarios");
+    const protocolosResult = await query("SELECT COUNT(*) as count FROM protocolos");
+    const aguardandoResult = await query("SELECT COUNT(*) as count FROM protocolos WHERE status = 'Aguardando'");
+    
+    // Estatísticas adicionais de funcionários por equipe
+    const equipesResult = await query(`
+      SELECT equipe, COUNT(*) as count 
+      FROM funcionarios 
+      WHERE equipe IS NOT NULL 
+      GROUP BY equipe
+    `);
+    
+    const stats = {
+      funcionarios: funcionariosResult.rows[0].count,
+      protocolos: protocolosResult.rows[0].count,
+      protocolosAguardando: aguardandoResult.rows[0].count,
+      funcionariosPorEquipe: equipesResult.rows || [],
+      databaseType: 'SQLite Otimizado para Square Cloud',
+      environment: process.env.NODE_ENV || 'development'
+    };
+    
+    return stats;
+  } catch (error) {
+    console.error('❌ Erro ao obter estatísticas:', error);
+    throw error;
+  }
+};
+
+// Função para manutenção do banco
+export const maintenanceDb = async () => {
+  console.log('🔧 Executando manutenção do banco...');
+  
+  try {
+    // Vacuum para otimizar espaço
+    await query("VACUUM");
+    
+    // Reindexar para otimizar queries
+    await query("REINDEX");
+    
+    // Analisar estatísticas
+    await query("ANALYZE");
+    
+    // Otimizar
+    await query("PRAGMA optimize");
+    
+    console.log('✅ Manutenção concluída');
+  } catch (error) {
+    console.error('❌ Erro na manutenção:', error);
   }
 };
 
 /**
- * Listar todos os backups disponíveis
+ * Verificar e restaurar backup automaticamente se necessário
  */
-export const listBackups = () => {
+export const checkAndRestoreFromBackup = async () => {
   try {
-    const files = fs.readdirSync(BACKUP_DIR)
-      .filter(file => file.startsWith('database-backup-') && file.endsWith('.sqlite'))
-      .map(file => {
-        const filePath = path.join(BACKUP_DIR, file);
-        const stats = fs.statSync(filePath);
-        return {
-          name: file,
-          path: filePath,
-          size: stats.size,
-          created: stats.mtime,
-          sizeInMB: (stats.size / (1024 * 1024)).toFixed(2)
-        };
-      })
-      .sort((a, b) => b.created - a.created);
+    console.log('🔍 Verificando se precisa restaurar backup...');
     
-    return files;
+    // Verificar se o banco existe e tem dados
+    if (fs.existsSync(DB_PATH)) {
+      const { query } = await import('./db.js');
+      try {
+        const protocolCount = await query('SELECT COUNT(*) as count FROM protocolos');
+        const userCount = await query('SELECT COUNT(*) as count FROM funcionarios');
+        
+        console.log(`📊 Banco atual: ${protocolCount.rows[0].count} protocolos, ${userCount.rows[0].count} usuários`);
+        
+        // Se tem usuários mas não tem protocolos, pode ser uma nova instância
+        if (userCount.rows[0].count > 0 && protocolCount.rows[0].count === 0) {
+          console.log('⚠️ Detectada possível nova instância - verificando backups...');
+          await attemptAutoRestore();
+        } else {
+          console.log('✅ Banco parece estar íntegro, não precisa restaurar');
+        }
+        return;
+      } catch (error) {
+        console.log('⚠️ Erro ao verificar banco, pode estar corrompido:', error.message);
+        await attemptAutoRestore();
+      }
+    } else {
+      console.log('📁 Banco não existe, verificando backups...');
+      await attemptAutoRestore();
+    }
   } catch (error) {
-    console.error('❌ Erro ao listar backups:', error);
-    return [];
+    console.error('❌ Erro na verificação de backup:', error);
   }
 };
 
 /**
- * Restaurar backup
+ * Tentar restaurar automaticamente do backup mais recente
  */
-export const restoreBackup = async (backupFileName) => {
+const attemptAutoRestore = async () => {
   try {
-    const backupPath = path.join(BACKUP_DIR, backupFileName);
+    const backups = listBackups();
     
-    if (!fs.existsSync(backupPath)) {
-      throw new Error('Arquivo de backup não encontrado');
+    if (backups.length === 0) {
+      console.log('📝 Nenhum backup encontrado - iniciando com banco limpo');
+      return;
     }
     
-    console.log('🔄 Iniciando restauração do backup...');
-    console.log('📍 Backup:', backupPath);
-    console.log('📍 Destino:', DB_PATH);
+    // Pegar o backup mais recente
+    const latestBackup = backups[0];
+    console.log(`🔄 Tentando restaurar backup: ${latestBackup.name}`);
+    console.log(`📅 Data do backup: ${latestBackup.created.toLocaleString('pt-BR')}`);
+    console.log(`📊 Tamanho: ${latestBackup.sizeInMB} MB`);
     
-    // Criar backup do banco atual antes de restaurar
-    const currentBackup = await createBackup();
-    if (currentBackup.success) {
-      console.log('💾 Backup de segurança criado antes da restauração');
+    const result = await restoreBackup(latestBackup.name);
+    
+    if (result.success) {
+      console.log('🎉 BACKUP RESTAURADO COM SUCESSO!');
+      console.log('📋 Seus protocolos foram recuperados automaticamente');
+      
+      // Verificar quantos protocolos foram restaurados
+      setTimeout(async () => {
+        try {
+          const { query } = await import('./db.js');
+          const protocolCount = await query('SELECT COUNT(*) as count FROM protocolos');
+          console.log(`✅ ${protocolCount.rows[0].count} protocolos restaurados do backup`);
+        } catch (error) {
+          console.error('Erro ao verificar protocolos restaurados:', error);
+        }
+      }, 2000);
+      
+    } else {
+      console.error('❌ Falha na restauração automática:', result.error);
+      console.log('📝 Continuando com banco limpo...');
     }
-    
-    // Restaurar o backup
-    fs.copyFileSync(backupPath, DB_PATH);
-    
-    console.log('✅ Backup restaurado com sucesso!');
-    
-    return {
-      success: true,
-      message: 'Backup restaurado com sucesso'
-    };
     
   } catch (error) {
-    console.error('❌ Erro ao restaurar backup:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    console.error('❌ Erro na tentativa de restauração:', error);
+    console.log('📝 Continuando com banco limpo...');
   }
 };
 
 /**
  * Backup automático agendado
  */
-export const scheduleAutoBackup = () => {
-  // Backup a cada 6 horas
-  const BACKUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 horas em ms
-  
-  console.log('⏰ Agendando backups automáticos a cada 6 horas...');
-  
-  // Criar backup inicial
-  setTimeout(async () => {
-    await createBackup();
-  }, 5000); // 5 segundos após iniciar
-  
-  // Agendar backups periódicos
-  setInterval(async () => {
-    console.log('⏰ Executando backup automático agendado...');
-    await createBackup();
-  }, BACKUP_INTERVAL);
+
+// Função para fechar conexões (cleanup)
+export const closeConnection = async () => {
+  await connection.close();
 };
 
-/**
- * Exportar dados em formato JSON (para migração)
- */
-export const exportData = async () => {
-  try {
-    const { query } = await import('./db.js');
-    
-    console.log('📤 Exportando dados para JSON...');
-    
-    // Buscar todos os dados
-    const funcionarios = await query('SELECT * FROM funcionarios');
-    const protocolos = await query('SELECT * FROM protocolos');
-    
-    const exportData = {
-      timestamp: new Date().toISOString(),
-      version: '1.0',
-      data: {
-        funcionarios: funcionarios.rows || [],
-        protocolos: protocolos.rows || []
-      },
-      stats: {
-        totalFuncionarios: funcionarios.rows?.length || 0,
-        totalProtocolos: protocolos.rows?.length || 0
-      }
-    };
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const exportFileName = `data-export-${timestamp}.json`;
-    const exportPath = path.join(BACKUP_DIR, exportFileName);
-    
-    fs.writeFileSync(exportPath, JSON.stringify(exportData, null, 2));
-    
-    const stats = fs.statSync(exportPath);
-    const sizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-    
-    console.log('✅ Dados exportados com sucesso!');
-    console.log(`📁 Arquivo: ${exportFileName}`);
-    console.log(`📊 Tamanho: ${sizeInMB} MB`);
-    console.log(`👥 Funcionários: ${exportData.stats.totalFuncionarios}`);
-    console.log(`📋 Protocolos: ${exportData.stats.totalProtocolos}`);
-    
-    return {
-      success: true,
-      fileName: exportFileName,
-      path: exportPath,
-      stats: exportData.stats
-    };
-    
-  } catch (error) {
-    console.error('❌ Erro ao exportar dados:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
+// Exportar funções principais
+export { query, transaction };
+export default { query, transaction };
