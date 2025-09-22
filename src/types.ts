@@ -51,6 +51,7 @@ export interface User {
   id: number;
   email: string;
   permissao: 'admin' | 'mod' | 'advogado';
+  equipe?: string;
 }
 
 export const USER_PERMISSIONS = {

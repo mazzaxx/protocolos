@@ -191,6 +191,7 @@ export const initializeDb = async () => {
         email TEXT UNIQUE NOT NULL,
         senha TEXT NOT NULL,
         permissao TEXT NOT NULL DEFAULT 'advogado',
+        equipe TEXT DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -278,27 +279,73 @@ export const initializeDb = async () => {
 
 // Função para criar usuários de teste
 const createTestUsers = async () => {
+  // Definir equipes
+  const equipes = {
+    'Equipe Rahner': [
+      "Maísa Abreu", "Tais Brandão", "Ana Catarina",
+      "Angélica Andrade", "Dayane Cristina", "Isabela Dornelas",
+      "Layla Oliveira", "Thaisa Gomes", "Rafael Rahner"
+    ],
+    'Equipe Mayssa': [
+      "Camila Pimenta", "Carolina Vieira", "Diná Souza",
+      "Nathalia Cristina", "Stefani Caroline", "Mayssa Marcela"
+    ],
+    'Equipe Juacy': [
+      "Adriana Xavier", "Amanda Marques", "André Alencar", "Daiane Alves",
+      "Eloízio Andrade", "Gabriel Augusto", "Natalia Ferreira", "Priscila Alves",
+      "Ramon Alves", "Rejane Oliveira", "Thalita Gonzaga", "Thiago Paiva", "Juacy Leal"
+    ],
+    'Equipe Johnson': [
+      "Ana Marinho", "Audrey Roberto", "Dayane Machado", "Isabela Nogueira",
+      "Izadora Feital", "Jéssica Oliveira", "Lucas Barroso", "Paloma Teodoro",
+      "Pedro Gama", "Sabrina Alves", "Talita Freitas", "Thiago Johnson"
+    ],
+    'Equipe Flaviana': [
+      "Arthur Ferreira", "Clara Pires", "Deivison José", "Idaelly Dutra",
+      "João Pedro Sales", "Juliana Ferreira", "Priscila Cristina",
+      "Rinara de Sá", "Vandressa Barroso", "Flaviana Estevam"
+    ]
+  };
+
   const testUsers = [
-    { email: 'admin@escritorio.com', senha: '123456', permissao: 'admin' },
-    { email: 'mod@escritorio.com', senha: '123456', permissao: 'mod' },
-    { email: 'advogado@escritorio.com', senha: '123456', permissao: 'advogado' }
+    { email: 'admin@escritorio.com', senha: '123456', permissao: 'admin', equipe: null },
+    { email: 'mod@escritorio.com', senha: '123456', permissao: 'mod', equipe: null },
+    { email: 'advogado@escritorio.com', senha: '123456', permissao: 'advogado', equipe: null }
   ];
+
+  // Adicionar usuários das equipes
+  Object.entries(equipes).forEach(([nomeEquipe, membros]) => {
+    membros.forEach(nome => {
+      const email = nome.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/\s+/g, '.')
+        .replace(/[^a-z0-9.]/g, '') + '@nca.com';
+      
+      testUsers.push({
+        email,
+        senha: '123456',
+        permissao: 'advogado',
+        equipe: nomeEquipe
+      });
+    });
+  });
 
   let usersCreated = 0;
 
   for (const user of testUsers) {
     try {
       const existingUser = await query(
-        "SELECT email FROM funcionarios WHERE email = ?", 
+        "SELECT email FROM funcionarios WHERE email = ?",
         [user.email]
       );
       
       if (existingUser.rows.length === 0) {
         await query(
-          "INSERT INTO funcionarios (email, senha, permissao) VALUES (?, ?, ?)",
-          [user.email, user.senha, user.permissao]
+          "INSERT INTO funcionarios (email, senha, permissao, equipe) VALUES (?, ?, ?, ?)",
+          [user.email, user.senha, user.permissao, user.equipe]
         );
-        console.log(`✅ Usuário de teste criado: ${user.email} (${user.permissao})`);
+        console.log(`✅ Usuário criado: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
         usersCreated++;
       }
     } catch (error) {
