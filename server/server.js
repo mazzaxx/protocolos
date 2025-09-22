@@ -6,6 +6,7 @@ import { initializeDb, testConnection, getDatabaseStats, closeConnection } from 
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
+import teamRoutes from './teams.js';
 import { scheduleAutoBackup, createBackup, listBackups, exportData } from './backup.js';
 import { maintenanceDb } from './db.js';
 
@@ -247,6 +248,7 @@ app.get('/health', async (req, res) => {
 app.use('/api', authRoutes);
 app.use('/api', protocolRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', teamRoutes);
 
 // Servir o frontend React para todas as rotas não-API (SPA routing)
 app.get('*', (req, res) => {

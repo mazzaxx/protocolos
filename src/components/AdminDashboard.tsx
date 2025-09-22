@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Users, BarChart3, Plus, Edit, Trash2, Eye, X, Calendar, Filter, RefreshCw, Search, SortAsc, SortDesc } from 'lucide-react';
+import { Settings, Users, BarChart3, Plus, Edit, Trash2, Eye, X, Calendar, Filter, RefreshCw, Search, SortAsc, SortDesc, Trash, AlertTriangle, CheckCircle, UserPlus } from 'lucide-react';
 import { useProtocols } from '../hooks/useProtocols';
 import { useAuth } from '../contexts/AuthContext';
 import { Protocol, User } from '../types';
@@ -13,6 +13,20 @@ interface Employee {
   updated_at?: string;
 }
 
+interface Team {
+  nome: string;
+  membros: number;
+}
+
+interface CleanupPreview {
+  total: number;
+  peticionados: number;
+  cancelados: number;
+  devolvidos: number;
+  maisAntigo?: string;
+  maisRecente?: string;
+}
+
 const EQUIPES_DISPONIVEIS = [
   'Equipe Rahner',
   'Equipe Mayssa', 
@@ -24,13 +38,19 @@ const EQUIPES_DISPONIVEIS = [
 export function AdminDashboard() {
   const { protocols, forceRefresh } = useProtocols();
   const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'teams' | 'cleanup' | 'reports'>('overview');
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [cleanupPreview, setCleanupPreview] = useState<CleanupPreview | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isCleanupModalOpen, setIsCleanupModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [selectedProtocol, setSelectedProtocol] = useState<Protocol | null>(null);
   const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
   
   // Estados para filtros de data
   const [dateFilter, setDateFilter] = useState({
@@ -55,6 +75,10 @@ export function AdminDashboard() {
     equipe: ''
   });
 
+  const [teamFormData, setTeamFormData] = useState({
+    nome: ''
+  });
+
   // Verificar permissões
   if (!hasPermission('canAccessAllQueues')) {
     return (
@@ -68,6 +92,8 @@ export function AdminDashboard() {
 
   useEffect(() => {
     fetchEmployees();
+    fetchTeams();
+    fetchCleanupPreview();
     // Forçar refresh inicial para garantir dados atualizados
     handleRefresh();
   }, []);
@@ -90,10 +116,48 @@ export function AdminDashboard() {
     }
   };
 
+  const fetchTeams = async () => {
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/equipes`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setTeams(data.equipes);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar equipes:', error);
+    }
+  };
+
+  const fetchCleanupPreview = async () => {
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/protocolos/finalizados/preview`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setCleanupPreview(data.preview);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar preview de limpeza:', error);
+    }
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     Promise.all([
       fetchEmployees(),
+      fetchTeams(),
+      fetchCleanupPreview(),
       forceRefresh()
     ]).finally(() => {
       setIsRefreshing(false);
@@ -103,6 +167,11 @@ export function AdminDashboard() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleTeamInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setTeamFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleDateFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,6 +195,13 @@ export function AdminDashboard() {
       equipe: ''
     });
     setEditingEmployee(null);
+  };
+
+  const resetTeamForm = () => {
+    setTeamFormData({
+      nome: ''
+    });
+    setEditingTeam(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,6 +228,7 @@ export function AdminDashboard() {
         const data = await response.json();
         if (data.success) {
           fetchEmployees();
+          fetchTeams(); // Atualizar equipes também
           setIsModalOpen(false);
           resetForm();
         } else {
@@ -159,6 +236,49 @@ export function AdminDashboard() {
         }
       } else {
         alert('Erro ao salvar funcionário');
+      }
+    } catch (error) {
+      console.error('Erro:', error);
+      alert('Erro de conexão');
+    }
+  };
+
+  const handleTeamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const url = editingTeam 
+        ? `${apiBaseUrl}/api/admin/equipes/${encodeURIComponent(editingTeam.nome)}`
+        : `${apiBaseUrl}/api/admin/equipes`;
+      
+      const method = editingTeam ? 'PUT' : 'POST';
+      const body = editingTeam 
+        ? { nomeNovo: teamFormData.nome }
+        : { nome: teamFormData.nome };
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          fetchTeams();
+          fetchEmployees(); // Atualizar funcionários também
+          setIsTeamModalOpen(false);
+          resetTeamForm();
+          alert(data.message);
+        } else {
+          alert(data.message || 'Erro ao salvar equipe');
+        }
+      } else {
+        alert('Erro ao salvar equipe');
       }
     } catch (error) {
       console.error('Erro:', error);
@@ -177,6 +297,14 @@ export function AdminDashboard() {
     setIsModalOpen(true);
   };
 
+  const handleEditTeam = (team: Team) => {
+    setEditingTeam(team);
+    setTeamFormData({
+      nome: team.nome
+    });
+    setIsTeamModalOpen(true);
+  };
+
   const handleDelete = async (id: number) => {
     if (window.confirm('Tem certeza que deseja deletar este funcionário?')) {
       try {
@@ -188,6 +316,7 @@ export function AdminDashboard() {
 
         if (response.ok) {
           fetchEmployees();
+          fetchTeams(); // Atualizar equipes também
         } else {
           alert('Erro ao deletar funcionário');
         }
@@ -195,6 +324,61 @@ export function AdminDashboard() {
         console.error('Erro:', error);
         alert('Erro de conexão');
       }
+    }
+  };
+
+  const handleDeleteTeam = async (teamName: string) => {
+    if (window.confirm(`Tem certeza que deseja deletar a equipe "${teamName}"? Todos os funcionários desta equipe ficarão sem equipe.`)) {
+      try {
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+        const response = await fetch(`${apiBaseUrl}/api/admin/equipes/${encodeURIComponent(teamName)}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          fetchTeams();
+          fetchEmployees(); // Atualizar funcionários também
+          alert(data.message);
+        } else {
+          alert('Erro ao deletar equipe');
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro de conexão');
+      }
+    }
+  };
+
+  const handleCleanupProtocols = async () => {
+    setIsCleaningUp(true);
+    
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/protocolos/finalizados`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          alert(`Limpeza concluída!\n\nProtocolos removidos:\n• Total: ${data.removidos.total}\n• Peticionados: ${data.removidos.peticionados}\n• Cancelados: ${data.removidos.cancelados}\n• Devolvidos: ${data.removidos.devolvidos}`);
+          fetchCleanupPreview();
+          forceRefresh(); // Atualizar lista de protocolos
+        } else {
+          alert(data.message || 'Erro na limpeza');
+        }
+      } else {
+        alert('Erro na limpeza de protocolos');
+      }
+    } catch (error) {
+      console.error('Erro:', error);
+      alert('Erro de conexão');
+    } finally {
+      setIsCleaningUp(false);
+      setIsCleanupModalOpen(false);
     }
   };
 
@@ -272,6 +456,13 @@ export function AdminDashboard() {
     });
 
     return filtered;
+  };
+
+  // Obter lista atualizada de equipes para o dropdown
+  const getAvailableTeams = () => {
+    const teamsFromEmployees = [...new Set(employees.filter(e => e.equipe).map(e => e.equipe))];
+    const allTeams = [...new Set([...EQUIPES_DISPONIVEIS, ...teamsFromEmployees])];
+    return allTeams.sort();
   };
 
   const filteredProtocols = getFilteredProtocols();
@@ -356,6 +547,8 @@ export function AdminDashboard() {
           {[
             { id: 'overview', label: 'Visão Geral', icon: BarChart3 },
             { id: 'employees', label: 'Funcionários', icon: Users },
+            { id: 'teams', label: 'Equipes', icon: UserPlus },
+            { id: 'cleanup', label: 'Limpeza', icon: Trash },
             { id: 'reports', label: 'Relatórios', icon: Settings },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -647,7 +840,7 @@ export function AdminDashboard() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Todas as equipes</option>
-                  {EQUIPES_DISPONIVEIS.map(equipe => (
+                  {getAvailableTeams().map(equipe => (
                     <option key={equipe} value={equipe}>{equipe}</option>
                   ))}
                   <option value="sem-equipe">Sem equipe</option>
@@ -792,6 +985,226 @@ export function AdminDashboard() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'teams' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium text-gray-900">
+              Gerenciar Equipes ({teams.length} equipes)
+            </h3>
+            <button
+              onClick={() => setIsTeamModalOpen(true)}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Equipe
+            </button>
+          </div>
+
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nome da Equipe
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Membros
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {teams.map((team) => (
+                  <tr key={team.nome} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <UserPlus className="h-5 w-5 text-green-500 mr-3" />
+                        <span className="text-sm font-medium text-gray-900">{team.nome}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {team.membros} {team.membros === 1 ? 'membro' : 'membros'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                      <button
+                        onClick={() => handleEditTeam(team)}
+                        className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
+                        title="Editar equipe"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTeam(team.nome)}
+                        className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
+                        title="Deletar equipe"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {teams.length === 0 && (
+              <div className="text-center py-12">
+                <UserPlus className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500">Nenhuma equipe cadastrada</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Equipes são criadas automaticamente quando funcionários são atribuídos a elas
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-blue-900 mb-2">Como funcionam as equipes:</h4>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>• Equipes são criadas automaticamente quando funcionários são atribuídos a elas</li>
+              <li>• Você pode renomear equipes existentes</li>
+              <li>• Ao deletar uma equipe, os funcionários ficam sem equipe</li>
+              <li>• Use equipes para organizar funcionários e gerar relatórios</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'cleanup' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Limpeza de Protocolos</h3>
+              <p className="text-sm text-gray-600">Remove protocolos finalizados para liberar espaço</p>
+            </div>
+            <button
+              onClick={() => setIsCleanupModalOpen(true)}
+              disabled={!cleanupPreview || cleanupPreview.total === 0}
+              className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash className="h-4 w-4 mr-2" />
+              Limpar Protocolos
+            </button>
+          </div>
+
+          {cleanupPreview && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-6 rounded-lg shadow">
+                <div className="flex items-center">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <Trash className="h-6 w-6 text-red-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total para Limpeza</p>
+                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.total}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg shadow">
+                <div className="flex items-center">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Peticionados</p>
+                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.peticionados}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg shadow">
+                <div className="flex items-center">
+                  <div className="p-2 bg-gray-100 rounded-lg">
+                    <X className="h-6 w-6 text-gray-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Cancelados</p>
+                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.cancelados}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg shadow">
+                <div className="flex items-center">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <AlertTriangle className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Devolvidos</p>
+                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.devolvidos}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h4 className="text-lg font-medium text-gray-900 mb-4">O que será removido?</h4>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                <div className="flex items-center">
+                  <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
+                  <span className="text-sm font-medium text-green-900">Protocolos Peticionados</span>
+                </div>
+                <span className="text-sm text-green-700">
+                  {cleanupPreview ? cleanupPreview.peticionados : 0} protocolos
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center">
+                  <X className="h-5 w-5 text-gray-600 mr-3" />
+                  <span className="text-sm font-medium text-gray-900">Protocolos Cancelados</span>
+                </div>
+                <span className="text-sm text-gray-700">
+                  {cleanupPreview ? cleanupPreview.cancelados : 0} protocolos
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                <div className="flex items-center">
+                  <AlertTriangle className="h-5 w-5 text-orange-600 mr-3" />
+                  <span className="text-sm font-medium text-orange-900">Protocolos Devolvidos</span>
+                </div>
+                <span className="text-sm text-orange-700">
+                  {cleanupPreview ? cleanupPreview.devolvidos : 0} protocolos
+                </span>
+              </div>
+            </div>
+
+            {cleanupPreview && cleanupPreview.total === 0 && (
+              <div className="text-center py-8">
+                <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-3" />
+                <p className="text-gray-500">Nenhum protocolo finalizado para limpeza</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Todos os protocolos estão em andamento
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="text-sm font-medium text-yellow-900 mb-2">Importante sobre a limpeza:</h4>
+                <ul className="text-sm text-yellow-800 space-y-1">
+                  <li>• <strong>Protocolos ativos NÃO serão removidos</strong> (Aguardando, Em Execução)</li>
+                  <li>• Apenas protocolos finalizados serão removidos (Peticionados, Cancelados, Devolvidos)</li>
+                  <li>• Esta ação é <strong>irreversível</strong> - faça backup se necessário</li>
+                  <li>• A limpeza libera espaço de armazenamento e melhora a performance</li>
+                  <li>• Recomendado fazer limpeza periodicamente</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -971,7 +1384,7 @@ export function AdminDashboard() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Selecione uma equipe (opcional)</option>
-                    {EQUIPES_DISPONIVEIS.map(equipe => (
+                    {getAvailableTeams().map(equipe => (
                       <option key={equipe} value={equipe}>{equipe}</option>
                     ))}
                   </select>
@@ -999,6 +1412,145 @@ export function AdminDashboard() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Equipe */}
+      {isTeamModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {editingTeam ? 'Editar Equipe' : 'Nova Equipe'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsTeamModalOpen(false);
+                    resetTeamForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <form onSubmit={handleTeamSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nome da Equipe *
+                  </label>
+                  <input
+                    type="text"
+                    name="nome"
+                    value={teamFormData.nome}
+                    onChange={handleTeamInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Equipe Alpha"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {editingTeam 
+                      ? 'Renomear a equipe atualizará todos os funcionários automaticamente'
+                      : 'A equipe ficará visível quando funcionários forem atribuídos a ela'
+                    }
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTeamModalOpen(false);
+                      resetTeamForm();
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
+                  >
+                    {editingTeam ? 'Atualizar' : 'Criar'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Limpeza */}
+      {isCleanupModalOpen && cleanupPreview && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center mb-4">
+                <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
+                <h3 className="text-lg font-medium text-gray-900">
+                  Confirmar Limpeza
+                </h3>
+              </div>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-3">
+                  Tem certeza que deseja remover os seguintes protocolos?
+                </p>
+                
+                <div className="bg-gray-50 p-3 rounded-md space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-700">Peticionados:</span>
+                    <span className="text-sm font-medium">{cleanupPreview.peticionados}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-700">Cancelados:</span>
+                    <span className="text-sm font-medium">{cleanupPreview.cancelados}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-700">Devolvidos:</span>
+                    <span className="text-sm font-medium">{cleanupPreview.devolvidos}</span>
+                  </div>
+                  <hr className="my-2" />
+                  <div className="flex justify-between font-medium">
+                    <span className="text-sm text-gray-900">Total:</span>
+                    <span className="text-sm text-red-600">{cleanupPreview.total}</span>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-red-600 mt-3">
+                  <strong>Atenção:</strong> Esta ação é irreversível. Protocolos ativos (Aguardando, Em Execução) não serão afetados.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setIsCleanupModalOpen(false)}
+                  disabled={isCleaningUp}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCleanupProtocols}
+                  disabled={isCleaningUp}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50 flex items-center"
+                >
+                  {isCleaningUp ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Limpando...
+                    </>
+                  ) : (
+                    <>
+                      <Trash className="h-4 w-4 mr-2" />
+                      Confirmar Limpeza
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
