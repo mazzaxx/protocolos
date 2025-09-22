@@ -183,6 +183,11 @@ export const initializeDb = async () => {
     // Aguardar inicialização da conexão
     await connection.initialize();
     
+    // Verificar se o banco está funcionando
+    console.log('🔍 Testando conectividade básica...');
+    await query('SELECT 1 as test');
+    console.log('✅ Conectividade básica confirmada');
+    
     // Criar tabelas com índices otimizados
     console.log('📋 Criando tabela funcionarios...');
     await query(`
@@ -197,9 +202,25 @@ export const initializeDb = async () => {
       )
     `);
     
+    // Verificar se a coluna equipe existe, se não existir, adicionar
+    console.log('🔧 Verificando estrutura da tabela funcionarios...');
+    try {
+      await query(`SELECT equipe FROM funcionarios LIMIT 1`);
+      console.log('✅ Coluna equipe já existe');
+    } catch (error) {
+      if (error.message.includes('no such column: equipe') || error.message.includes('has no column named equipe')) {
+        console.log('➕ Adicionando coluna equipe à tabela funcionarios...');
+        await query(`ALTER TABLE funcionarios ADD COLUMN equipe TEXT DEFAULT NULL`);
+        console.log('✅ Coluna equipe adicionada com sucesso');
+      } else {
+        console.error('❌ Erro inesperado ao verificar coluna equipe:', error);
+      }
+    }
+    
     // Índices para funcionarios
     await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_email ON funcionarios(email)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_permissao ON funcionarios(permissao)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_funcionarios_equipe ON funcionarios(equipe)`);
     
     console.log('📋 Criando tabela protocolos...');
     await query(`
@@ -259,7 +280,9 @@ export const initializeDb = async () => {
     `);
     
     // Criar usuários de teste
+    console.log('👥 Iniciando processo de criação de usuários...');
     await createTestUsers();
+    console.log('✅ Processo de criação de usuários concluído');
     
     // Otimizar banco após criação
     console.log('⚡ Otimizando banco de dados...');
@@ -273,12 +296,15 @@ export const initializeDb = async () => {
     
   } catch (error) {
     console.error('❌ Erro na inicialização do banco:', error);
+    console.error('📋 Stack trace:', error.stack);
     throw error;
   }
 };
 
 // Função para criar usuários de teste
 const createTestUsers = async () => {
+  console.log('👥 Iniciando criação de usuários de teste...');
+  
   // Definir equipes
   const equipes = {
     'Equipe Rahner': [
@@ -334,6 +360,11 @@ const createTestUsers = async () => {
   let usersCreated = 0;
 
   for (const user of testUsers) {
+    // Log detalhado para debug
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🔍 Tentando criar usuário: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
+    }
+    
     try {
       const existingUser = await query(
         "SELECT email FROM funcionarios WHERE email = ?",
@@ -341,20 +372,45 @@ const createTestUsers = async () => {
       );
       
       if (existingUser.rows.length === 0) {
-        await query(
+        const result = await query(
           "INSERT INTO funcionarios (email, senha, permissao, equipe) VALUES (?, ?, ?, ?)",
-          [user.email, user.senha, user.permissao, user.equipe]
+          [user.email, user.senha, user.permissao, user.equipe || null]
         );
-        console.log(`✅ Usuário criado: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
-        usersCreated++;
+        
+        if (result.changes > 0) {
+          console.log(`✅ Usuário criado: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
+          usersCreated++;
+        } else {
+          console.warn(`⚠️ Usuário não foi criado (sem mudanças): ${user.email}`);
+        }
+      } else {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`ℹ️ Usuário já existe: ${user.email}`);
+        }
       }
     } catch (error) {
-      console.error(`❌ Erro ao criar usuário ${user.email}:`, error);
+      console.error(`❌ Erro ao criar usuário ${user.email}:`, error.message);
+      console.error(`📋 Dados do usuário:`, {
+        email: user.email,
+        permissao: user.permissao,
+        equipe: user.equipe || 'null'
+      });
     }
   }
 
   if (usersCreated > 0) {
     console.log(`🆕 ${usersCreated} usuários criados nesta inicialização`);
+  } else {
+    console.log(`ℹ️ Nenhum usuário novo foi criado (todos já existem)`);
+  }
+  
+  // Verificar total de usuários após criação
+  try {
+    const totalResult = await query('SELECT COUNT(*) as count FROM funcionarios');
+    const total = totalResult.rows[0].count;
+    console.log(`📊 Total de funcionários no banco: ${total}`);
+  } catch (error) {
+    console.error('❌ Erro ao contar funcionários:', error);
   }
 };
 
@@ -377,10 +433,19 @@ export const getDatabaseStats = async () => {
     const protocolosResult = await query("SELECT COUNT(*) as count FROM protocolos");
     const aguardandoResult = await query("SELECT COUNT(*) as count FROM protocolos WHERE status = 'Aguardando'");
     
+    // Estatísticas adicionais de funcionários por equipe
+    const equipesResult = await query(`
+      SELECT equipe, COUNT(*) as count 
+      FROM funcionarios 
+      WHERE equipe IS NOT NULL 
+      GROUP BY equipe
+    `);
+    
     const stats = {
       funcionarios: funcionariosResult.rows[0].count,
       protocolos: protocolosResult.rows[0].count,
       protocolosAguardando: aguardandoResult.rows[0].count,
+      funcionariosPorEquipe: equipesResult.rows || [],
       databaseType: 'SQLite Otimizado para Square Cloud',
       environment: process.env.NODE_ENV || 'development'
     };
