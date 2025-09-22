@@ -54,6 +54,53 @@ npm start
 - Mudanças feitas por qualquer usuário aparecem para todos
 - **NÃO há armazenamento local** - tudo depende do servidor
 
+## 💾 Sistema de Backup Automático
+
+### Backups Automáticos:
+- **Frequência:** A cada 6 horas automaticamente
+- **Localização:** `/server/backups/`
+- **Retenção:** Mantém os 10 backups mais recentes
+- **Formato:** Cópia completa do banco SQLite
+
+### Backup Manual:
+```bash
+# Criar backup manual via API
+curl http://localhost/api/backup/create
+
+# Listar backups disponíveis
+curl http://localhost/api/backup/list
+
+# Exportar dados em JSON
+curl http://localhost/api/backup/export
+```
+
+### Estratégias de Deploy sem Perda de Dados:
+
+#### 1. **Deploy com Backup Automático (Recomendado)**
+```bash
+# 1. Fazer backup antes do deploy
+curl http://sua-url.squarecloud.app/api/backup/create
+
+# 2. Baixar o arquivo database.sqlite do servidor atual
+# 3. Fazer o deploy da nova versão
+# 4. Substituir o database.sqlite novo pelo antigo
+# 5. Reiniciar a aplicação
+```
+
+#### 2. **Deploy com Migração de Dados**
+```bash
+# 1. Exportar dados em JSON
+curl http://sua-url.squarecloud.app/api/backup/export
+
+# 2. Fazer deploy da nova versão
+# 3. Importar os dados via script de migração
+```
+
+#### 3. **Deploy Blue-Green (Avançado)**
+- Manter duas instâncias: uma ativa e uma de staging
+- Testar na staging com dados reais
+- Fazer switch quando tudo estiver funcionando
+
 ## Acesso ao sistema
 
 - **URL de desenvolvimento:** http://localhost:5173
@@ -138,6 +185,30 @@ npm run start        # Iniciar servidor de produção
 npm run lint         # Verificar código
 ```
 
+## 🚀 Processo de Deploy Seguro
+
+### Antes do Deploy:
+1. **Criar backup manual:** `curl http://sua-url/api/backup/create`
+2. **Verificar backup:** `curl http://sua-url/api/backup/list`
+3. **Exportar dados:** `curl http://sua-url/api/backup/export`
+4. **Baixar arquivos de backup** do servidor atual
+
+### Durante o Deploy:
+1. Fazer upload do novo código
+2. **IMPORTANTE:** Substituir o `database.sqlite` novo pelo antigo
+3. Reiniciar a aplicação
+4. Verificar se tudo está funcionando
+
+### Após o Deploy:
+1. Testar todas as funcionalidades
+2. Verificar se os dados estão íntegros
+3. Criar novo backup da versão atualizada
+
+### Em Caso de Problemas:
+1. Restaurar backup anterior
+2. Reiniciar aplicação
+3. Investigar problemas na versão de desenvolvimento
+
 ## Suporte
 
 Para suporte técnico, verifique:
@@ -145,3 +216,4 @@ Para suporte técnico, verifique:
 2. Se o banco SQLite foi criado corretamente
 3. Se as dependências foram instaladas
 4. Logs do console para erros específicos
+5. Se os backups estão sendo criados automaticamente

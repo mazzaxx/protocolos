@@ -6,6 +6,7 @@ import { initializeDb, testConnection, getDatabaseStats, closeConnection } from 
 import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
+import { scheduleAutoBackup, createBackup, listBackups, exportData } from './backup.js';
 import { maintenanceDb } from './db.js';
 
 // Obter __dirname em ES modules
@@ -119,6 +120,83 @@ app.use((req, res, next) => {
   next();
 });
 
+// Rotas de backup (apenas para admins)
+app.get('/api/backup/create', async (req, res) => {
+  console.log('💾 Solicitação de backup manual');
+  
+  try {
+    const result = await createBackup();
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Backup criado com sucesso',
+        backup: result
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao criar backup',
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('❌ Erro na rota de backup:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
+    });
+  }
+});
+
+app.get('/api/backup/list', async (req, res) => {
+  console.log('📋 Listando backups disponíveis');
+  
+  try {
+    const backups = listBackups();
+    
+    res.json({
+      success: true,
+      backups: backups,
+      total: backups.length
+    });
+  } catch (error) {
+    console.error('❌ Erro ao listar backups:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao listar backups'
+    });
+  }
+});
+
+app.get('/api/backup/export', async (req, res) => {
+  console.log('📤 Exportando dados em JSON');
+  
+  try {
+    const result = await exportData();
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Dados exportados com sucesso',
+        export: result
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao exportar dados',
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('❌ Erro na exportação:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
+    });
+  }
+});
+
 // Rota de health check
 app.get('/', (req, res) => {
   console.log('🏥 Health check solicitado');
@@ -221,6 +299,9 @@ async function startServer() {
     console.log('🗄️ Inicializando banco de dados...');
     await initializeDb();
     console.log('✅ Banco de dados inicializado com sucesso!');
+    
+    // Iniciar sistema de backup automático
+    scheduleAutoBackup();
     
     // Agendar manutenção periódica (a cada 12 horas para Square Cloud)
     setInterval(async () => {
