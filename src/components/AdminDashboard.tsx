@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Users, BarChart3, Plus, Edit, Trash2, Eye, X, Calendar, Filter, RefreshCw } from 'lucide-react';
+import { Settings, Users, BarChart3, Plus, Edit, Trash2, Eye, X, Calendar, Filter, RefreshCw, Search, SortAsc, SortDesc } from 'lucide-react';
 import { useProtocols } from '../hooks/useProtocols';
 import { useAuth } from '../contexts/AuthContext';
 import { Protocol, User } from '../types';
@@ -9,6 +9,8 @@ interface Employee {
   email: string;
   permissao: 'admin' | 'mod' | 'advogado';
   equipe?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const EQUIPES_DISPONIVEIS = [
@@ -35,6 +37,15 @@ export function AdminDashboard() {
     startDate: '',
     endDate: '',
     enabled: false
+  });
+
+  // Estados para filtros de funcionários
+  const [employeeFilters, setEmployeeFilters] = useState({
+    searchTerm: '',
+    selectedTeam: '',
+    selectedPermission: '',
+    sortBy: 'email' as 'email' | 'permissao' | 'equipe' | 'created_at',
+    sortOrder: 'asc' as 'asc' | 'desc'
   });
   
   const [formData, setFormData] = useState({
@@ -98,6 +109,11 @@ export function AdminDashboard() {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const handleEmployeeFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEmployeeFilters(prev => ({ ...prev, [name]: value }));
   };
 
   const resetForm = () => {
@@ -180,6 +196,14 @@ export function AdminDashboard() {
     }
   };
 
+  const handleSort = (field: typeof employeeFilters.sortBy) => {
+    setEmployeeFilters(prev => ({
+      ...prev,
+      sortBy: field,
+      sortOrder: prev.sortBy === field && prev.sortOrder === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
   // Filtrar protocolos por data se o filtro estiver ativo
   const getFilteredProtocols = () => {
     if (!dateFilter.enabled || (!dateFilter.startDate && !dateFilter.endDate)) {
@@ -203,7 +227,52 @@ export function AdminDashboard() {
     });
   };
 
+  // Filtrar e ordenar funcionários
+  const getFilteredEmployees = () => {
+    let filtered = employees.filter(employee => {
+      const matchesSearch = employee.email.toLowerCase().includes(employeeFilters.searchTerm.toLowerCase());
+      const matchesTeam = !employeeFilters.selectedTeam || employee.equipe === employeeFilters.selectedTeam;
+      const matchesPermission = !employeeFilters.selectedPermission || employee.permissao === employeeFilters.selectedPermission;
+      
+      return matchesSearch && matchesTeam && matchesPermission;
+    });
+
+    // Ordenar
+    filtered.sort((a, b) => {
+      let aValue = '';
+      let bValue = '';
+
+      switch (employeeFilters.sortBy) {
+        case 'email':
+          aValue = a.email;
+          bValue = b.email;
+          break;
+        case 'permissao':
+          aValue = a.permissao;
+          bValue = b.permissao;
+          break;
+        case 'equipe':
+          aValue = a.equipe || '';
+          bValue = b.equipe || '';
+          break;
+        case 'created_at':
+          aValue = a.created_at || '';
+          bValue = b.created_at || '';
+          break;
+      }
+
+      if (employeeFilters.sortOrder === 'asc') {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
+      }
+    });
+
+    return filtered;
+  };
+
   const filteredProtocols = getFilteredProtocols();
+  const filteredEmployees = getFilteredEmployees();
 
   const getProtocolStats = () => {
     const stats = {
@@ -232,11 +301,23 @@ export function AdminDashboard() {
       return acc;
     }, {} as Record<string, number>);
     
-    return { totalEmployees, byPermission, byTeam };
+    // Funcionários sem equipe
+    const semEquipe = employees.filter(e => !e.equipe || e.equipe === '').length;
+    
+    return { totalEmployees, byPermission, byTeam, semEquipe };
   };
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
+  };
+
+  const formatDateOnly = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR');
+  };
+
+  const getSortIcon = (field: typeof employeeFilters.sortBy) => {
+    if (employeeFilters.sortBy !== field) return null;
+    return employeeFilters.sortOrder === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />;
   };
 
   const stats = getProtocolStats();
@@ -359,6 +440,9 @@ export function AdminDashboard() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total de Protocolos</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  {dateFilter.enabled && (
+                    <p className="text-xs text-blue-600">Período filtrado</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -421,37 +505,53 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          {/* Estatísticas de Funcionários */}
+          {/* Estatísticas de Funcionários Aprimoradas */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Funcionários</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Funcionários ({employeeStats.totalEmployees} total)
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Por Permissão</h4>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Por Permissão</h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Administradores:</span>
-                    <span className="text-sm font-medium">{employeeStats.byPermission.admin}</span>
+                    <span className="text-sm font-medium bg-red-100 text-red-800 px-2 py-1 rounded-full">
+                      {employeeStats.byPermission.admin}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Moderadores:</span>
-                    <span className="text-sm font-medium">{employeeStats.byPermission.mod}</span>
+                    <span className="text-sm font-medium bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                      {employeeStats.byPermission.mod}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Advogados:</span>
-                    <span className="text-sm font-medium">{employeeStats.byPermission.advogado}</span>
+                    <span className="text-sm font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                      {employeeStats.byPermission.advogado}
+                    </span>
                   </div>
                 </div>
               </div>
               
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Por Equipe</h4>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Por Equipe</h4>
                 <div className="space-y-2">
                   {EQUIPES_DISPONIVEIS.map(equipe => (
-                    <div key={equipe} className="flex justify-between">
+                    <div key={equipe} className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">{equipe}:</span>
-                      <span className="text-sm font-medium">{employeeStats.byTeam[equipe] || 0}</span>
+                      <span className="text-sm font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        {employeeStats.byTeam[equipe] || 0}
+                      </span>
                     </div>
                   ))}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Sem equipe:</span>
+                    <span className="text-sm font-medium bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
+                      {employeeStats.semEquipe}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -462,7 +562,9 @@ export function AdminDashboard() {
       {activeTab === 'employees' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">Gerenciar Funcionários</h3>
+            <h3 className="text-lg font-medium text-gray-900">
+              Gerenciar Funcionários ({filteredEmployees.length} de {employees.length})
+            </h3>
             <button
               onClick={() => setIsModalOpen(true)}
               className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -472,18 +574,117 @@ export function AdminDashboard() {
             </button>
           </div>
 
+          {/* Filtros de Funcionários */}
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Buscar por email
+                </label>
+                <div className="relative">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    name="searchTerm"
+                    value={employeeFilters.searchTerm}
+                    onChange={handleEmployeeFilterChange}
+                    placeholder="Digite o email..."
+                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Filtrar por equipe
+                </label>
+                <select
+                  name="selectedTeam"
+                  value={employeeFilters.selectedTeam}
+                  onChange={handleEmployeeFilterChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todas as equipes</option>
+                  {EQUIPES_DISPONIVEIS.map(equipe => (
+                    <option key={equipe} value={equipe}>{equipe}</option>
+                  ))}
+                  <option value="sem-equipe">Sem equipe</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Filtrar por permissão
+                </label>
+                <select
+                  name="selectedPermission"
+                  value={employeeFilters.selectedPermission}
+                  onChange={handleEmployeeFilterChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todas as permissões</option>
+                  <option value="admin">Administrador</option>
+                  <option value="mod">Moderador</option>
+                  <option value="advogado">Advogado</option>
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  onClick={() => setEmployeeFilters({
+                    searchTerm: '',
+                    selectedTeam: '',
+                    selectedPermission: '',
+                    sortBy: 'email',
+                    sortOrder: 'asc'
+                  })}
+                  className="w-full px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Limpar Filtros
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('email')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Email</span>
+                      {getSortIcon('email')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Permissão
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('permissao')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Permissão</span>
+                      {getSortIcon('permissao')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Equipe
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('equipe')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Equipe</span>
+                      {getSortIcon('equipe')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('created_at')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Criado em</span>
+                      {getSortIcon('created_at')}
+                    </div>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Ações
@@ -491,8 +692,8 @@ export function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {employees.map((employee) => (
-                  <tr key={employee.id}>
+                {filteredEmployees.map((employee) => (
+                  <tr key={employee.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {employee.email}
                     </td>
@@ -506,18 +707,29 @@ export function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {employee.equipe || '-'}
+                      {employee.equipe ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {employee.equipe}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 italic">Sem equipe</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {employee.created_at ? formatDateOnly(employee.created_at) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                       <button
                         onClick={() => handleEdit(employee)}
-                        className="text-blue-600 hover:text-blue-900"
+                        className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
+                        title="Editar funcionário"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(employee.id)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
+                        title="Deletar funcionário"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -526,6 +738,18 @@ export function AdminDashboard() {
                 ))}
               </tbody>
             </table>
+
+            {filteredEmployees.length === 0 && (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500">
+                  {employees.length === 0 
+                    ? 'Nenhum funcionário cadastrado' 
+                    : 'Nenhum funcionário encontrado com os filtros aplicados'
+                  }
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -539,6 +763,11 @@ export function AdminDashboard() {
               <h4 className="text-md font-medium text-gray-900">
                 Protocolos ({filteredProtocols.length} {dateFilter.enabled ? 'filtrados' : 'total'})
               </h4>
+              {dateFilter.enabled && (dateFilter.startDate || dateFilter.endDate) && (
+                <p className="text-sm text-blue-600 mt-1">
+                  Período: {dateFilter.startDate ? new Date(dateFilter.startDate).toLocaleDateString('pt-BR') : 'início'} até {dateFilter.endDate ? new Date(dateFilter.endDate).toLocaleDateString('pt-BR') : 'hoje'}
+                </p>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -566,7 +795,7 @@ export function AdminDashboard() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredProtocols.map((protocol) => (
-                    <tr key={protocol.id}>
+                    <tr key={protocol.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {protocol.id.substring(0, 8)}...
                       </td>
@@ -596,7 +825,8 @@ export function AdminDashboard() {
                             setSelectedProtocol(protocol);
                             setIsProtocolModalOpen(true);
                           }}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
+                          title="Ver detalhes"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -605,6 +835,18 @@ export function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
+
+              {filteredProtocols.length === 0 && (
+                <div className="text-center py-12">
+                  <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-500">
+                    {protocols.length === 0 
+                      ? 'Nenhum protocolo encontrado' 
+                      : 'Nenhum protocolo encontrado no período selecionado'
+                    }
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -615,14 +857,25 @@ export function AdminDashboard() {
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {editingEmployee ? 'Editar Funcionário' : 'Novo Funcionário'}
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {editingEmployee ? 'Editar Funcionário' : 'Novo Funcionário'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
               
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    Email *
                   </label>
                   <input
                     type="email"
@@ -650,7 +903,7 @@ export function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Permissão
+                    Permissão *
                   </label>
                   <select
                     name="permissao"
@@ -667,7 +920,7 @@ export function AdminDashboard() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Equipe (opcional)
+                    Equipe
                   </label>
                   <select
                     name="equipe"
@@ -675,11 +928,14 @@ export function AdminDashboard() {
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Sem equipe</option>
+                    <option value="">Selecione uma equipe (opcional)</option>
                     {EQUIPES_DISPONIVEIS.map(equipe => (
                       <option key={equipe} value={equipe}>{equipe}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    A equipe ajuda na organização e relatórios dos funcionários
+                  </p>
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
@@ -726,11 +982,19 @@ export function AdminDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">ID</label>
-                  <p className="text-sm text-gray-900">{selectedProtocol.id}</p>
+                  <p className="text-sm text-gray-900 font-mono">{selectedProtocol.id}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Status</label>
-                  <p className="text-sm text-gray-900">{selectedProtocol.status}</p>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    selectedProtocol.status === 'Aguardando' ? 'bg-yellow-100 text-yellow-800' :
+                    selectedProtocol.status === 'Em Execução' ? 'bg-blue-100 text-blue-800' :
+                    selectedProtocol.status === 'Peticionado' ? 'bg-green-100 text-green-800' :
+                    selectedProtocol.status === 'Devolvido' ? 'bg-orange-100 text-orange-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {selectedProtocol.status}
+                  </span>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Processo</label>
@@ -773,6 +1037,20 @@ export function AdminDashboard() {
                   <p className="text-sm text-gray-900 bg-orange-50 p-2 rounded">{selectedProtocol.returnReason}</p>
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Documentos</label>
+                <p className="text-sm text-gray-900">{selectedProtocol.documents.length} arquivo(s) anexado(s)</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setIsProtocolModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
