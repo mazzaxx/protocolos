@@ -1,84 +1,108 @@
-# Sistema de Protocolos Jurídicos - Square Cloud Extension
+# Sistema de Protocolos Jurídicos
 
-Sistema completo para gerenciamento de protocolos jurídicos com automação de peticionamento.
+Sistema completo para gerenciamento de protocolos jurídicos com automação de peticionamento, dividido em duas aplicações independentes.
 
-## 🚀 Deploy com Square Cloud VS Code Extension
+## 🏗️ Arquitetura
 
-### Pré-requisitos
-1. **VS Code** instalado
-2. **Node.js** 18+ instalado
-3. **Conta na Square Cloud**
-4. **Extensão Square Cloud** instalada no VS Code
+O projeto está dividido em duas aplicações separadas:
 
-### 📋 Passo a Passo Completo
+### 📡 Backend (API + Database)
+- **Localização**: `/backend`
+- **Tecnologia**: Node.js + Express + SQLite
+- **Responsabilidade**: API REST, autenticação, banco de dados
+- **Deploy**: Railway, Render, Heroku
 
-#### 1. Instalar a Extensão Square Cloud
+### 🎨 Frontend (Interface)
+- **Localização**: `/frontend`
+- **Tecnologia**: React + TypeScript + Vite + Tailwind
+- **Responsabilidade**: Interface do usuário, consumo da API
+- **Deploy**: Vercel, Netlify, GitHub Pages
+
+## 🚀 Deploy Separado
+
+### 1. Deploy do Backend
+
+#### Railway (Recomendado)
+1. Crie uma conta no [Railway](https://railway.app)
+2. Conecte o repositório
+3. Selecione a pasta `/backend`
+4. O deploy será automático
+
+#### Render
+1. Crie uma conta no [Render](https://render.com)
+2. Conecte o repositório
+3. Configure:
+   - **Root Directory**: `backend`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+
+#### Heroku
+1. Crie uma conta no [Heroku](https://heroku.com)
+2. Conecte o repositório
+3. Configure para usar a pasta `backend`
+
+### 2. Deploy do Frontend
+
+#### Vercel (Recomendado)
+1. Crie uma conta no [Vercel](https://vercel.com)
+2. Conecte o repositório
+3. Configure:
+   - **Root Directory**: `frontend`
+   - **Environment Variable**: `VITE_API_BASE_URL` = URL do seu backend
+
+#### Netlify
+1. Crie uma conta no [Netlify](https://netlify.com)
+2. Conecte o repositório
+3. Configure:
+   - **Base directory**: `frontend`
+   - **Build command**: `npm run build`
+   - **Publish directory**: `frontend/dist`
+   - **Environment Variable**: `VITE_API_BASE_URL` = URL do seu backend
+
+## 🔧 Desenvolvimento Local
+
+### Backend
 ```bash
-# No VS Code, vá em Extensions (Ctrl+Shift+X) e procure por:
-Square Cloud
-# Ou instale via marketplace: https://marketplace.visualstudio.com/items?itemName=squarecloud.squarecloud
+cd backend
+npm install
+npm run dev
+# Servidor rodando em http://localhost:80
 ```
 
-#### 2. Configurar a Extensão
-1. Abra o VS Code neste projeto
-2. Pressione `Ctrl+Shift+P` e digite: `Square Cloud: Login`
-3. Faça login com sua conta Square Cloud
-4. Configure o App ID (será criado automaticamente)
+### Frontend
+```bash
+cd frontend
+npm install
+cp .env.example .env
+# Edite o .env com a URL do backend
+npm run dev
+# Interface rodando em http://localhost:5173
+```
 
-#### 3. Configurar o Projeto
-O projeto já está configurado com:
-- ✅ `squarecloud.config` - Configurações do Square Cloud
-- ✅ `.squareignore` - Arquivos que não serão enviados
-- ✅ Scripts otimizados no `package.json`
-- ✅ Servidor Express configurado para produção
+## 🌐 Configuração de Produção
 
-#### 4. Deploy Automático
-1. **Primeira vez:**
-   ```bash
-   # No terminal do VS Code:
-   Ctrl+Shift+P -> "Square Cloud: Upload"
+1. **Deploy o Backend primeiro** e anote a URL
+2. **Configure o Frontend** com a URL do backend:
+   ```env
+   VITE_API_BASE_URL=https://protocolos.squareweb.app
    ```
+3. **Deploy o Frontend**
 
-2. **Deploys subsequentes:**
-   - A extensão pode fazer upload automático quando você salvar arquivos
-   - Ou use `Ctrl+Shift+P -> "Square Cloud: Upload"` manualmente
+## 🔗 URLs de Produção
 
-#### 5. Monitoramento
-- Use `Ctrl+Shift+P -> "Square Cloud: Logs"` para ver logs em tempo real
-- Use `Ctrl+Shift+P -> "Square Cloud: Status"` para ver status da aplicação
+- **Frontend (Netlify)**: https://protocolosnca.netlify.app
+- **Backend (Square Cloud)**: https://protocolos.squareweb.app
 
-### 🔧 Comandos Úteis da Extensão
+## ✅ Vantagens desta Arquitetura
 
-| Comando | Descrição |
-|---------|-----------|
-| `Square Cloud: Upload` | Faz upload do projeto |
-| `Square Cloud: Logs` | Mostra logs em tempo real |
-| `Square Cloud: Status` | Status da aplicação |
-| `Square Cloud: Restart` | Reinicia a aplicação |
-| `Square Cloud: Delete` | Deleta a aplicação |
+- ✅ **Deploy Independente**: Atualize frontend sem afetar o backend
+- ✅ **Dados Preservados**: Banco de dados nunca é perdido
+- ✅ **Cache Limpo**: Frontend sempre atualizado
+- ✅ **Escalabilidade**: Cada parte pode escalar independentemente
+- ✅ **Flexibilidade**: Use diferentes provedores para cada parte
+- ✅ **Desenvolvimento**: Equipes podem trabalhar independentemente
 
-### 💾 Backup Automático de Dados
-
-#### Vantagens da Extensão para Backup:
-1. **Deploy Instantâneo**: Mudanças são aplicadas em segundos
-2. **Logs em Tempo Real**: Veja exatamente o que está acontecendo
-3. **Rollback Fácil**: Reverta mudanças rapidamente
-4. **Sincronização Automática**: Dados persistem entre deploys
-
-#### Como Funciona o Backup:
-- ✅ **Banco SQLite**: Persiste automaticamente no Square Cloud
-- ✅ **Uploads de Arquivos**: Mantidos entre deploys
-- ✅ **Configurações**: Salvas no `squarecloud.config`
-- ✅ **Logs**: Histórico completo disponível
-
-### 🌐 URLs e Acesso
-
-Após o deploy, sua aplicação estará disponível em:
-```
-https://protocolos-juridicos.squarecloud.app
-```
-
-### 🔐 Usuários de Teste
+## 🔐 Usuários de Teste
 
 | Tipo | Email | Senha |
 |------|-------|-------|
@@ -86,67 +110,20 @@ https://protocolos-juridicos.squarecloud.app
 | Moderador | mod@escritorio.com | 123456 |
 | Advogado | advogado@escritorio.com | 123456 |
 
-### 📊 Monitoramento e Debug
+## 📞 Suporte
 
-#### Ver Logs:
-```bash
-# No VS Code:
-Ctrl+Shift+P -> "Square Cloud: Logs"
-```
+- **Backend**: Verifique logs no provedor escolhido
+- **Frontend**: Verifique console do navegador
+- **CORS**: Certifique-se que a URL do frontend está na lista permitida do backend
 
-#### Verificar Status:
-```bash
-# No VS Code:
-Ctrl+Shift+P -> "Square Cloud: Status"
-```
+## 🔄 Fluxo de Deploy
 
-#### Reiniciar Aplicação:
-```bash
-# No VS Code:
-Ctrl+Shift+P -> "Square Cloud: Restart"
-```
+1. **Primeira vez**:
+   - Deploy backend → Anote URL
+   - Configure frontend com URL do backend
+   - Deploy frontend
 
-### 🛠️ Desenvolvimento Local
-
-Para testar localmente antes do deploy:
-```bash
-npm install
-npm run dev:full
-```
-
-### 📁 Estrutura de Arquivos
-
-```
-projeto/
-├── squarecloud.config      # Configurações Square Cloud
-├── .squareignore          # Arquivos ignorados no upload
-├── start.js               # Script de inicialização
-├── server/                # Backend Express
-├── src/                   # Frontend React (não enviado)
-├── dist/                  # Frontend buildado (enviado)
-└── .vscode/settings.json  # Configurações VS Code
-```
-
-### 🚨 Troubleshooting
-
-#### Problema: Upload falha
-**Solução**: Verifique se está logado: `Ctrl+Shift+P -> "Square Cloud: Login"`
-
-#### Problema: Aplicação não inicia
-**Solução**: Verifique logs: `Ctrl+Shift+P -> "Square Cloud: Logs"`
-
-#### Problema: Banco de dados vazio
-**Solução**: Os usuários são criados automaticamente na primeira inicialização
-
-### 🎯 Próximos Passos
-
-1. **Faça o primeiro deploy** usando a extensão
-2. **Configure domínio personalizado** (opcional)
-3. **Configure backup automático** dos dados
-4. **Monitore performance** através dos logs
-
-### 📞 Suporte
-
-- **Square Cloud Docs**: https://docs.squarecloud.app/
-- **Extensão VS Code**: https://marketplace.visualstudio.com/items?itemName=squarecloud.squarecloud
-- **Discord Square Cloud**: https://discord.gg/squarecloud
+2. **Atualizações**:
+   - **Só backend**: Deploy backend (frontend não afetado)
+   - **Só frontend**: Deploy frontend (dados preservados)
+   - **Ambos**: Deploy backend primeiro, depois frontend

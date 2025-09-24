@@ -5,53 +5,63 @@ import authRoutes from './auth.js';
 import protocolRoutes from './protocols.js';
 import adminRoutes from './admin.js';
 import teamsRoutes from './teams.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 80;
 const isProduction = process.env.NODE_ENV === 'production';
 
-console.log('🚀 Iniciando servidor Express - Square Cloud Extension');
+console.log('🚀 Iniciando Backend API - Sistema de Protocolos Jurídicos');
 console.log('🌍 Ambiente:', isProduction ? 'PRODUÇÃO' : 'DESENVOLVIMENTO');
 console.log('🔌 Porta:', PORT);
 
-// Middleware de CORS otimizado para Square Cloud
+// Middleware de CORS - Permitir requisições do frontend
 const corsOptions = {
   origin: function (origin, callback) {
+    // Lista de origens permitidas (adicione suas URLs de produção aqui)
+    const allowedOrigins = [
+      'http://localhost:5173', // Vite dev
+      'http://localhost:3000', // React dev
+      'https://protocolosnca.netlify.app',
+      'https://main--protocolosnca.netlify.app',
+      'https://deploy-preview-*--protocolosnca.netlify.app',
+      /^https:\/\/.*\.netlify\.app$/,
+      'https://protocolos.squareweb.app',
+      // Adicione outras URLs conforme necessário
+    ];
+    
     // Permitir requisições sem origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
     
-    // Lista de origens permitidas
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://localhost:80',
-      /\.squarecloud\.app$/,
-      /protocolos-juridicos.*\.squarecloud\.app$/
-    ];
-    
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        return origin === allowedOrigin;
+    // Verificar se a origem está na lista permitida
+    if (allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return allowed === origin;
+      } else if (allowed instanceof RegExp) {
+        return allowed.test(origin);
       }
-      return allowedOrigin.test(origin);
-    });
-    
-    if (isAllowed) {
+      return false;
+    })) {
       callback(null, true);
     } else {
       console.log('🚫 Origem bloqueada pelo CORS:', origin);
-      callback(null, true); // Permitir mesmo assim em produção
+      // Em desenvolvimento, permitir mesmo assim
+      callback(null, !isProduction);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'X-Sync-Mode', 'X-Sync-Action', 'X-Client-Time'],
-  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin', 
+    'Cache-Control',
+    'X-Sync-Mode', 
+    'X-Sync-Action', 
+    'X-Client-Time'
+  ],
+  exposedHeaders: ['Content-Length'],
   maxAge: 86400 // 24 horas
 };
 
@@ -73,9 +83,9 @@ if (!isProduction) {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
+    service: 'Protocolos Jurídicos Backend API',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    platform: 'Square Cloud Extension',
     uptime: process.uptime(),
     memory: process.memoryUsage()
   });
@@ -87,19 +97,19 @@ app.use('/api', protocolRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', teamsRoutes);
 
-// Servir arquivos estáticos do frontend
-const distPath = path.join(__dirname, '..', 'dist');
-console.log('📁 Servindo arquivos estáticos de:', distPath);
-app.use(express.static(distPath));
-
-// Fallback para SPA (Single Page Application)
-app.get('*', (req, res) => {
-  // Não aplicar fallback para rotas da API
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API endpoint not found' });
-  }
-  
-  res.sendFile(path.join(distPath, 'index.html'));
+// Rota raiz
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Sistema de Protocolos Jurídicos - Backend API',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      auth: '/api/login',
+      protocols: '/api/protocolos',
+      admin: '/api/admin/*'
+    }
+  });
 });
 
 // Middleware de tratamento de erros
@@ -120,17 +130,17 @@ async function startServer() {
     console.log('✅ Banco de dados inicializado com sucesso!');
     
     const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log('🎉 SERVIDOR INICIADO COM SUCESSO!');
-      console.log(`🌐 URL: http://localhost:${PORT}`);
+      console.log('🎉 BACKEND API INICIADO COM SUCESSO!');
+      console.log(`🌐 URL: ${isProduction ? 'https://protocolos-backend.squarecloud.app' : `http://localhost:${PORT}`}`);
       console.log(`📊 Ambiente: ${isProduction ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'}`);
-      console.log(`🔧 Plataforma: Square Cloud Extension`);
       console.log('📋 Endpoints disponíveis:');
+      console.log('   - GET  / (Informações da API)');
       console.log('   - GET  /health (Health check)');
       console.log('   - POST /api/login (Autenticação)');
       console.log('   - GET  /api/protocolos (Listar protocolos)');
       console.log('   - POST /api/protocolos (Criar protocolo)');
       console.log('   - GET  /api/admin/* (Rotas administrativas)');
-      console.log('🚀 Sistema pronto para uso!');
+      console.log('🚀 Backend pronto para receber requisições!');
     });
     
     // Graceful shutdown

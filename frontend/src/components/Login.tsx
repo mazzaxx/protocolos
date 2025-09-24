@@ -26,7 +26,7 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const loginUrl = `${apiBaseUrl}/api/login`;
       
       console.log('🔐 Tentando fazer login em:', loginUrl);

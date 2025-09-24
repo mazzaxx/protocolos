@@ -9,7 +9,9 @@ const __dirname = dirname(__filename);
 
 // Configuração otimizada do SQLite para Square Cloud
 const isProduction = process.env.NODE_ENV === 'production';
-const dbPath = path.join(__dirname, 'database.sqlite');
+const dbPath = isProduction 
+  ? path.join(process.cwd(), 'database.sqlite')
+  : path.join(__dirname, 'database.sqlite');
 
 console.log('🗄️ Configurando SQLite otimizado para Square Cloud');
 console.log('📍 Caminho do banco:', dbPath);
@@ -180,9 +182,6 @@ export const initializeDb = async () => {
   console.log('🚀 Inicializando banco SQLite para Square Cloud...');
   
   try {
-    // Verificar se existe backup para restaurar
-    await checkAndRestoreFromBackup();
-    
     // Aguardar inicialização da conexão
     await connection.initialize();
     
@@ -486,6 +485,12 @@ export const maintenanceDb = async () => {
 // Função para fechar conexões (cleanup)
 export const closeConnection = async () => {
   await connection.close();
+};
+
+// Função placeholder para backup (implementar futuramente se necessário)
+const checkAndRestoreFromBackup = async () => {
+  // Implementação futura para backup/restore
+  console.log('ℹ️ Sistema de backup não implementado ainda');
 };
 
 // Exportar funções principais
