@@ -8,13 +8,28 @@ router.get('/equipes', async (req, res) => {
   console.log('📋 GET /admin/equipes - Listando equipes');
   
   try {
-    // Buscar equipes únicas dos funcionários
+    // Primeiro, garantir que a tabela de equipes existe
+    await query(`
+      CREATE TABLE IF NOT EXISTS equipes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Buscar todas as equipes da tabela de equipes com contagem de membros
     const result = await query(`
-      SELECT DISTINCT equipe as nome, COUNT(*) as membros
-      FROM funcionarios 
-      WHERE equipe IS NOT NULL AND equipe != ''
-      GROUP BY equipe
-      ORDER BY equipe
+      SELECT 
+        e.id,
+        e.nome,
+        e.created_at,
+        e.updated_at,
+        COUNT(f.id) as membros
+      FROM equipes e
+      LEFT JOIN funcionarios f ON e.nome = f.equipe
+      GROUP BY e.id, e.nome, e.created_at, e.updated_at
+      ORDER BY e.nome
     `);
 
     const equipes = result.rows || [];
@@ -49,9 +64,9 @@ router.post('/equipes', async (req, res) => {
   }
 
   try {
-    // Verificar se a equipe já existe
+    // Verificar se a equipe já existe na tabela de equipes
     const existingTeam = await query(
-      "SELECT COUNT(*) as count FROM funcionarios WHERE equipe = ?",
+      "SELECT COUNT(*) as count FROM equipes WHERE nome = ?",
       [nome.trim()]
     );
     
@@ -62,13 +77,30 @@ router.post('/equipes', async (req, res) => {
       });
     }
 
-    console.log('✅ Equipe validada para criação:', nome.trim());
+    // Inserir nova equipe na tabela
+    const result = await query(
+      "INSERT INTO equipes (nome) VALUES (?)",
+      [nome.trim()]
+    );
+
+    console.log('✅ Equipe criada com sucesso:', nome.trim());
+    
+    // Buscar a equipe recém-criada para retornar dados completos
+    const newTeamResult = await query(
+      "SELECT * FROM equipes WHERE id = ?",
+      [result.insertId]
+    );
+    
+    const newTeam = newTeamResult.rows[0];
     
     res.json({
       success: true,
-      message: 'Equipe criada com sucesso (será visível quando funcionários forem atribuídos)',
+      message: 'Equipe criada com sucesso',
       equipe: {
-        nome: nome.trim(),
+        id: newTeam.id,
+        nome: newTeam.nome,
+        created_at: newTeam.created_at,
+        updated_at: newTeam.updated_at,
         membros: 0
       }
     });
@@ -158,34 +190,46 @@ router.delete('/equipes/:nome', async (req, res) => {
   const { nome } = req.params;
 
   try {
-    // Verificar se a equipe existe
+    // Verificar se a equipe existe na tabela de equipes
     const existingTeam = await query(
-      "SELECT COUNT(*) as count FROM funcionarios WHERE equipe = ?",
+      "SELECT id FROM equipes WHERE nome = ?",
       [decodeURIComponent(nome)]
     );
     
-    if (existingTeam.rows[0].count === 0) {
+    if (!existingTeam.rows || existingTeam.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Equipe não encontrada'
       });
     }
 
-    const membrosCount = existingTeam.rows[0].count;
+    // Contar membros antes de deletar
+    const membrosResult = await query(
+      "SELECT COUNT(*) as count FROM funcionarios WHERE equipe = ?",
+      [decodeURIComponent(nome)]
+    );
+    const membrosCount = membrosResult.rows[0].count;
 
     // Remover a equipe de todos os funcionários (definir como NULL)
-    const result = await query(
+    const updateResult = await query(
       "UPDATE funcionarios SET equipe = NULL, updated_at = CURRENT_TIMESTAMP WHERE equipe = ?",
+      [decodeURIComponent(nome)]
+    );
+    
+    // Deletar a equipe da tabela de equipes
+    const deleteResult = await query(
+      "DELETE FROM equipes WHERE nome = ?",
       [decodeURIComponent(nome)]
     );
 
     console.log('✅ Equipe deletada com sucesso:', nome);
-    console.log('📊 Funcionários atualizados:', result.changes);
+    console.log('📊 Funcionários atualizados:', updateResult.changes);
+    console.log('📊 Equipe removida da tabela:', deleteResult.changes);
     
     res.json({
       success: true,
       message: 'Equipe deletada com sucesso',
-      funcionariosAtualizados: result.changes,
+      funcionariosAtualizados: updateResult.changes,
       membrosAntes: membrosCount
     });
   } catch (error) {

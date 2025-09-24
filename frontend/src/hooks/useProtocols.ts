@@ -137,7 +137,7 @@ export function useProtocols() {
     }
     
     // Throttling inteligente
-    if (!forceRefresh && !protocolCache.canFetch(1500)) {
+    if (!forceRefresh && !protocolCache.canFetch(800)) {
       console.log('⏱️ Throttling ativo, aguardando...');
       return;
     }
@@ -157,7 +157,9 @@ export function useProtocols() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=30',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
           'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
           'X-Client-Time': new Date().toISOString()
         },
@@ -271,19 +273,9 @@ export function useProtocols() {
       intervalRef.current = setInterval(() => {
         if (!mountedRef.current) return;
         
-        // Polling adaptativo baseado na atividade
-        const timeSinceActivity = Date.now() - lastActivityRef.current;
-        let interval = 3000; // 3 segundos padrão
-        
-        if (timeSinceActivity > 60000) {
-          interval = 10000; // 10 segundos se inativo por 1 minuto
-        } else if (timeSinceActivity > 30000) {
-          interval = 5000; // 5 segundos se inativo por 30 segundos
-        }
-        
-        console.log(`🔄 POLLING AUTOMÁTICO (${interval}ms): Verificando atualizações...`);
+        console.log('🔄 POLLING AUTOMÁTICO: Verificando atualizações...');
         debouncedFetch(false);
-      }, 3000); // Intervalo base de 3 segundos
+      }, 1500); // Intervalo otimizado de 1.5 segundos para sincronização instantânea
     };
     
     setupPolling();
@@ -389,10 +381,13 @@ export function useProtocols() {
         // Invalidar cache e forçar refresh imediato
         protocolCache.clear();
         
-        // Múltiplas sincronizações para garantir consistência
+        // Sincronização imediata e múltiplas verificações para garantir que apareça instantaneamente
         setTimeout(() => fetchProtocols(true), 100);
+        setTimeout(() => fetchProtocols(true), 300);
         setTimeout(() => fetchProtocols(true), 500);
+        setTimeout(() => fetchProtocols(true), 800);
         setTimeout(() => fetchProtocols(true), 1000);
+        setTimeout(() => fetchProtocols(true), 1500);
         
         return data.protocolo;
       } else {
@@ -442,10 +437,12 @@ export function useProtocols() {
       if (data.success) {
         console.log('✅ PROTOCOLO ATUALIZADO - Sincronizando...');
         
-        // Invalidar cache e sincronizar
-        protocolCache.clear();
         setTimeout(() => fetchProtocols(true), 200);
-        
+        setTimeout(() => fetchProtocols(true), 350);
+        setTimeout(() => fetchProtocols(true), 500);
+        setTimeout(() => fetchProtocols(true), 800);
+        setTimeout(() => fetchProtocols(true), 1200);
+        // Sincronização imediata para atualizações
         return true;
       } else {
         throw new Error(data.message || 'Erro ao atualizar protocolo');

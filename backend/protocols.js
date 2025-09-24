@@ -9,6 +9,14 @@ router.get('/protocolos', async (req, res) => {
   console.log('🔄 Modo:', req.headers['x-sync-mode'] || 'normal');
   
   try {
+    // Adicionar headers para cache otimizado
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Sync-Timestamp': new Date().toISOString()
+    });
+    
     const result = await query(`
       SELECT p.*, f.email as createdByEmail 
       FROM protocolos p 

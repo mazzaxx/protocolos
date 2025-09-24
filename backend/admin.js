@@ -233,6 +233,17 @@ router.get('/stats', async (req, res) => {
       GROUP BY permissao
     `);
 
+    // Estatísticas de funcionários por equipe (usando a tabela de equipes)
+    const funcionariosPorEquipe = await query(`
+      SELECT 
+        e.nome as equipe, 
+        COUNT(f.id) as count 
+      FROM equipes e
+      LEFT JOIN funcionarios f ON e.nome = f.equipe
+      GROUP BY e.nome
+      ORDER BY e.nome
+    `);
+
     // Estatísticas de protocolos
     const protocolosResult = await query("SELECT COUNT(*) as count FROM protocolos");
     const protocolosPorStatus = await query(`
@@ -255,7 +266,8 @@ router.get('/stats', async (req, res) => {
     const stats = {
       funcionarios: {
         total: funcionariosResult.rows[0].count,
-        porPermissao: funcionariosPorPermissao.rows || []
+        porPermissao: funcionariosPorPermissao.rows || [],
+        porEquipe: funcionariosPorEquipe.rows || []
       },
       protocolos: {
         total: protocolosResult.rows[0].count,
@@ -334,6 +346,125 @@ router.get('/test', (req, res) => {
       'GET /admin/test - Teste das rotas'
     ]
   });
+});
+
+// Gerar relatório por período
+router.post('/relatorio', async (req, res) => {
+  console.log('📊 POST /admin/relatorio - Gerando relatório');
+  
+  const { dataInicio, dataFim } = req.body;
+
+  if (!dataInicio || !dataFim) {
+    return res.status(400).json({
+      success: false,
+      message: 'Data de início e fim são obrigatórias'
+    });
+  }
+
+  try {
+    // Converter datas para formato SQLite
+    const inicio = new Date(dataInicio).toISOString();
+    const fim = new Date(dataFim + 'T23:59:59').toISOString();
+    
+    console.log('📅 Período do relatório:', { inicio, fim });
+
+    // Buscar protocolos do período
+    const protocolosResult = await query(`
+      SELECT 
+        p.*,
+        f.email as createdByEmail,
+        f.equipe as createdByEquipe
+      FROM protocolos p
+      LEFT JOIN funcionarios f ON p.createdBy = f.id
+      WHERE p.createdAt BETWEEN ? AND ?
+      ORDER BY p.createdAt DESC
+    `, [inicio, fim]);
+
+    const protocolos = protocolosResult.rows || [];
+    
+    // Estatísticas gerais
+    const totalProtocolos = protocolos.length;
+    const fatais = protocolos.filter(p => p.isFatal).length;
+    const trabalhistas = protocolos.filter(p => p.processType === 'trabalhista').length;
+    const civeis = protocolos.filter(p => p.processType === 'civel').length;
+    const distribuicoes = protocolos.filter(p => p.isDistribution).length;
+    
+    // Estatísticas por status
+    const porStatus = {};
+    protocolos.forEach(p => {
+      porStatus[p.status] = (porStatus[p.status] || 0) + 1;
+    });
+    
+    // Estatísticas por equipe
+    const porEquipe = {};
+    protocolos.forEach(p => {
+      const equipe = p.createdByEquipe || 'Sem equipe';
+      porEquipe[equipe] = (porEquipe[equipe] || 0) + 1;
+    });
+    
+    // Estatísticas por tribunal
+    const porTribunal = {};
+    protocolos.forEach(p => {
+      const tribunal = p.court || 'Não especificado';
+      porTribunal[tribunal] = (porTribunal[tribunal] || 0) + 1;
+    });
+    
+    // Estatísticas por sistema
+    const porSistema = {};
+    protocolos.forEach(p => {
+      const sistema = p.system || 'Não especificado';
+      porSistema[sistema] = (porSistema[sistema] || 0) + 1;
+    });
+
+    const relatorio = {
+      periodo: {
+        inicio: dataInicio,
+        fim: dataFim
+      },
+      resumo: {
+        totalProtocolos,
+        fatais,
+        trabalhistas,
+        civeis,
+        distribuicoes,
+        normais: totalProtocolos - fatais - distribuicoes
+      },
+      detalhes: {
+        porStatus,
+        porEquipe,
+        porTribunal,
+        porSistema
+      },
+      protocolos: protocolos.map(p => ({
+        id: p.id,
+        processNumber: p.processNumber,
+        court: p.court,
+        system: p.system,
+        processType: p.processType,
+        isFatal: Boolean(p.isFatal),
+        isDistribution: Boolean(p.isDistribution),
+        status: p.status,
+        createdAt: p.createdAt,
+        createdByEmail: p.createdByEmail,
+        createdByEquipe: p.createdByEquipe
+      }))
+    };
+
+    console.log('✅ Relatório gerado com sucesso');
+    console.log('📊 Resumo:', relatorio.resumo);
+    
+    res.json({
+      success: true,
+      relatorio
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar relatório:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao gerar relatório',
+      error: error.message
+    });
+  }
 });
 
 export default router;

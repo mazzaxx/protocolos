@@ -1,21 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Users, BarChart3, Plus, Edit, Trash2, Eye, X, Calendar, Filter, RefreshCw, Search, SortAsc, SortDesc, Trash, AlertTriangle, CheckCircle, UserPlus } from 'lucide-react';
-import { useProtocols } from '../hooks/useProtocols';
+import { Users, Plus, Edit, Trash2, Settings, BarChart3, Download, Calendar, FileText, Building2, RotateCcw, Trash, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Protocol, User } from '../types';
 
 interface Employee {
   id: number;
   email: string;
   permissao: 'admin' | 'mod' | 'advogado';
   equipe?: string;
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Team {
+  id: number;
   nome: string;
+  created_at: string;
+  updated_at: string;
   membros: number;
+}
+
+interface Stats {
+  funcionarios: {
+    total: number;
+    porPermissao: Array<{ permissao: string; count: number }>;
+    porEquipe: Array<{ equipe: string; count: number }>;
+  };
+  protocolos: {
+    total: number;
+    porStatus: Array<{ status: string; count: number }>;
+    porFila: Array<{ fila: string; count: number }>;
+  };
 }
 
 interface CleanupPreview {
@@ -23,339 +37,454 @@ interface CleanupPreview {
   peticionados: number;
   cancelados: number;
   devolvidos: number;
-  maisAntigo?: string;
-  maisRecente?: string;
+  maisAntigo: string;
+  maisRecente: string;
 }
 
-const EQUIPES_DISPONIVEIS = [
-  'Equipe Rahner',
-  'Equipe Mayssa', 
-  'Equipe Juacy',
-  'Equipe Johnson',
-  'Equipe Flaviana'
-];
-
 export function AdminDashboard() {
-  const { protocols, forceRefresh } = useProtocols();
-  const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'teams' | 'cleanup' | 'reports'>('overview');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'employees' | 'teams' | 'stats' | 'reports' | 'cleanup'>('employees');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [cleanupPreview, setCleanupPreview] = useState<CleanupPreview | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
-  const [isCleanupModalOpen, setIsCleanupModalOpen] = useState(false);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-  const [selectedProtocol, setSelectedProtocol] = useState<Protocol | null>(null);
-  const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isCleaningUp, setIsCleaningUp] = useState(false);
-  
-  // Estados para filtros de data
-  const [dateFilter, setDateFilter] = useState({
-    startDate: '',
-    endDate: '',
-    enabled: false
+  const [cleanupPreview, setCleanupPreview] = useState<CleanupPreview | null>(null);
+  const [reportDates, setReportDates] = useState({
+    dataInicio: '',
+    dataFim: ''
   });
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  // Estados para filtros de funcionários
-  const [employeeFilters, setEmployeeFilters] = useState({
-    searchTerm: '',
-    selectedTeam: '',
-    selectedPermission: '',
-    sortBy: 'email' as 'email' | 'permissao' | 'equipe' | 'created_at',
-    sortOrder: 'asc' as 'asc' | 'desc'
-  });
-  
-  const [formData, setFormData] = useState({
+  const [employeeForm, setEmployeeForm] = useState({
     email: '',
     senha: '',
     permissao: 'advogado' as 'admin' | 'mod' | 'advogado',
     equipe: ''
   });
 
-  const [teamFormData, setTeamFormData] = useState({
+  const [teamForm, setTeamForm] = useState({
     nome: ''
   });
 
-  // Verificar permissões
-  if (!hasPermission('canAccessAllQueues')) {
-    return (
-      <div className="text-center py-12">
-        <Settings className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Acesso Negado</h3>
-        <p className="text-gray-600">Você não tem permissão para acessar o painel administrativo.</p>
-      </div>
-    );
-  }
-
   useEffect(() => {
-    fetchEmployees();
-    fetchTeams();
-    fetchCleanupPreview();
-    // Forçar refresh inicial para garantir dados atualizados
-    handleRefresh();
-  }, []);
+    loadData();
+  }, [activeTab]);
 
-  const fetchEmployees = async () => {
+  const loadData = async () => {
+    setIsLoading(true);
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      
+      if (activeTab === 'employees' || activeTab === 'stats') {
+        const employeesResponse = await fetch(`${apiBaseUrl}/api/admin/funcionarios`, {
+          credentials: 'include'
+        });
+        if (employeesResponse.ok) {
+          const employeesData = await employeesResponse.json();
+          setEmployees(employeesData.funcionarios || []);
+        }
+      }
+
+      if (activeTab === 'teams' || activeTab === 'stats') {
+        const teamsResponse = await fetch(`${apiBaseUrl}/api/admin/equipes`, {
+          credentials: 'include'
+        });
+        if (teamsResponse.ok) {
+          const teamsData = await teamsResponse.json();
+          setTeams(teamsData.equipes || []);
+        }
+      }
+
+      if (activeTab === 'stats') {
+        const statsResponse = await fetch(`${apiBaseUrl}/api/admin/stats`, {
+          credentials: 'include'
+        });
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          setStats(statsData.stats);
+        }
+      }
+
+      if (activeTab === 'cleanup') {
+        const previewResponse = await fetch(`${apiBaseUrl}/api/admin/protocolos/finalizados/preview`, {
+          credentials: 'include'
+        });
+        if (previewResponse.ok) {
+          const previewData = await previewResponse.json();
+          setCleanupPreview(previewData.preview);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios`, {
-        credentials: 'include'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(employeeForm)
       });
-      
+
       if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setEmployees(data.funcionarios);
-        }
+        setEmployeeForm({ email: '', senha: '', permissao: 'advogado', equipe: '' });
+        setShowEmployeeModal(false);
+        loadData();
       }
     } catch (error) {
-      console.error('Erro ao buscar funcionários:', error);
+      console.error('Erro ao criar funcionário:', error);
     }
   };
 
-  const fetchTeams = async () => {
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEmployee) return;
+
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios/${editingEmployee.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(employeeForm)
+      });
+
+      if (response.ok) {
+        setEditingEmployee(null);
+        setEmployeeForm({ email: '', senha: '', permissao: 'advogado', equipe: '' });
+        setShowEmployeeModal(false);
+        loadData();
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar funcionário:', error);
+    }
+  };
+
+  const handleDeleteEmployee = async (id: number) => {
+    if (!confirm('Tem certeza que deseja deletar este funcionário?')) return;
+
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        loadData();
+      }
+    } catch (error) {
+      console.error('Erro ao deletar funcionário:', error);
+    }
+  };
+
+  const handleCreateTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const response = await fetch(`${apiBaseUrl}/api/admin/equipes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(teamForm)
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        console.log('✅ Equipe criada com sucesso:', data.equipe);
+        setTeamForm({ nome: '' });
+        setShowTeamModal(false);
+        loadData(); // Recarregar dados
+      } else {
+        console.error('❌ Erro ao criar equipe:', data.message);
+        alert(data.message || 'Erro ao criar equipe');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao criar equipe:', error);
+      alert('Erro de conexão ao criar equipe');
+    }
+  };
+
+  const handleDeleteTeam = async (nome: string) => {
+    if (!confirm(`Tem certeza que deseja deletar a equipe "${nome}"? Todos os funcionários desta equipe ficarão sem equipe.`)) return;
+
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/equipes/${encodeURIComponent(nome)}`, {
+        method: 'DELETE',
         credentials: 'include'
       });
-      
+
       if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setTeams(data.equipes);
-        }
+        loadData();
       }
     } catch (error) {
-      console.error('Erro ao buscar equipes:', error);
+      console.error('Erro ao deletar equipe:', error);
     }
   };
 
-  const fetchCleanupPreview = async () => {
-    try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
-      const response = await fetch(`${apiBaseUrl}/api/admin/protocolos/finalizados/preview`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setCleanupPreview(data.preview);
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao buscar preview de limpeza:', error);
+  const handleGenerateReport = async () => {
+    if (!reportDates.dataInicio || !reportDates.dataFim) {
+      alert('Por favor, selecione as datas de início e fim');
+      return;
     }
-  };
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    Promise.all([
-      fetchEmployees(),
-      fetchTeams(),
-      fetchCleanupPreview(),
-      forceRefresh()
-    ]).finally(() => {
-      setIsRefreshing(false);
-    });
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleTeamInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setTeamFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleDateFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setDateFilter(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const handleEmployeeFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setEmployeeFilters(prev => ({ ...prev, [name]: value }));
-  };
-
-  const resetForm = () => {
-    setFormData({
-      email: '',
-      senha: '',
-      permissao: 'advogado',
-      equipe: ''
-    });
-    setEditingEmployee(null);
-  };
-
-  const resetTeamForm = () => {
-    setTeamFormData({
-      nome: ''
-    });
-    setEditingTeam(null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+    setIsGeneratingReport(true);
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
-      const url = editingEmployee 
-        ? `${apiBaseUrl}/api/admin/funcionarios/${editingEmployee.id}`
-        : `${apiBaseUrl}/api/admin/funcionarios`;
-      
-      const method = editingEmployee ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/relatorio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(formData),
+        body: JSON.stringify(reportDates)
       });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success) {
-          fetchEmployees();
-          fetchTeams(); // Atualizar equipes também
-          setIsModalOpen(false);
-          resetForm();
-        } else {
-          alert(data.message || 'Erro ao salvar funcionário');
-        }
-      } else {
-        alert('Erro ao salvar funcionário');
+        generateHTMLReport(data.relatorio);
       }
     } catch (error) {
-      console.error('Erro:', error);
-      alert('Erro de conexão');
+      console.error('Erro ao gerar relatório:', error);
+      alert('Erro ao gerar relatório');
+    } finally {
+      setIsGeneratingReport(false);
     }
   };
 
-  const handleTeamSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
-      const url = editingTeam 
-        ? `${apiBaseUrl}/api/admin/equipes/${encodeURIComponent(editingTeam.nome)}`
-        : `${apiBaseUrl}/api/admin/equipes`;
-      
-      const method = editingTeam ? 'PUT' : 'POST';
-      const body = editingTeam 
-        ? { nomeNovo: teamFormData.nome }
-        : { nome: teamFormData.nome };
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
+  const generateHTMLReport = (relatorio: any) => {
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório de Protocolos - ${relatorio.periodo.inicio} a ${relatorio.periodo.fim}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .section { margin-bottom: 30px; }
+        .section h2 { color: #333; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .stat-card { background: #f5f5f5; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; color: #2563eb; }
+        .stat-label { color: #666; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .fatal { color: #dc2626; font-weight: bold; }
+        .trabalhista { color: #7c3aed; font-weight: bold; }
+        .distribuicao { color: #ea580c; font-weight: bold; }
+        .footer { margin-top: 40px; text-align: center; color: #666; font-size: 0.9em; border-top: 1px solid #ccc; padding-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Relatório de Protocolos Jurídicos</h1>
+        <p><strong>Período:</strong> ${new Date(relatorio.periodo.inicio).toLocaleDateString('pt-BR')} a ${new Date(relatorio.periodo.fim).toLocaleDateString('pt-BR')}</p>
+        <p><strong>Gerado em:</strong> ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+    </div>
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          fetchTeams();
-          fetchEmployees(); // Atualizar funcionários também
-          setIsTeamModalOpen(false);
-          resetTeamForm();
-          alert(data.message);
-        } else {
-          alert(data.message || 'Erro ao salvar equipe');
-        }
-      } else {
-        alert('Erro ao salvar equipe');
-      }
-    } catch (error) {
-      console.error('Erro:', error);
-      alert('Erro de conexão');
-    }
-  };
+    <div class="section">
+        <h2>📊 Resumo Geral</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">${relatorio.resumo.totalProtocolos}</div>
+                <div class="stat-label">Total de Protocolos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: #dc2626;">${relatorio.resumo.fatais}</div>
+                <div class="stat-label">Protocolos Fatais</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: #7c3aed;">${relatorio.resumo.trabalhistas}</div>
+                <div class="stat-label">Processos Trabalhistas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: #059669;">${relatorio.resumo.civeis}</div>
+                <div class="stat-label">Processos Cíveis</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: #ea580c;">${relatorio.resumo.distribuicoes}</div>
+                <div class="stat-label">Distribuições</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${relatorio.resumo.normais}</div>
+                <div class="stat-label">Protocolos Normais</div>
+            </div>
+        </div>
+    </div>
 
-  const handleEdit = (employee: Employee) => {
-    setEditingEmployee(employee);
-    setFormData({
-      email: employee.email,
-      senha: '',
-      permissao: employee.permissao,
-      equipe: employee.equipe || ''
-    });
-    setIsModalOpen(true);
-  };
+    <div class="section">
+        <h2>📈 Protocolos por Status</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Quantidade</th>
+                    <th>Percentual</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${Object.entries(relatorio.detalhes.porStatus).map(([status, count]) => `
+                    <tr>
+                        <td>${status}</td>
+                        <td>${count}</td>
+                        <td>${((count / relatorio.resumo.totalProtocolos) * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
 
-  const handleEditTeam = (team: Team) => {
-    setEditingTeam(team);
-    setTeamFormData({
-      nome: team.nome
-    });
-    setIsTeamModalOpen(true);
-  };
+    <div class="section">
+        <h2>👥 Protocolos por Equipe</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Equipe</th>
+                    <th>Quantidade</th>
+                    <th>Percentual</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${Object.entries(relatorio.detalhes.porEquipe).map(([equipe, count]) => `
+                    <tr>
+                        <td>${equipe}</td>
+                        <td>${count}</td>
+                        <td>${((count / relatorio.resumo.totalProtocolos) * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Tem certeza que deseja deletar este funcionário?')) {
-      try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
-        const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios/${id}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
+    <div class="section">
+        <h2>🏛️ Protocolos por Tribunal</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tribunal</th>
+                    <th>Quantidade</th>
+                    <th>Percentual</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${Object.entries(relatorio.detalhes.porTribunal).map(([tribunal, count]) => `
+                    <tr>
+                        <td>${tribunal}</td>
+                        <td>${count}</td>
+                        <td>${((count / relatorio.resumo.totalProtocolos) * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
 
-        if (response.ok) {
-          fetchEmployees();
-          fetchTeams(); // Atualizar equipes também
-        } else {
-          alert('Erro ao deletar funcionário');
-        }
-      } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro de conexão');
-      }
-    }
-  };
+    <div class="section">
+        <h2>💻 Protocolos por Sistema</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Sistema</th>
+                    <th>Quantidade</th>
+                    <th>Percentual</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${Object.entries(relatorio.detalhes.porSistema).map(([sistema, count]) => `
+                    <tr>
+                        <td>${sistema}</td>
+                        <td>${count}</td>
+                        <td>${((count / relatorio.resumo.totalProtocolos) * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
 
-  const handleDeleteTeam = async (teamName: string) => {
-    if (window.confirm(`Tem certeza que deseja deletar a equipe "${teamName}"? Todos os funcionários desta equipe ficarão sem equipe.`)) {
-      try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
-        const response = await fetch(`${apiBaseUrl}/api/admin/equipes/${encodeURIComponent(teamName)}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
+    <div class="section">
+        <h2>📋 Detalhes dos Protocolos</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Número do Processo</th>
+                    <th>Tribunal</th>
+                    <th>Sistema</th>
+                    <th>Tipo</th>
+                    <th>Status</th>
+                    <th>Criado por</th>
+                    <th>Equipe</th>
+                    <th>Data de Criação</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${relatorio.protocolos.map(p => `
+                    <tr>
+                        <td>
+                            ${p.processNumber || 'Distribuição'}
+                            ${p.isFatal ? '<span class="fatal"> (FATAL)</span>' : ''}
+                            ${p.isDistribution ? '<span class="distribuicao"> (DIST)</span>' : ''}
+                        </td>
+                        <td>${p.court || 'Não especificado'}</td>
+                        <td>${p.system || 'Não especificado'}</td>
+                        <td class="${p.processType === 'trabalhista' ? 'trabalhista' : ''}">${p.processType === 'civel' ? 'Cível' : 'Trabalhista'}</td>
+                        <td>${p.status}</td>
+                        <td>${p.createdByEmail || 'Não identificado'}</td>
+                        <td>${p.createdByEquipe || 'Sem equipe'}</td>
+                        <td>${new Date(p.createdAt).toLocaleDateString('pt-BR')}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
 
-        if (response.ok) {
-          const data = await response.json();
-          fetchTeams();
-          fetchEmployees(); // Atualizar funcionários também
-          alert(data.message);
-        } else {
-          alert('Erro ao deletar equipe');
-        }
-      } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro de conexão');
-      }
-    }
+    <div class="footer">
+        <p>Sistema de Protocolos Jurídicos - Relatório gerado automaticamente</p>
+        <p>Total de ${relatorio.resumo.totalProtocolos} protocolos no período selecionado</p>
+    </div>
+</body>
+</html>`;
+
+    // Criar e baixar o arquivo HTML
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio-protocolos-${relatorio.periodo.inicio}-${relatorio.periodo.fim}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   const handleCleanupProtocols = async () => {
-    setIsCleaningUp(true);
-    
+    if (!cleanupPreview || cleanupPreview.total === 0) {
+      alert('Nenhum protocolo finalizado encontrado para limpeza');
+      return;
+    }
+
+    const confirmMessage = `Tem certeza que deseja remover ${cleanupPreview.total} protocolos finalizados?\n\n` +
+      `• ${cleanupPreview.peticionados} peticionados\n` +
+      `• ${cleanupPreview.cancelados} cancelados\n` +
+      `• ${cleanupPreview.devolvidos} devolvidos\n\n` +
+      `Esta ação não pode ser desfeita!`;
+
+    if (!confirm(confirmMessage)) return;
+
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const response = await fetch(`${apiBaseUrl}/api/admin/protocolos/finalizados`, {
         method: 'DELETE',
         credentials: 'include'
@@ -363,577 +492,122 @@ export function AdminDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success) {
-          alert(`Limpeza concluída!\n\nProtocolos removidos:\n• Total: ${data.removidos.total}\n• Peticionados: ${data.removidos.peticionados}\n• Cancelados: ${data.removidos.cancelados}\n• Devolvidos: ${data.removidos.devolvidos}`);
-          fetchCleanupPreview();
-          forceRefresh(); // Atualizar lista de protocolos
-        } else {
-          alert(data.message || 'Erro na limpeza');
-        }
-      } else {
-        alert('Erro na limpeza de protocolos');
+        alert(`Limpeza concluída!\n\nRemovidos: ${data.removidos.total} protocolos`);
+        loadData(); // Atualizar preview
       }
     } catch (error) {
-      console.error('Erro:', error);
-      alert('Erro de conexão');
-    } finally {
-      setIsCleaningUp(false);
-      setIsCleanupModalOpen(false);
+      console.error('Erro ao limpar protocolos:', error);
+      alert('Erro ao limpar protocolos');
     }
   };
 
-  const handleSort = (field: typeof employeeFilters.sortBy) => {
-    setEmployeeFilters(prev => ({
-      ...prev,
-      sortBy: field,
-      sortOrder: prev.sortBy === field && prev.sortOrder === 'asc' ? 'desc' : 'asc'
-    }));
-  };
-
-  // Filtrar protocolos por data se o filtro estiver ativo
-  const getFilteredProtocols = () => {
-    if (!dateFilter.enabled || (!dateFilter.startDate && !dateFilter.endDate)) {
-      return protocols;
-    }
-
-    return protocols.filter(protocol => {
-      const protocolDate = new Date(protocol.createdAt);
-      const startDate = dateFilter.startDate ? new Date(dateFilter.startDate + 'T00:00:00') : null;
-      const endDate = dateFilter.endDate ? new Date(dateFilter.endDate + 'T23:59:59') : null;
-
-      if (startDate && endDate) {
-        return protocolDate >= startDate && protocolDate <= endDate;
-      } else if (startDate) {
-        return protocolDate >= startDate;
-      } else if (endDate) {
-        return protocolDate <= endDate;
-      }
-      
-      return true;
+  const openEditEmployeeModal = (employee: Employee) => {
+    setEditingEmployee(employee);
+    setEmployeeForm({
+      email: employee.email,
+      senha: '', // Não preencher senha por segurança
+      permissao: employee.permissao,
+      equipe: employee.equipe || ''
     });
+    setShowEmployeeModal(true);
   };
 
-  // Filtrar e ordenar funcionários
-  const getFilteredEmployees = () => {
-    let filtered = employees.filter(employee => {
-      const matchesSearch = employee.email.toLowerCase().includes(employeeFilters.searchTerm.toLowerCase());
-      const matchesTeam = !employeeFilters.selectedTeam || 
-        (employeeFilters.selectedTeam === 'sem-equipe' ? (!employee.equipe || employee.equipe === '') : employee.equipe === employeeFilters.selectedTeam);
-      const matchesPermission = !employeeFilters.selectedPermission || employee.permissao === employeeFilters.selectedPermission;
-      
-      return matchesSearch && matchesTeam && matchesPermission;
-    });
-
-    // Ordenar
-    filtered.sort((a, b) => {
-      let aValue = '';
-      let bValue = '';
-
-      switch (employeeFilters.sortBy) {
-        case 'email':
-          aValue = a.email;
-          bValue = b.email;
-          break;
-        case 'permissao':
-          aValue = a.permissao;
-          bValue = b.permissao;
-          break;
-        case 'equipe':
-          aValue = a.equipe || '';
-          bValue = b.equipe || '';
-          break;
-        case 'created_at':
-          aValue = a.created_at || '';
-          bValue = b.created_at || '';
-          break;
-      }
-
-      if (employeeFilters.sortOrder === 'asc') {
-        return aValue.localeCompare(bValue);
-      } else {
-        return bValue.localeCompare(aValue);
-      }
-    });
-
-    return filtered;
+  const openCreateEmployeeModal = () => {
+    setEditingEmployee(null);
+    setEmployeeForm({ email: '', senha: '', permissao: 'advogado', equipe: '' });
+    setShowEmployeeModal(true);
   };
 
-  // Obter lista atualizada de equipes para o dropdown
-  const getAvailableTeams = () => {
-    const teamsFromEmployees = [...new Set(employees.filter(e => e.equipe).map(e => e.equipe))];
-    const allTeams = [...new Set([...EQUIPES_DISPONIVEIS, ...teamsFromEmployees])];
-    return allTeams.sort();
+  const openCreateTeamModal = () => {
+    setEditingTeam(null);
+    setTeamForm({ nome: '' });
+    setShowTeamModal(true);
   };
 
-  const filteredProtocols = getFilteredProtocols();
-  const filteredEmployees = getFilteredEmployees();
-
-  const getProtocolStats = () => {
-    const stats = {
-      total: filteredProtocols.length,
-      aguardando: filteredProtocols.filter(p => p.status === 'Aguardando').length,
-      emExecucao: filteredProtocols.filter(p => p.status === 'Em Execução').length,
-      peticionado: filteredProtocols.filter(p => p.status === 'Peticionado').length,
-      devolvido: filteredProtocols.filter(p => p.status === 'Devolvido').length,
-      cancelado: filteredProtocols.filter(p => p.status === 'Cancelado').length,
-      filaRobo: filteredProtocols.filter(p => !p.assignedTo && p.status === 'Aguardando').length,
-      filaCarlos: filteredProtocols.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length,
-      filaDeyse: filteredProtocols.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length,
-    };
-    return stats;
-  };
-
-  const getEmployeeStats = () => {
-    const totalEmployees = employees.length;
-    const byPermission = {
-      admin: employees.filter(e => e.permissao === 'admin').length,
-      mod: employees.filter(e => e.permissao === 'mod').length,
-      advogado: employees.filter(e => e.permissao === 'advogado').length,
-    };
-    const byTeam = EQUIPES_DISPONIVEIS.reduce((acc, equipe) => {
-      acc[equipe] = employees.filter(e => e.equipe === equipe).length;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    // Funcionários sem equipe
-    const semEquipe = employees.filter(e => !e.equipe || e.equipe === '').length;
-    
-    return { totalEmployees, byPermission, byTeam, semEquipe };
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
-  };
-
-  const formatDateOnly = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
-  };
-
-  const getSortIcon = (field: typeof employeeFilters.sortBy) => {
-    if (employeeFilters.sortBy !== field) return null;
-    return employeeFilters.sortOrder === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />;
-  };
-
-  const stats = getProtocolStats();
-  const employeeStats = getEmployeeStats();
+  if (user?.permissao !== 'admin') {
+    return (
+      <div className="text-center py-12">
+        <Settings className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Acesso Restrito</h3>
+        <p className="text-gray-600">Apenas administradores podem acessar esta seção.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Painel Administrativo</h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            className="flex items-center px-3 py-2 text-sm font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors"
-            title="Recarregar página completamente"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh Completo
-          </button>
-        </div>
+        <button
+          onClick={loadData}
+          disabled={isLoading}
+          className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+        >
+          <RotateCcw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Atualizar
+        </button>
       </div>
 
-      {/* Navigation Tabs */}
-      <nav className="bg-white border-b mb-6">
-        <div className="flex space-x-8">
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
           {[
-            { id: 'overview', label: 'Visão Geral', icon: BarChart3 },
             { id: 'employees', label: 'Funcionários', icon: Users },
-            { id: 'teams', label: 'Equipes', icon: UserPlus },
-            { id: 'cleanup', label: 'Limpeza', icon: Trash },
-            { id: 'reports', label: 'Relatórios', icon: Settings },
+            { id: 'teams', label: 'Equipes', icon: Building2 },
+            { id: 'stats', label: 'Estatísticas', icon: BarChart3 },
+            { id: 'reports', label: 'Relatórios', icon: FileText },
+            { id: 'cleanup', label: 'Limpeza', icon: Trash }
           ].map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  isActive 
-                    ? 'border-blue-600 text-blue-600' 
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <Icon className="h-5 w-5 mr-2" />
+                <Icon className="h-4 w-4 mr-2" />
                 {tab.label}
               </button>
             );
           })}
-        </div>
-      </nav>
-
-      {/* Filtro de Data (visível em todas as abas) */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="enableDateFilter"
-              name="enabled"
-              checked={dateFilter.enabled}
-              onChange={handleDateFilterChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="enableDateFilter" className="ml-2 text-sm font-medium text-gray-700">
-              Filtrar por período
-            </label>
-          </div>
-          
-          {dateFilter.enabled && (
-            <>
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-gray-400" />
-                <label className="text-sm text-gray-600">De:</label>
-                <input
-                  type="date"
-                  name="startDate"
-                  value={dateFilter.startDate}
-                  onChange={handleDateFilterChange}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600">Até:</label>
-                <input
-                  type="date"
-                  name="endDate"
-                  value={dateFilter.endDate}
-                  onChange={handleDateFilterChange}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <button
-                onClick={() => setDateFilter({ startDate: '', endDate: '', enabled: false })}
-                className="flex items-center px-3 py-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Limpar
-              </button>
-            </>
-          )}
-        </div>
-        
-        {dateFilter.enabled && (dateFilter.startDate || dateFilter.endDate) && (
-          <div className="mt-2 text-xs text-blue-600">
-            <Filter className="h-3 w-3 inline mr-1" />
-            Mostrando dados de {dateFilter.startDate ? new Date(dateFilter.startDate).toLocaleDateString('pt-BR') : 'início'} até {dateFilter.endDate ? new Date(dateFilter.endDate).toLocaleDateString('pt-BR') : 'hoje'}
-          </div>
-        )}
+        </nav>
       </div>
 
-      {/* Tab Content */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Estatísticas de Protocolos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-blue-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total de Protocolos</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                  {dateFilter.enabled && (
-                    <p className="text-xs text-blue-600">Período filtrado</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex items-center">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-yellow-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Aguardando</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.aguardando}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-green-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Peticionados</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.peticionado}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-orange-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Devolvidos</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.devolvido}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Estatísticas das Filas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Fila do Robô</h3>
-              <p className="text-3xl font-bold text-red-600">{stats.filaRobo}</p>
-              <p className="text-sm text-gray-600">protocolos aguardando</p>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Fila do Carlos</h3>
-              <p className="text-3xl font-bold text-blue-600">{stats.filaCarlos}</p>
-              <p className="text-sm text-gray-600">protocolos aguardando</p>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Fila da Deyse</h3>
-              <p className="text-3xl font-bold text-purple-600">{stats.filaDeyse}</p>
-              <p className="text-sm text-gray-600">protocolos aguardando</p>
-            </div>
-          </div>
-
-          {/* Estatísticas de Funcionários Aprimoradas */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Funcionários ({employeeStats.totalEmployees} total)
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Por Permissão</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Administradores:</span>
-                    <span className="text-sm font-medium bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                      {employeeStats.byPermission.admin}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Moderadores:</span>
-                    <span className="text-sm font-medium bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                      {employeeStats.byPermission.mod}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Advogados:</span>
-                    <span className="text-sm font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                      {employeeStats.byPermission.advogado}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Por Equipe</h4>
-                <div className="space-y-2">
-                  {EQUIPES_DISPONIVEIS.map(equipe => (
-                    <div key={equipe} className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">{equipe}:</span>
-                      <span className="text-sm font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                        {employeeStats.byTeam[equipe] || 0}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Sem equipe:</span>
-                    <span className="text-sm font-medium bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
-                      {employeeStats.semEquipe}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Conteúdo das Tabs */}
       {activeTab === 'employees' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">
-              Gerenciar Funcionários ({filteredEmployees.length} de {employees.length})
-            </h3>
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Gerenciar Funcionários</h3>
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              onClick={openCreateEmployeeModal}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               <Plus className="h-4 w-4 mr-2" />
               Novo Funcionário
             </button>
           </div>
 
-          {/* Filtros de Funcionários */}
-          <div className="bg-white rounded-lg shadow p-4">
-            {/* Indicador de filtros ativos */}
-            {(employeeFilters.searchTerm || employeeFilters.selectedTeam || employeeFilters.selectedPermission) && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Filter className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-800">Filtros ativos:</span>
-                    <div className="flex space-x-2">
-                      {employeeFilters.searchTerm && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          Email: "{employeeFilters.searchTerm}"
-                        </span>
-                      )}
-                      {employeeFilters.selectedTeam && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Equipe: {employeeFilters.selectedTeam === 'sem-equipe' ? 'Sem equipe' : employeeFilters.selectedTeam}
-                        </span>
-                      )}
-                      {employeeFilters.selectedPermission && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          Permissão: {employeeFilters.selectedPermission}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Buscar por email
-                </label>
-                <div className="relative">
-                  <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    name="searchTerm"
-                    value={employeeFilters.searchTerm}
-                    onChange={handleEmployeeFilterChange}
-                    placeholder="Digite o email..."
-                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Filtrar por equipe
-                </label>
-                <select
-                  name="selectedTeam"
-                  value={employeeFilters.selectedTeam}
-                  onChange={handleEmployeeFilterChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Todas as equipes</option>
-                  {getAvailableTeams().map(equipe => (
-                    <option key={equipe} value={equipe}>{equipe}</option>
-                  ))}
-                  <option value="sem-equipe">Sem equipe</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Filtrar por permissão
-                </label>
-                <select
-                  name="selectedPermission"
-                  value={employeeFilters.selectedPermission}
-                  onChange={handleEmployeeFilterChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Todas as permissões</option>
-                  <option value="admin">Administrador</option>
-                  <option value="mod">Moderador</option>
-                  <option value="advogado">Advogado</option>
-                </select>
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  onClick={() => setEmployeeFilters({
-                    searchTerm: '',
-                    selectedTeam: '',
-                    selectedPermission: '',
-                    sortBy: 'email',
-                    sortOrder: 'asc'
-                  })}
-                  className="w-full px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                >
-                  Limpar Filtros
-                </button>
-              </div>
-            </div>
-          </div>
-
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('email')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Email</span>
-                      {getSortIcon('email')}
-                    </div>
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('permissao')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Permissão</span>
-                      {getSortIcon('permissao')}
-                    </div>
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('equipe')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Equipe</span>
-                      {getSortIcon('equipe')}
-                    </div>
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('created_at')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Criado em</span>
-                      {getSortIcon('created_at')}
-                    </div>
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ações
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Permissão</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Equipe</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Criado em</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredEmployees.map((employee) => (
-                  <tr key={employee.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {employee.email}
-                    </td>
+              <tbody className="divide-y divide-gray-200">
+                {employees.map((employee) => (
+                  <tr key={employee.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{employee.email}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         employee.permissao === 'admin' ? 'bg-red-100 text-red-800' :
                         employee.permissao === 'mod' ? 'bg-purple-100 text-purple-800' :
                         'bg-blue-100 text-blue-800'
@@ -942,29 +616,21 @@ export function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {employee.equipe ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {employee.equipe}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 italic">Sem equipe</span>
-                      )}
+                      {employee.equipe || 'Sem equipe'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {employee.created_at ? formatDateOnly(employee.created_at) : '-'}
+                      {new Date(employee.created_at).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                       <button
-                        onClick={() => handleEdit(employee)}
-                        className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
-                        title="Editar funcionário"
+                        onClick={() => openEditEmployeeModal(employee)}
+                        className="text-blue-600 hover:text-blue-900"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(employee.id)}
-                        className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
-                        title="Deletar funcionário"
+                        onClick={() => handleDeleteEmployee(employee.id)}
+                        className="text-red-600 hover:text-red-900"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -973,31 +639,17 @@ export function AdminDashboard() {
                 ))}
               </tbody>
             </table>
-
-            {filteredEmployees.length === 0 && (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500">
-                  {employees.length === 0 
-                    ? 'Nenhum funcionário cadastrado' 
-                    : 'Nenhum funcionário encontrado com os filtros aplicados'
-                  }
-                </p>
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {activeTab === 'teams' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">
-              Gerenciar Equipes ({teams.length} equipes)
-            </h3>
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Gerenciar Equipes</h3>
             <button
-              onClick={() => setIsTeamModalOpen(true)}
-              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+              onClick={openCreateTeamModal}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
             >
               <Plus className="h-4 w-4 mr-2" />
               Nova Equipe
@@ -1008,43 +660,24 @@ export function AdminDashboard() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nome da Equipe
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Membros
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ações
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome da Equipe</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Membros</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Criada em</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200">
                 {teams.map((team) => (
-                  <tr key={team.nome} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <UserPlus className="h-5 w-5 text-green-500 mr-3" />
-                        <span className="text-sm font-medium text-gray-900">{team.nome}</span>
-                      </div>
+                  <tr key={team.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{team.nome}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{team.membros}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(team.created_at).toLocaleDateString('pt-BR')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {team.membros} {team.membros === 1 ? 'membro' : 'membros'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button
-                        onClick={() => handleEditTeam(team)}
-                        className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
-                        title="Editar equipe"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => handleDeleteTeam(team.nome)}
-                        className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
-                        title="Deletar equipe"
+                        className="text-red-600 hover:text-red-900"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1053,157 +686,54 @@ export function AdminDashboard() {
                 ))}
               </tbody>
             </table>
-
-            {teams.length === 0 && (
-              <div className="text-center py-12">
-                <UserPlus className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500">Nenhuma equipe cadastrada</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  Equipes são criadas automaticamente quando funcionários são atribuídos a elas
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">Como funcionam as equipes:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Equipes são criadas automaticamente quando funcionários são atribuídos a elas</li>
-              <li>• Você pode renomear equipes existentes</li>
-              <li>• Ao deletar uma equipe, os funcionários ficam sem equipe</li>
-              <li>• Use equipes para organizar funcionários e gerar relatórios</li>
-            </ul>
           </div>
         </div>
       )}
 
-      {activeTab === 'cleanup' && (
+      {activeTab === 'stats' && stats && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">Limpeza de Protocolos</h3>
-              <p className="text-sm text-gray-600">Remove protocolos finalizados para liberar espaço</p>
+          <h3 className="text-lg font-medium text-gray-900">Estatísticas do Sistema</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">{stats.funcionarios.total}</div>
+              <div className="text-sm text-blue-800">Total de Funcionários</div>
             </div>
-            <button
-              onClick={() => setIsCleanupModalOpen(true)}
-              disabled={!cleanupPreview || cleanupPreview.total === 0}
-              className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Trash className="h-4 w-4 mr-2" />
-              Limpar Protocolos
-            </button>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.protocolos.total}</div>
+              <div className="text-sm text-green-800">Total de Protocolos</div>
+            </div>
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-yellow-600">
+                {stats.protocolos.porFila.reduce((acc, fila) => acc + fila.count, 0)}
+              </div>
+              <div className="text-sm text-yellow-800">Protocolos Aguardando</div>
+            </div>
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600">{teams.length}</div>
+              <div className="text-sm text-purple-800">Total de Equipes</div>
+            </div>
           </div>
 
-          {cleanupPreview && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <Trash className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total para Limpeza</p>
-                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.total}</p>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-4 rounded-lg shadow">
+              <h4 className="font-medium text-gray-900 mb-3">Funcionários por Permissão</h4>
+              {stats.funcionarios.porPermissao.map((item) => (
+                <div key={item.permissao} className="flex justify-between py-1">
+                  <span className="capitalize">{item.permissao}</span>
+                  <span className="font-medium">{item.count}</span>
                 </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Peticionados</p>
-                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.peticionados}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <X className="h-6 w-6 text-gray-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Cancelados</p>
-                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.cancelados}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex items-center">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <AlertTriangle className="h-6 w-6 text-orange-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Devolvidos</p>
-                    <p className="text-2xl font-bold text-gray-900">{cleanupPreview.devolvidos}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <h4 className="text-lg font-medium text-gray-900 mb-4">O que será removido?</h4>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                <div className="flex items-center">
-                  <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
-                  <span className="text-sm font-medium text-green-900">Protocolos Peticionados</span>
-                </div>
-                <span className="text-sm text-green-700">
-                  {cleanupPreview ? cleanupPreview.peticionados : 0} protocolos
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center">
-                  <X className="h-5 w-5 text-gray-600 mr-3" />
-                  <span className="text-sm font-medium text-gray-900">Protocolos Cancelados</span>
-                </div>
-                <span className="text-sm text-gray-700">
-                  {cleanupPreview ? cleanupPreview.cancelados : 0} protocolos
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                <div className="flex items-center">
-                  <AlertTriangle className="h-5 w-5 text-orange-600 mr-3" />
-                  <span className="text-sm font-medium text-orange-900">Protocolos Devolvidos</span>
-                </div>
-                <span className="text-sm text-orange-700">
-                  {cleanupPreview ? cleanupPreview.devolvidos : 0} protocolos
-                </span>
-              </div>
+              ))}
             </div>
 
-            {cleanupPreview && cleanupPreview.total === 0 && (
-              <div className="text-center py-8">
-                <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-3" />
-                <p className="text-gray-500">Nenhum protocolo finalizado para limpeza</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  Todos os protocolos estão em andamento
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="text-sm font-medium text-yellow-900 mb-2">Importante sobre a limpeza:</h4>
-                <ul className="text-sm text-yellow-800 space-y-1">
-                  <li>• <strong>Protocolos ativos NÃO serão removidos</strong> (Aguardando, Em Execução)</li>
-                  <li>• Apenas protocolos finalizados serão removidos (Peticionados, Cancelados, Devolvidos)</li>
-                  <li>• Esta ação é <strong>irreversível</strong> - faça backup se necessário</li>
-                  <li>• A limpeza libera espaço de armazenamento e melhora a performance</li>
-                  <li>• Recomendado fazer limpeza periodicamente</li>
-                </ul>
-              </div>
+            <div className="bg-white p-4 rounded-lg shadow">
+              <h4 className="font-medium text-gray-900 mb-3">Protocolos por Status</h4>
+              {stats.protocolos.porStatus.map((item) => (
+                <div key={item.status} className="flex justify-between py-1">
+                  <span>{item.status}</span>
+                  <span className="font-medium">{item.count}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -1211,441 +741,243 @@ export function AdminDashboard() {
 
       {activeTab === 'reports' && (
         <div className="space-y-6">
-          <h3 className="text-lg font-medium text-gray-900">Relatórios Detalhados</h3>
+          <h3 className="text-lg font-medium text-gray-900">Gerar Relatórios</h3>
           
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h4 className="text-md font-medium text-gray-900">
-                Protocolos ({filteredProtocols.length} {dateFilter.enabled ? 'filtrados' : 'total'})
-              </h4>
-              {dateFilter.enabled && (dateFilter.startDate || dateFilter.endDate) && (
-                <p className="text-sm text-blue-600 mt-1">
-                  Período: {dateFilter.startDate ? new Date(dateFilter.startDate).toLocaleDateString('pt-BR') : 'início'} até {dateFilter.endDate ? new Date(dateFilter.endDate).toLocaleDateString('pt-BR') : 'hoje'}
-                </p>
-              )}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Processo
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fila
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Criado em
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ação
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredProtocols.map((protocol) => (
-                    <tr key={protocol.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {protocol.id.substring(0, 8)}...
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {protocol.processNumber || 'Distribuição'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          protocol.status === 'Aguardando' ? 'bg-yellow-100 text-yellow-800' :
-                          protocol.status === 'Em Execução' ? 'bg-blue-100 text-blue-800' :
-                          protocol.status === 'Peticionado' ? 'bg-green-100 text-green-800' :
-                          protocol.status === 'Devolvido' ? 'bg-orange-100 text-orange-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {protocol.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {protocol.assignedTo ? `Fila do ${protocol.assignedTo}` : 'Fila do Robô'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(protocol.createdAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => {
-                            setSelectedProtocol(protocol);
-                            setIsProtocolModalOpen(true);
-                          }}
-                          className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
-                          title="Ver detalhes"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {filteredProtocols.length === 0 && (
-                <div className="text-center py-12">
-                  <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">
-                    {protocols.length === 0 
-                      ? 'Nenhum protocolo encontrado' 
-                      : 'Nenhum protocolo encontrado no período selecionado'
-                    }
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Funcionário */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {editingEmployee ? 'Editar Funcionário' : 'Novo Funcionário'}
-                </h3>
-                <button
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    resetForm();
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h4 className="font-medium text-gray-900 mb-4">Relatório por Período</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data de Início
+                </label>
+                <input
+                  type="date"
+                  value={reportDates.dataInicio}
+                  onChange={(e) => setReportDates(prev => ({ ...prev, dataInicio: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Senha {editingEmployee && '(deixe em branco para manter a atual)'}
-                  </label>
-                  <input
-                    type="password"
-                    name="senha"
-                    value={formData.senha}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required={!editingEmployee}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Permissão *
-                  </label>
-                  <select
-                    name="permissao"
-                    value={formData.permissao}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="advogado">Advogado</option>
-                    <option value="mod">Moderador</option>
-                    <option value="admin">Administrador</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Equipe
-                  </label>
-                  <select
-                    name="equipe"
-                    value={formData.equipe}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Selecione uma equipe (opcional)</option>
-                    {getAvailableTeams().map(equipe => (
-                      <option key={equipe} value={equipe}>{equipe}</option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    A equipe ajuda na organização e relatórios dos funcionários
-                  </p>
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      resetForm();
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-                  >
-                    {editingEmployee ? 'Atualizar' : 'Criar'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Equipe */}
-      {isTeamModalOpen && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {editingTeam ? 'Editar Equipe' : 'Nova Equipe'}
-                </h3>
-                <button
-                  onClick={() => {
-                    setIsTeamModalOpen(false);
-                    resetTeamForm();
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data de Fim
+                </label>
+                <input
+                  type="date"
+                  value={reportDates.dataFim}
+                  onChange={(e) => setReportDates(prev => ({ ...prev, dataFim: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               
-              <form onSubmit={handleTeamSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nome da Equipe *
-                  </label>
-                  <input
-                    type="text"
-                    name="nome"
-                    value={teamFormData.nome}
-                    onChange={handleTeamInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Equipe Alpha"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    {editingTeam 
-                      ? 'Renomear a equipe atualizará todos os funcionários automaticamente'
-                      : 'A equipe ficará visível quando funcionários forem atribuídos a ela'
-                    }
-                  </p>
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsTeamModalOpen(false);
-                      resetTeamForm();
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
-                  >
-                    {editingTeam ? 'Atualizar' : 'Criar'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Confirmação de Limpeza */}
-      {isCleanupModalOpen && cleanupPreview && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center mb-4">
-                <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
-                <h3 className="text-lg font-medium text-gray-900">
-                  Confirmar Limpeza
-                </h3>
-              </div>
-              
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 mb-3">
-                  Tem certeza que deseja remover os seguintes protocolos?
-                </p>
-                
-                <div className="bg-gray-50 p-3 rounded-md space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-700">Peticionados:</span>
-                    <span className="text-sm font-medium">{cleanupPreview.peticionados}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-700">Cancelados:</span>
-                    <span className="text-sm font-medium">{cleanupPreview.cancelados}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-700">Devolvidos:</span>
-                    <span className="text-sm font-medium">{cleanupPreview.devolvidos}</span>
-                  </div>
-                  <hr className="my-2" />
-                  <div className="flex justify-between font-medium">
-                    <span className="text-sm text-gray-900">Total:</span>
-                    <span className="text-sm text-red-600">{cleanupPreview.total}</span>
-                  </div>
-                </div>
-                
-                <p className="text-xs text-red-600 mt-3">
-                  <strong>Atenção:</strong> Esta ação é irreversível. Protocolos ativos (Aguardando, Em Execução) não serão afetados.
-                </p>
-              </div>
-
-              <div className="flex justify-end space-x-3">
+              <div>
                 <button
-                  onClick={() => setIsCleanupModalOpen(false)}
-                  disabled={isCleaningUp}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors disabled:opacity-50"
+                  onClick={handleGenerateReport}
+                  disabled={isGeneratingReport || !reportDates.dataInicio || !reportDates.dataFim}
+                  className="w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCleanupProtocols}
-                  disabled={isCleaningUp}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50 flex items-center"
-                >
-                  {isCleaningUp ? (
+                  {isGeneratingReport ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                      Limpando...
+                      Gerando...
                     </>
                   ) : (
                     <>
-                      <Trash className="h-4 w-4 mr-2" />
-                      Confirmar Limpeza
+                      <Download className="h-4 w-4 mr-2" />
+                      Gerar Relatório HTML
                     </>
                   )}
                 </button>
               </div>
             </div>
+            
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>O relatório incluirá:</strong> Total de protocolos, fatais, trabalhistas, cíveis, distribuições, 
+                estatísticas por equipe, tribunal e sistema, além de uma lista detalhada de todos os protocolos do período.
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Modal de Detalhes do Protocolo */}
-      {isProtocolModalOpen && selectedProtocol && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Detalhes do Protocolo
-              </h3>
-              <button
-                onClick={() => setIsProtocolModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">ID</label>
-                  <p className="text-sm text-gray-900 font-mono">{selectedProtocol.id}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Status</label>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    selectedProtocol.status === 'Aguardando' ? 'bg-yellow-100 text-yellow-800' :
-                    selectedProtocol.status === 'Em Execução' ? 'bg-blue-100 text-blue-800' :
-                    selectedProtocol.status === 'Peticionado' ? 'bg-green-100 text-green-800' :
-                    selectedProtocol.status === 'Devolvido' ? 'bg-orange-100 text-orange-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {selectedProtocol.status}
-                  </span>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Processo</label>
-                  <p className="text-sm text-gray-900">{selectedProtocol.processNumber || 'Distribuição'}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Tribunal</label>
-                  <p className="text-sm text-gray-900">{selectedProtocol.court || '-'}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Sistema</label>
-                  <p className="text-sm text-gray-900">{selectedProtocol.system || '-'}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Fila</label>
-                  <p className="text-sm text-gray-900">
-                    {selectedProtocol.assignedTo ? `Fila do ${selectedProtocol.assignedTo}` : 'Fila do Robô'}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Criado em</label>
-                  <p className="text-sm text-gray-900">{formatDate(selectedProtocol.createdAt)}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Atualizado em</label>
-                  <p className="text-sm text-gray-900">{formatDate(selectedProtocol.updatedAt)}</p>
-                </div>
-              </div>
-              
-              {selectedProtocol.observations && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Observações</label>
-                  <p className="text-sm text-gray-900 bg-gray-50 p-2 rounded">{selectedProtocol.observations}</p>
-                </div>
-              )}
-              
-              {selectedProtocol.returnReason && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Motivo da Devolução</label>
-                  <p className="text-sm text-gray-900 bg-orange-50 p-2 rounded">{selectedProtocol.returnReason}</p>
-                </div>
-              )}
-
+      {activeTab === 'cleanup' && (
+        <div className="space-y-6">
+          <h3 className="text-lg font-medium text-gray-900">Limpeza de Protocolos</h3>
+          
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="flex items-start space-x-3 mb-4">
+              <AlertTriangle className="h-6 w-6 text-yellow-500 flex-shrink-0 mt-1" />
               <div>
-                <label className="block text-sm font-medium text-gray-700">Documentos</label>
-                <p className="text-sm text-gray-900">{selectedProtocol.documents.length} arquivo(s) anexado(s)</p>
+                <h4 className="font-medium text-gray-900">Remover Protocolos Finalizados</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  Remove protocolos com status "Peticionado", "Cancelado" e "Devolvido" do banco de dados.
+                  Esta ação é irreversível!
+                </p>
               </div>
             </div>
 
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={() => setIsProtocolModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
-              >
-                Fechar
-              </button>
-            </div>
+            {cleanupPreview && (
+              <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                <h5 className="font-medium text-gray-900 mb-2">Preview da Limpeza:</h5>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Total:</span>
+                    <span className="ml-2 font-medium">{cleanupPreview.total}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Peticionados:</span>
+                    <span className="ml-2 font-medium text-green-600">{cleanupPreview.peticionados}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Cancelados:</span>
+                    <span className="ml-2 font-medium text-red-600">{cleanupPreview.cancelados}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Devolvidos:</span>
+                    <span className="ml-2 font-medium text-orange-600">{cleanupPreview.devolvidos}</span>
+                  </div>
+                </div>
+                
+                {cleanupPreview.total > 0 && (
+                  <div className="mt-3 text-xs text-gray-500">
+                    <p>Período: {new Date(cleanupPreview.maisAntigo).toLocaleDateString('pt-BR')} a {new Date(cleanupPreview.maisRecente).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={handleCleanupProtocols}
+              disabled={!cleanupPreview || cleanupPreview.total === 0}
+              className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash className="h-4 w-4 mr-2" />
+              {cleanupPreview && cleanupPreview.total > 0 
+                ? `Remover ${cleanupPreview.total} Protocolos Finalizados`
+                : 'Nenhum Protocolo para Remover'
+              }
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Funcionário */}
+      {showEmployeeModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              {editingEmployee ? 'Editar Funcionário' : 'Novo Funcionário'}
+            </h3>
+            
+            <form onSubmit={editingEmployee ? handleUpdateEmployee : handleCreateEmployee} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={employeeForm.email}
+                  onChange={(e) => setEmployeeForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Senha {editingEmployee && '(deixe vazio para manter atual)'}
+                </label>
+                <input
+                  type="password"
+                  value={employeeForm.senha}
+                  onChange={(e) => setEmployeeForm(prev => ({ ...prev, senha: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required={!editingEmployee}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Permissão</label>
+                <select
+                  value={employeeForm.permissao}
+                  onChange={(e) => setEmployeeForm(prev => ({ ...prev, permissao: e.target.value as any }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="advogado">Advogado</option>
+                  <option value="mod">Moderador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Equipe</label>
+                <select
+                  value={employeeForm.equipe}
+                  onChange={(e) => setEmployeeForm(prev => ({ ...prev, equipe: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sem equipe</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.nome}>{team.nome}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEmployeeModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                >
+                  {editingEmployee ? 'Atualizar' : 'Criar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Equipe */}
+      {showTeamModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Nova Equipe</h3>
+            
+            <form onSubmit={handleCreateTeam} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Equipe</label>
+                <input
+                  type="text"
+                  value={teamForm.nome}
+                  onChange={(e) => setTeamForm(prev => ({ ...prev, nome: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Ex: Equipe Alpha"
+                  required
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowTeamModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md"
+                >
+                  Criar Equipe
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

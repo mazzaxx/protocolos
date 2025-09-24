@@ -137,7 +137,7 @@ export function useProtocols() {
     }
     
     // Throttling inteligente
-    if (!forceRefresh && !protocolCache.canFetch(1500)) {
+    if (!forceRefresh && !protocolCache.canFetch(800)) {
       console.log('⏱️ Throttling ativo, aguardando...');
       return;
     }
@@ -157,7 +157,9 @@ export function useProtocols() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': forceRefresh ? 'no-cache' : 'max-age=30',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
           'X-Sync-Mode': forceRefresh ? 'force' : 'auto',
           'X-Client-Time': new Date().toISOString()
         },
@@ -283,7 +285,7 @@ export function useProtocols() {
         
         console.log(`🔄 POLLING AUTOMÁTICO (${interval}ms): Verificando atualizações...`);
         debouncedFetch(false);
-      }, 3000); // Intervalo base de 3 segundos
+      }, 1500); // Intervalo otimizado de 1.5 segundos para sincronização instantânea
     };
     
     setupPolling();
@@ -444,7 +446,14 @@ export function useProtocols() {
         
         // Invalidar cache e sincronizar
         protocolCache.clear();
-        setTimeout(() => fetchProtocols(true), 200);
+        
+        // Sincronização mais agressiva para atualizações
+        setTimeout(() => fetchProtocols(true), 100);
+        setTimeout(() => fetchProtocols(true), 300);
+        setTimeout(() => fetchProtocols(true), 350);
+        setTimeout(() => fetchProtocols(true), 500);
+        setTimeout(() => fetchProtocols(true), 800);
+        setTimeout(() => fetchProtocols(true), 1200);
         
         return true;
       } else {
