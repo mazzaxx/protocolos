@@ -211,15 +211,17 @@ router.get('/stats', async (req, res) => {
     `);
     
     const protocolosPorFila = await query(`
-      SELECT 
-        CASE 
+      SELECT
+        CASE
           WHEN assignedTo IS NULL THEN 'Robô'
-          WHEN assignedTo = 'Carlos' THEN 'Carlos'
+          WHEN assignedTo = 'Manual' THEN 'Manual'
           WHEN assignedTo = 'Deyse' THEN 'Deyse'
+          WHEN assignedTo = 'Enzo' THEN 'Enzo'
+          WHEN assignedTo = 'Iago' THEN 'Iago'
           ELSE 'Outros'
         END as fila,
         COUNT(*) as count
-      FROM protocolos 
+      FROM protocolos
       WHERE status = 'Aguardando'
       GROUP BY assignedTo
     `);

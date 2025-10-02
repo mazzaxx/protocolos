@@ -239,7 +239,7 @@ export function RobotQueue() {
 
   const handleReturnProtocol = () => {
     if (selectedProtocol) {
-      // Devolução do robô sem justificativa - apenas move para fila do Carlos
+      // Devolução do robô sem justificativa - apenas move para fila do Fila Manual
       returnProtocol(selectedProtocol.id, 'Devolvido pelo Robô para análise manual', 'Robô');
       
       // Mostrar notificação de sucesso
@@ -1007,7 +1007,7 @@ export function RobotQueue() {
           <li>• Use "Feito" ou "Erro" para atualizar o status do processo</li>
           <li>• Use "Devolver" (data-action="return-protocol") para enviar protocolo para análise manual (apenas confirmação)</li>
           <li>• Todos os botões têm atributos data-action para fácil identificação</li>
-          <li>• <strong>IMPORTANTE:</strong> Protocolos devolvidos pelo robô vão automaticamente para o Carlos</li>
+          <li>• <strong>IMPORTANTE:</strong> Protocolos devolvidos pelo robô vão automaticamente para o Fila Manual</li>
         </ul>
         <div className="mt-3 p-3 bg-blue-100 rounded-md">
           <h4 className="font-medium text-blue-900 mb-2">Sistemas Aceitos pelo Robô:</h4>
@@ -1019,7 +1019,7 @@ export function RobotQueue() {
             <div>• <strong>PJe MG:</strong> PJe de Minas Gerais</div>
           </div>
           <p className="text-xs text-blue-700 mt-2">
-            <strong>Nota:</strong> Protocolos de outros sistemas ou de 2º grau são automaticamente direcionados para o Carlos.
+            <strong>Nota:</strong> Protocolos de outros sistemas ou de 2º grau são automaticamente direcionados para o Fila Manual.
           </p>
         </div>
       </div>

@@ -14,7 +14,7 @@ export interface Protocol {
   observations?: string;
   documents: ProtocolDocument[];
   status: 'Aguardando' | 'Em Execução' | 'Peticionado' | 'Devolvido' | 'Cancelado';
-  assignedTo?: 'Carlos' | 'Deyse' | null; // Para fila manual
+  assignedTo?: 'Manual' | 'Deyse' | 'Enzo' | 'Iago' | null; // Para fila manual
   createdBy: number; // ID do usuário que criou o protocolo
   returnReason?: string; // Motivo da devolução
   taskCode: string; // Código da Tarefa (obrigatório, apenas números)

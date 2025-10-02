@@ -793,7 +793,7 @@ export function ProtocolForm() {
               <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-yellow-800">
                 <p className="font-medium">Atenção:</p>
-                <p>Protocolos com observações, de 2º grau ou sistemas não suportados pelo robô serão automaticamente direcionados para a fila do Carlos.</p>
+                <p>Protocolos com observações, de 2º grau ou sistemas não suportados pelo robô serão automaticamente direcionados para a Fila Manual.</p>
               </div>
             </div>
           </div>
@@ -812,14 +812,14 @@ export function ProtocolForm() {
             <p className="text-xs text-blue-800">
               <strong>Direcionamento automático:</strong> {(() => {
                 const assignment = determineQueueAssignment(formData, isDistribution);
-                if (assignment === 'Carlos') {
-                  if (isDistribution) return 'Fila do Carlos (distribuição)';
-                  if (formData.observations.trim()) return 'Fila do Carlos (tem observações)';
-                  if (formData.jurisdiction === '2º Grau') return 'Fila do Carlos (2º grau)';
+                if (assignment === 'Manual') {
+                  if (isDistribution) return 'Fila Manual (distribuição)';
+                  if (formData.observations.trim()) return 'Fila Manual (tem observações)';
+                  if (formData.jurisdiction === '2º Grau') return 'Fila Manual (2º grau)';
                   if (formData.system && formData.court && !checkRobotEligibility(formData.system, formData.court)) {
-                    return 'Fila do Carlos (sistema não suportado pelo robô)';
+                    return 'Fila Manual (sistema não suportado pelo robô)';
                   }
-                  return 'Fila do Carlos';
+                  return 'Fila Manual';
                 }
                 return 'Fila do Robô (automática)';
               })()}
@@ -1057,14 +1057,14 @@ export function ProtocolForm() {
                   <p className="text-sm text-blue-800">
                     <strong>Será direcionado para:</strong> {(() => {
                       const assignment = determineQueueAssignment(formData, isDistribution);
-                      if (assignment === 'Carlos') {
-                        if (isDistribution) return 'Fila do Carlos (distribuição)';
-                        if (formData.observations.trim()) return 'Fila do Carlos (tem observações)';
-                        if (formData.jurisdiction === '2º Grau') return 'Fila do Carlos (2º grau)';
+                      if (assignment === 'Manual') {
+                        if (isDistribution) return 'Fila Manual (distribuição)';
+                        if (formData.observations.trim()) return 'Fila Manual (tem observações)';
+                        if (formData.jurisdiction === '2º Grau') return 'Fila Manual (2º grau)';
                         if (formData.system && formData.court && !checkRobotEligibility(formData.system, formData.court)) {
-                          return 'Fila do Carlos (sistema não suportado pelo robô)';
+                          return 'Fila Manual (sistema não suportado pelo robô)';
                         }
-                        return 'Fila do Carlos';
+                        return 'Fila Manual';
                       }
                       return 'Fila do Robô (automática)';
                     })()}

@@ -99,8 +99,14 @@ export function TrackingQueue() {
 
   const getQueueName = (protocol: Protocol) => {
     // Verificar primeiro se está atribuído a alguém
-    if (protocol.assignedTo === 'Carlos') {
-      return protocol.status === 'Aguardando' ? 'Em espera na fila do Carlos' : 'Fila do Carlos';
+    if (protocol.assignedTo === 'Manual') {
+      return protocol.status === 'Aguardando' ? 'Em espera na Fila Manual' : 'Fila Manual';
+    }
+    if (protocol.assignedTo === 'Enzo') {
+      return protocol.status === 'Aguardando' ? 'Em espera na fila do Enzo' : 'Fila do Enzo';
+    }
+    if (protocol.assignedTo === 'Iago') {
+      return protocol.status === 'Aguardando' ? 'Em espera na fila do Iago' : 'Fila do Iago';
     }
     if (protocol.assignedTo === 'Deyse') {
       return protocol.status === 'Aguardando' ? 'Em espera na fila da Deyse' : 'Fila da Deyse';

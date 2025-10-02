@@ -6,7 +6,7 @@ import { Protocol } from '../types';
 import { QueueManager } from './QueueManager';
 
 interface ManualQueueProps {
-  employee: 'Carlos' | 'Deyse';
+  employee: 'Manual' | 'Deyse' | 'Enzo' | 'Iago';
 }
 
 export function ManualQueue({ employee }: ManualQueueProps) {
@@ -88,7 +88,13 @@ export function ManualQueue({ employee }: ManualQueueProps) {
   };
 
   const getEmployeeAccentColor = () => {
-    return employee === 'Carlos' ? 'blue' : 'purple';
+    const colors = {
+      'Manual': 'blue',
+      'Deyse': 'purple',
+      'Enzo': 'green',
+      'Iago': 'orange'
+    };
+    return colors[employee] || 'gray';
   };
 
   const handleDownload = (doc: any) => {
@@ -222,7 +228,119 @@ export function ManualQueue({ employee }: ManualQueueProps) {
     }
   };
   const getEmployeeColor = (employee: string) => {
-    return employee === 'Carlos' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
+    const colors = {
+      'Manual': 'bg-blue-100 text-blue-800',
+      'Deyse': 'bg-purple-100 text-purple-800',
+      'Enzo': 'bg-green-100 text-green-800',
+      'Iago': 'bg-orange-100 text-orange-800'
+    };
+    return colors[employee as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Helper para cores de texto e botões
+  const getEmployeeTextColor = () => {
+    const colors = {
+      'Manual': 'text-blue-600',
+      'Deyse': 'text-purple-600',
+      'Enzo': 'text-green-600',
+      'Iago': 'text-orange-600'
+    };
+    return colors[employee] || 'text-gray-600';
+  };
+
+  const getEmployeeBgColor = () => {
+    const colors = {
+      'Manual': 'bg-blue-600',
+      'Deyse': 'bg-purple-600',
+      'Enzo': 'bg-green-600',
+      'Iago': 'bg-orange-600'
+    };
+    return colors[employee] || 'bg-gray-600';
+  };
+
+  const getEmployeeBorderColor = () => {
+    const colors = {
+      'Manual': 'border-blue-500',
+      'Deyse': 'border-purple-500',
+      'Enzo': 'border-green-500',
+      'Iago': 'border-orange-500'
+    };
+    return colors[employee] || 'border-gray-500';
+  };
+
+  const getEmployeeButtonColors = () => {
+    const colors = {
+      'Manual': 'text-blue-600 bg-blue-100 hover:bg-blue-200',
+      'Deyse': 'text-purple-600 bg-purple-100 hover:bg-purple-200',
+      'Enzo': 'text-green-600 bg-green-100 hover:bg-green-200',
+      'Iago': 'text-orange-600 bg-orange-100 hover:bg-orange-200'
+    };
+    return colors[employee] || 'text-gray-600 bg-gray-100 hover:bg-gray-200';
+  };
+
+  const getEmployeeModalButtonColors = () => {
+    const colors = {
+      'Manual': 'text-blue-700 bg-blue-100 hover:bg-blue-200 focus:ring-blue-500',
+      'Deyse': 'text-purple-700 bg-purple-100 hover:bg-purple-200 focus:ring-purple-500',
+      'Enzo': 'text-green-700 bg-green-100 hover:bg-green-200 focus:ring-green-500',
+      'Iago': 'text-orange-700 bg-orange-100 hover:bg-orange-200 focus:ring-orange-500'
+    };
+    return colors[employee] || 'text-gray-700 bg-gray-100 hover:bg-gray-200 focus:ring-gray-500';
+  };
+
+  const getQueueName = () => {
+    return employee === 'Manual' ? 'manual' : employee.toLowerCase();
+  };
+
+  // Estilos para modais e cards
+  const getEmployeeModalBg = () => {
+    const colors = {
+      'Manual': 'bg-blue-50 border-blue-200',
+      'Deyse': 'bg-purple-50 border-purple-200',
+      'Enzo': 'bg-green-50 border-green-200',
+      'Iago': 'bg-orange-50 border-orange-200'
+    };
+    return colors[employee] || 'bg-gray-50 border-gray-200';
+  };
+
+  const getEmployeeModalText = () => {
+    const colors = {
+      'Manual': 'text-blue-800',
+      'Deyse': 'text-purple-800',
+      'Enzo': 'text-green-800',
+      'Iago': 'text-orange-800'
+    };
+    return colors[employee] || 'text-gray-800';
+  };
+
+  const getEmployeeModalTextDark = () => {
+    const colors = {
+      'Manual': 'text-blue-900',
+      'Deyse': 'text-purple-900',
+      'Enzo': 'text-green-900',
+      'Iago': 'text-orange-900'
+    };
+    return colors[employee] || 'text-gray-900';
+  };
+
+  const getEmployeeModalTextLight = () => {
+    const colors = {
+      'Manual': 'text-blue-700',
+      'Deyse': 'text-purple-700',
+      'Enzo': 'text-green-700',
+      'Iago': 'text-orange-700'
+    };
+    return colors[employee] || 'text-gray-700';
+  };
+
+  const getEmployeeModalButtonBg = () => {
+    const colors = {
+      'Manual': 'bg-blue-600 hover:bg-blue-700',
+      'Deyse': 'bg-purple-600 hover:bg-purple-700',
+      'Enzo': 'bg-green-600 hover:bg-green-700',
+      'Iago': 'bg-orange-600 hover:bg-orange-700'
+    };
+    return colors[employee] || 'bg-gray-600 hover:bg-gray-700';
   };
 
   const formatDate = (date: Date) => {
@@ -254,15 +372,11 @@ export function ManualQueue({ employee }: ManualQueueProps) {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Fila do {employee} - Protocolos Aguardando</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Fila {employee === 'Manual' ? 'Manual' : `do ${employee}`} - Protocolos Aguardando</h2>
         <button
           onClick={handleRefreshQueue}
           disabled={isRefreshing}
-          className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 ${
-            employee === 'Carlos' 
-              ? 'text-blue-600 bg-blue-100 hover:bg-blue-200' 
-              : 'text-purple-600 bg-purple-100 hover:bg-purple-200'
-          } disabled:cursor-not-allowed`}
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 ${getEmployeeButtonColors()} disabled:cursor-not-allowed`}
           title="Atualizar fila - recarregar protocolos"
         >
           <RotateCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -272,17 +386,17 @@ export function ManualQueue({ employee }: ManualQueueProps) {
 
       {/* Card de resumo do funcionário */}
       <div className="mb-6">
-        <div className={`bg-white p-4 rounded-lg shadow border-l-4 ${employee === 'Carlos' ? 'border-blue-500' : 'border-purple-500'}`}>
+        <div className={`bg-white p-4 rounded-lg shadow border-l-4 ${getEmployeeBorderColor()}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <User className={`h-8 w-8 ${employee === 'Carlos' ? 'text-blue-500' : 'text-purple-500'} mr-3`} />
+              <User className={`h-8 w-8 ${getEmployeeTextColor()} mr-3`} />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">{employee}</h3>
-                <p className="text-sm text-gray-600">Funcionário{employee === 'Deyse' ? 'a' : ''}</p>
+                <h3 className="text-lg font-semibold text-gray-900">{employee === 'Manual' ? 'Fila Manual' : employee}</h3>
+                <p className="text-sm text-gray-600">{employee === 'Manual' ? 'Distribuição' : `Funcionário${employee === 'Deyse' ? 'a' : ''}`}</p>
               </div>
             </div>
             <div className="text-right">
-              <p className={`text-2xl font-bold ${employee === 'Carlos' ? 'text-blue-600' : 'text-purple-600'}`}>
+              <p className={`text-2xl font-bold ${getEmployeeTextColor()}`}>
                 {employeeProtocols.length}
               </p>
               <p className="text-sm text-gray-500">protocolos aguardando</p>
@@ -290,11 +404,11 @@ export function ManualQueue({ employee }: ManualQueueProps) {
           </div>
         </div>
       </div>
-      
+
       {/* Gerenciador de Filas */}
       <QueueManager
         protocols={employeeProtocols}
-        currentQueue={employee === 'Carlos' ? 'carlos' : 'deyse'}
+        currentQueue={getQueueName() as any}
         selectedProtocols={validSelectedProtocols}
         setSelectedProtocols={setSelectedProtocols}
         onProtocolsMoved={handleProtocolsMoved}
@@ -383,7 +497,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                     </div>
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${employee === 'Carlos' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEmployeeColor(employee)}`}>
                       {protocol.system || (protocol.isDistribution ? 'Sistema não especificado' : protocol.system)}
                     </span>
                     {protocol.isDistribution && (
@@ -442,11 +556,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                         type="checkbox"
                         checked={executingProtocols.has(protocol.id)}
                         onChange={() => handleExecutionToggle(protocol.id)}
-                        className={`h-4 w-4 focus:ring-2 border-gray-300 rounded mr-2 ${
-                          employee === 'Carlos' 
-                            ? 'text-blue-600 focus:ring-blue-500' 
-                            : 'text-purple-600 focus:ring-purple-500'
-                        }`}
+                        className={`h-4 w-4 focus:ring-2 border-gray-300 rounded mr-2 ${getEmployeeTextColor()} focus:ring-${getEmployeeAccentColor()}-500`}
                       />
                       <span className="text-xs text-gray-600">
                         {executingProtocols.has(protocol.id) ? 'Em Execução' : 'Aguardando'}
@@ -460,9 +570,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                         disabled={!executingProtocols.has(protocol.id)}
                         className={`inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md whitespace-nowrap ${
                           executingProtocols.has(protocol.id)
-                            ? (employee === 'Carlos' 
-                                ? 'text-blue-700 bg-blue-100 hover:bg-blue-200 focus:ring-blue-500' 
-                                : 'text-purple-700 bg-purple-100 hover:bg-purple-200 focus:ring-purple-500')
+                            ? getEmployeeModalButtonColors()
                             : 'text-gray-400 bg-gray-100 cursor-not-allowed'
                         } focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50`}
                         data-action="view-protocol"
@@ -532,10 +640,10 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                   </div>
 
                   {/* Funcionário Responsável */}
-                  <div className={`${employee === 'Carlos' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'} p-2 rounded-lg border mb-3`}>
+                  <div className={`${getEmployeeModalBg()} p-2 rounded-lg border mb-3`}>
                     <div className="flex items-center justify-center">
-                      <User className={`h-4 w-4 ${employee === 'Carlos' ? 'text-blue-600' : 'text-purple-600'} mr-2`} />
-                      <span className={`text-sm font-bold ${employee === 'Carlos' ? 'text-blue-800' : 'text-purple-800'}`}>
+                      <User className={`h-4 w-4 ${getEmployeeTextColor()} mr-2`} />
+                      <span className={`text-sm font-bold ${getEmployeeModalText()}`}>
                         👤 Responsável: {employee}
                       </span>
                     </div>
@@ -572,7 +680,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                               Sistema
                             </label>
                             <div data-modal-system={selectedProtocol.system}>
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee === 'Carlos' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getEmployeeColor(employee)}`}>
                                 {selectedProtocol.system || (selectedProtocol.isDistribution ? ' - ' : selectedProtocol.system)}
                               </span>
                             </div>
@@ -659,16 +767,16 @@ export function ManualQueue({ employee }: ManualQueueProps) {
 
                     {/* Posição na Fila do Funcionário */}
                     {getEmployeeQueuePosition(selectedProtocol) && (
-                      <div className={`border rounded p-3 ${employee === 'Carlos' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'}`}>
-                        <h5 className={`text-xs font-medium mb-1 ${employee === 'Carlos' ? 'text-blue-800' : 'text-purple-800'}`}>
+                      <div className={`border rounded p-3 ${getEmployeeModalBg()}`}>
+                        <h5 className={`text-xs font-medium mb-1 ${getEmployeeModalText()}`}>
                           👤 Posição na Fila do {employee}
                         </h5>
                         <div className="flex items-center">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${employee === 'Carlos' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getEmployeeColor(employee)}`}>
                             #{getEmployeeQueuePosition(selectedProtocol)} na fila
                           </span>
                         </div>
-                        <div className={`text-xs mt-1 ${employee === 'Carlos' ? 'text-blue-600' : 'text-purple-600'}`}>
+                        <div className={`text-xs mt-1 ${getEmployeeTextColor()}`}>
                           Baseado na ordem de criação
                         </div>
                       </div>
@@ -709,19 +817,19 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                         
                         <div className="grid grid-cols-1 gap-2">
                           {/* Petição */}
-                          <div className={`border rounded p-2 ${employee === 'Carlos' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'}`}>
+                          <div className={`border rounded p-2 ${getEmployeeModalBg()}`}>
                             <div className="flex items-center justify-between mb-1">
-                              <h5 className={`text-xs font-medium ${employee === 'Carlos' ? 'text-blue-800' : 'text-purple-800'}`}>📄 Petição ({selectedProtocol.documents.filter(d => d.category === 'petition').length})</h5>
+                              <h5 className={`text-xs font-medium ${getEmployeeModalText()}`}>📄 Petição ({selectedProtocol.documents.filter(d => d.category === 'petition').length})</h5>
                               <button
                                 onClick={handleDownloadPetition}
-                                className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white transition-colors ${employee === 'Carlos' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                                className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded text-white transition-colors ${getEmployeeModalButtonBg()}`}
                                 data-action="download-petition"
                               >
                                 <Download className="h-3 w-3 mr-1" />
                                 Baixar
                               </button>
                             </div>
-                            <div className={`text-xs ${employee === 'Carlos' ? 'text-blue-700' : 'text-purple-700'}`}>
+                            <div className={`text-xs ${getEmployeeModalTextLight()}`}>
                               {selectedProtocol.documents.filter(d => d.category === 'petition').length} arquivo(s)
                             </div>
                           </div>
@@ -749,8 +857,8 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                       </div>
                       
                       {/* Botões de Ação - Sempre Visíveis */}
-                      <div className={`border rounded p-3 ${employee === 'Carlos' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'}`}>
-                        <h5 className={`text-xs font-medium mb-2 ${employee === 'Carlos' ? 'text-blue-800' : 'text-purple-800'}`}>🎯 Ações do {employee}</h5>
+                      <div className={`border rounded p-3 ${getEmployeeModalBg()}`}>
+                        <h5 className={`text-xs font-medium mb-2 ${getEmployeeModalText()}`}>🎯 Ações do {employee}</h5>
                         <div className="grid grid-cols-1 gap-2">
                           <button
                             onClick={handleMarkAsDone}
@@ -999,11 +1107,11 @@ export function ManualQueue({ employee }: ManualQueueProps) {
         </div>
       )}
       
-      <div className={`mt-6 p-4 ${employee === 'Carlos' ? 'bg-blue-50' : 'bg-purple-50'} rounded-lg`}>
-        <h3 className={`font-medium ${employee === 'Carlos' ? 'text-blue-900' : 'text-purple-900'} mb-2`}>
+      <div className={`mt-6 p-4 ${employee === 'Manual' ? 'bg-blue-50' : employee === 'Deyse' ? 'bg-purple-50' : employee === 'Enzo' ? 'bg-green-50' : 'bg-orange-50'} rounded-lg`}>
+        <h3 className={`font-medium ${getEmployeeModalTextDark()} mb-2`}>
           Instruções para {employee}:
         </h3>
-        <ul className={`text-sm ${employee === 'Carlos' ? 'text-blue-800' : 'text-purple-800'} space-y-1`}>
+        <ul className={`text-sm ${getEmployeeModalText()} space-y-1`}>
           <li>• Esta é sua fila pessoal de protocolos para peticionamento manual</li>
           <li>• Clique em "Visualizar" para ver detalhes e baixar documentos</li>
           <li>• <strong>Alertas (🔔):</strong> Botão vermelho piscante indica alertas urgentes do advogado</li>

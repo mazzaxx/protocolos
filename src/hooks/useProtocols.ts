@@ -206,7 +206,7 @@ export function useProtocols() {
       
       console.log(`✅ SINCRONIZAÇÃO COMPLETA: ${protocolsWithDates.length} protocolos`);
       console.log(`📊 Performance: ${duration}ms`);
-      console.log(`🎯 Filas: Robô(${protocolsWithDates.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Carlos(${protocolsWithDates.filter(p => p.assignedTo === 'Carlos' && p.status === 'Aguardando').length}) Deyse(${protocolsWithDates.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length})`);
+      console.log(`🎯 Filas: Robô(${protocolsWithDates.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Manual(${protocolsWithDates.filter(p => p.assignedTo === 'Manual' && p.status === 'Aguardando').length}) Deyse(${protocolsWithDates.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length}) Enzo(${protocolsWithDates.filter(p => p.assignedTo === 'Enzo' && p.status === 'Aguardando').length}) Iago(${protocolsWithDates.filter(p => p.assignedTo === 'Iago' && p.status === 'Aguardando').length})`);
       
       // Atualizar estado apenas se o componente ainda estiver montado
       if (mountedRef.current) {
@@ -475,12 +475,12 @@ export function useProtocols() {
     if (performedBy === 'Robô') {
       updates = {
         status: 'Aguardando',
-        assignedTo: 'Carlos',
+        assignedTo: 'Manual',
         returnReason: `Devolvido pelo Robô: ${returnReason}`,
         newLogEntry: {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'returned',
-          description: 'Protocolo devolvido pelo Robô para fila do Carlos',
+          description: 'Protocolo devolvido pelo Robô para Fila Manual',
           performedBy: performedBy || 'Sistema',
           details: returnReason
         }

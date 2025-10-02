@@ -118,7 +118,7 @@ function ConnectivityStatus() {
 
 function Dashboard() {
   const { hasPermission, canAccessQueues, canAccessSpecificQueue, canMoveToQueue, user, login } = useAuth();
-  type Tab = 'send' | 'robot' | 'carlos' | 'deyse' | 'tracking' | 'returned' | 'admin';
+  type Tab = 'send' | 'robot' | 'manual' | 'deyse' | 'enzo' | 'iago' | 'tracking' | 'returned' | 'admin';
 
   const [activeTab, setActiveTab] = useState<Tab>('send');
   const [showUserProfile, setShowUserProfile] = useState(false);
@@ -127,8 +127,10 @@ function Dashboard() {
   const allTabs = [
     { id: 'send', label: 'Envio de Protocolo', icon: Upload, color: 'blue' },
     { id: 'robot', label: 'Fila do Robô', icon: Notebook, color: 'red' },
-    { id: 'carlos', label: 'Fila do Carlos', icon: Users, color: 'blue' },
+    { id: 'manual', label: 'Fila Manual', icon: Users, color: 'blue' },
     { id: 'deyse', label: 'Fila da Deyse', icon: Users, color: 'purple' },
+    { id: 'enzo', label: 'Fila do Enzo', icon: Users, color: 'green' },
+    { id: 'iago', label: 'Fila do Iago', icon: Users, color: 'orange' },
     { id: 'tracking', label: 'Acompanhamento', icon: BarChart3, color: 'green' },
     { id: 'returned', label: 'Devolvidos', icon: Upload, color: 'orange' },
     { id: 'admin', label: 'Administração', icon: Settings, color: 'gray' },
@@ -140,8 +142,10 @@ function Dashboard() {
     if (tab.id === 'tracking') return hasPermission('canViewTracking');
     if (tab.id === 'returned') return hasPermission('canSendProtocols'); // Todos que podem enviar podem ver devolvidos
     if (tab.id === 'robot') return canAccessSpecificQueue('robot');
-    if (tab.id === 'carlos') return canAccessSpecificQueue('carlos');
+    if (tab.id === 'manual') return canAccessSpecificQueue('manual');
     if (tab.id === 'deyse') return canAccessSpecificQueue('deyse');
+    if (tab.id === 'enzo') return canAccessSpecificQueue('enzo');
+    if (tab.id === 'iago') return canAccessSpecificQueue('iago');
     if (tab.id === 'admin') return hasPermission('canAccessAllQueues');
     return false;
   });
@@ -214,8 +218,10 @@ function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'send' && <ProtocolForm />}
         {activeTab === 'robot' && <RobotQueue />}
-        {activeTab === 'carlos' && <ManualQueue employee="Carlos" />}
+        {activeTab === 'manual' && <ManualQueue employee="Manual" />}
         {activeTab === 'deyse' && <ManualQueue employee="Deyse" />}
+        {activeTab === 'enzo' && <ManualQueue employee="Enzo" />}
+        {activeTab === 'iago' && <ManualQueue employee="Iago" />}
         {activeTab === 'tracking' && <TrackingQueue />}
         {activeTab === 'returned' && <ReturnedQueue />}
         {activeTab === 'admin' && <AdminDashboard />}

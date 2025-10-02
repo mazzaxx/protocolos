@@ -6,7 +6,7 @@ import { Protocol } from '../types';
 
 interface QueueManagerProps {
   protocols: Protocol[];
-  currentQueue: 'robot' | 'carlos' | 'deyse';
+  currentQueue: 'robot' | 'manual' | 'deyse' | 'enzo' | 'iago';
   selectedProtocols: string[];
   setSelectedProtocols: React.Dispatch<React.SetStateAction<string[]>>;
   onProtocolsMoved?: () => void;
@@ -32,8 +32,15 @@ export function QueueManager({ protocols, currentQueue, selectedProtocols, setSe
     }
   };
 
-  const handleMoveProtocols = (targetQueue: 'robot' | 'carlos' | 'deyse') => {
-    const assignedTo = targetQueue === 'robot' ? null : targetQueue === 'carlos' ? 'Carlos' : 'Deyse';
+  const handleMoveProtocols = (targetQueue: 'robot' | 'manual' | 'deyse' | 'enzo' | 'iago') => {
+    const queueMap: { [key: string]: 'Manual' | 'Deyse' | 'Enzo' | 'Iago' | null } = {
+      'robot': null,
+      'manual': 'Manual',
+      'deyse': 'Deyse',
+      'enzo': 'Enzo',
+      'iago': 'Iago'
+    };
+    const assignedTo = queueMap[targetQueue];
 
     if (selectedProtocols.length > 0) {
       const count = selectedProtocols.length;
@@ -69,8 +76,10 @@ export function QueueManager({ protocols, currentQueue, selectedProtocols, setSe
   const getQueueIcon = (queue: string) => {
     switch (queue) {
       case 'robot': return <Robot className="h-4 w-4" />;
-      case 'carlos': return <Users className="h-4 w-4 text-blue-600" />;
+      case 'manual': return <Users className="h-4 w-4 text-blue-600" />;
       case 'deyse': return <Users className="h-4 w-4 text-purple-600" />;
+      case 'enzo': return <Users className="h-4 w-4 text-green-600" />;
+      case 'iago': return <Users className="h-4 w-4 text-orange-600" />;
       default: return null;
     }
   };
@@ -78,8 +87,10 @@ export function QueueManager({ protocols, currentQueue, selectedProtocols, setSe
   const getQueueLabel = (queue: string) => {
     switch (queue) {
       case 'robot': return 'Fila do Robô';
-      case 'carlos': return 'Fila do Carlos';
+      case 'manual': return 'Fila Manual';
       case 'deyse': return 'Fila da Deyse';
+      case 'enzo': return 'Fila do Enzo';
+      case 'iago': return 'Fila do Iago';
       default: return queue;
     }
   };
@@ -87,8 +98,10 @@ export function QueueManager({ protocols, currentQueue, selectedProtocols, setSe
   const getQueueColor = (queue: string) => {
     switch (queue) {
       case 'robot': return 'bg-red-600 hover:bg-red-700';
-      case 'carlos': return 'bg-blue-600 hover:bg-blue-700';
+      case 'manual': return 'bg-blue-600 hover:bg-blue-700';
       case 'deyse': return 'bg-purple-600 hover:bg-purple-700';
+      case 'enzo': return 'bg-green-600 hover:bg-green-700';
+      case 'iago': return 'bg-orange-600 hover:bg-orange-700';
       default: return 'bg-gray-600 hover:bg-gray-700';
     }
   };
@@ -147,9 +160,9 @@ export function QueueManager({ protocols, currentQueue, selectedProtocols, setSe
               </p>
               
               <div className="space-y-3">
-                {['robot', 'carlos', 'deyse']
+                {['robot', 'manual', 'deyse', 'enzo', 'iago']
                   .filter(queue => queue !== currentQueue)
-                  .filter(queue => canMoveToQueue(queue as 'carlos' | 'deyse' | 'robot'))
+                  .filter(queue => canMoveToQueue(queue as 'manual' | 'deyse' | 'enzo' | 'iago' | 'robot'))
                   .map((targetQueue) => (
                   <button
                     key={targetQueue}

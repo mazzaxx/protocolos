@@ -769,8 +769,10 @@ export function ReportsTab() {
                                 }
 
                                 let queueName = 'Fila do Robô';
-                                if (protocol.assignedTo === 'Carlos') queueName = 'Fila do Carlos';
+                                if (protocol.assignedTo === 'Manual') queueName = 'Fila Manual';
                                 else if (protocol.assignedTo === 'Deyse') queueName = 'Fila da Deyse';
+                                else if (protocol.assignedTo === 'Enzo') queueName = 'Fila do Enzo';
+                                else if (protocol.assignedTo === 'Iago') queueName = 'Fila do Iago';
 
                                 const docCount = protocol.documents ? protocol.documents.length : 0;
                                 const logCount = protocol.activityLog ? protocol.activityLog.length : 0;
@@ -888,8 +890,10 @@ export function ReportsTab() {
   };
 
   const getQueueName = (protocol: Protocol) => {
-    if (protocol.assignedTo === 'Carlos') return 'Fila do Carlos';
+    if (protocol.assignedTo === 'Manual') return 'Fila Manual';
     if (protocol.assignedTo === 'Deyse') return 'Fila da Deyse';
+    if (protocol.assignedTo === 'Enzo') return 'Fila do Enzo';
+    if (protocol.assignedTo === 'Iago') return 'Fila do Iago';
     return 'Fila do Robô';
   };
 

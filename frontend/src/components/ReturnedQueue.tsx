@@ -157,21 +157,26 @@ export function ReturnedQueue() {
         }
 
         // REGRA CRÍTICA: Protocolos reenviados da aba de devolvidos NUNCA vão para o robô
-        // Devem retornar para a mesma fila manual de onde vieram, ou Carlos como padrão
-        let assignedTo: 'Carlos' | 'Deyse';
-        
+        // Devem retornar para a mesma fila manual de onde vieram, ou Manual como padrão
+        let assignedTo: 'Manual' | 'Deyse' | 'Enzo' | 'Iago';
+
         // Verificar de onde o protocolo veio originalmente através do log de atividades
-        const lastQueueMove = selectedProtocol.activityLog?.find(log => 
-          log.action === 'moved_to_queue' && 
-          (log.description.includes('Fila do Carlos') || log.description.includes('Fila da Deyse'))
+        const lastQueueMove = selectedProtocol.activityLog?.find(log =>
+          log.action === 'moved_to_queue' &&
+          (log.description.includes('Fila Manual') || log.description.includes('Fila da Deyse') ||
+           log.description.includes('Fila do Enzo') || log.description.includes('Fila do Iago'))
         );
-        
-        // Se veio da Deyse, volta para a Deyse. Caso contrário, vai para o Carlos
+
+        // Se veio de uma fila específica, volta para ela. Caso contrário, vai para Fila Manual
         if (lastQueueMove && lastQueueMove.description.includes('Fila da Deyse')) {
           assignedTo = 'Deyse';
+        } else if (lastQueueMove && lastQueueMove.description.includes('Fila do Enzo')) {
+          assignedTo = 'Enzo';
+        } else if (lastQueueMove && lastQueueMove.description.includes('Fila do Iago')) {
+          assignedTo = 'Iago';
         } else {
-          // Padrão: Carlos (incluindo protocolos que vieram do robô)
-          assignedTo = 'Carlos';
+          // Padrão: Manual (incluindo protocolos que vieram do robô)
+          assignedTo = 'Manual';
         }
 
         const updates = {
@@ -229,21 +234,26 @@ export function ReturnedQueue() {
   const handleResubmitWithoutChanges = () => {
     if (selectedProtocol) {
       // REGRA CRÍTICA: Protocolos reenviados da aba de devolvidos NUNCA vão para o robô
-      // Devem retornar para a mesma fila manual de onde vieram, ou Carlos como padrão
-      let assignedTo: 'Carlos' | 'Deyse';
-      
+      // Devem retornar para a mesma fila manual de onde vieram, ou Manual como padrão
+      let assignedTo: 'Manual' | 'Deyse' | 'Enzo' | 'Iago';
+
       // Verificar de onde o protocolo veio originalmente através do log de atividades
-      const lastQueueMove = selectedProtocol.activityLog?.find(log => 
-        log.action === 'moved_to_queue' && 
-        (log.description.includes('Fila do Carlos') || log.description.includes('Fila da Deyse'))
+      const lastQueueMove = selectedProtocol.activityLog?.find(log =>
+        log.action === 'moved_to_queue' &&
+        (log.description.includes('Fila Manual') || log.description.includes('Fila da Deyse') ||
+         log.description.includes('Fila do Enzo') || log.description.includes('Fila do Iago'))
       );
-      
-      // Se veio da Deyse, volta para a Deyse. Caso contrário, vai para o Carlos
+
+      // Se veio de uma fila específica, volta para ela. Caso contrário, vai para Fila Manual
       if (lastQueueMove && lastQueueMove.description.includes('Fila da Deyse')) {
         assignedTo = 'Deyse';
+      } else if (lastQueueMove && lastQueueMove.description.includes('Fila do Enzo')) {
+        assignedTo = 'Enzo';
+      } else if (lastQueueMove && lastQueueMove.description.includes('Fila do Iago')) {
+        assignedTo = 'Iago';
       } else {
-        // Padrão: Carlos (incluindo protocolos que vieram do robô)
-        assignedTo = 'Carlos';
+        // Padrão: Manual (incluindo protocolos que vieram do robô)
+        assignedTo = 'Manual';
       }
       
       const updates = {
