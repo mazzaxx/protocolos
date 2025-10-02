@@ -1,0 +1,32 @@
+{
+  "name": "protocolos-juridicos-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "API Backend para Sistema de Protocolos Jurídicos",
+  "main": "server.js",
+  "scripts": {
+    "start": "NODE_ENV=production node server.js",
+    "dev": "node server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "api",
+    "backend",
+    "protocolos",
+    "juridicos",
+    "express",
+    "sqlite"
+  ],
+  "author": "Sistema Protocolos Jurídicos",
+  "license": "MIT"
+}

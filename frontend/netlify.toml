@@ -1,0 +1,22 @@
+[build]
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "18"
+  VITE_API_BASE_URL = "https://protocolos.squareweb.app"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
+  VITE_API_BASE_URL = "https://protocolos.squareweb.app"
+
+[context.deploy-preview.environment]
+  VITE_API_BASE_URL = "https://protocolos.squareweb.app"
+
+[context.branch-deploy.environment]
+  VITE_API_BASE_URL = "https://protocolos.squareweb.app"
