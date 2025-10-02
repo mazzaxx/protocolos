@@ -38,7 +38,7 @@ export function ReportsTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
     loadEmployees();

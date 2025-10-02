@@ -109,4 +109,34 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
+// Endpoint para adiar troca de senha no primeiro login
+router.post('/skip-password-change', async (req, res) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      message: 'userId é obrigatório'
+    });
+  }
+
+  try {
+    await query(
+      "UPDATE funcionarios SET first_login = 0 WHERE id = ?",
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Troca de senha adiada com sucesso'
+    });
+  } catch (err) {
+    console.error('Erro ao adiar troca de senha:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
+    });
+  }
+});
+
 export default router;
