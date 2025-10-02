@@ -26,13 +26,13 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const loginUrl = `${apiBaseUrl}/api/login`;
-      
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const loginUrl = `${apiUrl}/api/auth/login`;
+
       console.log('🔐 Tentando fazer login em:', loginUrl);
       console.log('📧 Email:', formData.email);
-      
-      const response = await fetch(`${apiBaseUrl}/api/login`, {
+
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
