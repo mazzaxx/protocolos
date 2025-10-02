@@ -165,6 +165,29 @@ function Dashboard() {
     }
   };
 
+  const handleSkipPasswordChange = async () => {
+    setShowFirstLoginModal(false);
+    if (user) {
+      const updatedUser = { ...user, firstLogin: false };
+      login(updatedUser);
+
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        await fetch(`${apiUrl}/api/auth/skip-password-change`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+          }),
+        });
+      } catch (err) {
+        console.error('Erro ao registrar adiamento de senha:', err);
+      }
+    }
+  };
+
   const getTabColor = (tab: any, isActive: boolean) => {
     const colors = {
       blue: isActive ? 'bg-blue-600 text-white' : 'text-blue-600 hover:bg-blue-50',
@@ -241,7 +264,7 @@ function Dashboard() {
 
       {/* Modals */}
       <UserProfile isOpen={showUserProfile} onClose={() => setShowUserProfile(false)} />
-      {showFirstLoginModal && <FirstLoginModal onPasswordChanged={handlePasswordChanged} />}
+      {showFirstLoginModal && <FirstLoginModal onPasswordChanged={handlePasswordChanged} onSkip={handleSkipPasswordChange} />}
       </div>
     </>
   );
