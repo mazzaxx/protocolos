@@ -17,7 +17,7 @@ export function CleanupTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCleanupCategories, setSelectedCleanupCategories] = useState<string[]>(['Peticionado', 'Cancelado']);
 
-  const apiBaseUrl = import.meta.env.VITE_API_URL || '';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
   useEffect(() => {
     loadCleanupPreview();

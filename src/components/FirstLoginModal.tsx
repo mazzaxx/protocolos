@@ -4,10 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface FirstLoginModalProps {
   onPasswordChanged: () => void;
-  onSkip: () => void;
 }
 
-export default function FirstLoginModal({ onPasswordChanged, onSkip }: FirstLoginModalProps) {
+export default function FirstLoginModal({ onPasswordChanged }: FirstLoginModalProps) {
   const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -147,24 +146,13 @@ export default function FirstLoginModal({ onPasswordChanged, onSkip }: FirstLogi
             </div>
           )}
 
-          <div className="space-y-3">
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {isLoading ? 'Alterando senha...' : 'Alterar Senha e Continuar'}
-            </button>
-
-            <button
-              type="button"
-              onClick={onSkip}
-              disabled={isLoading}
-              className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              Fazer isso mais tarde
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {isLoading ? 'Alterando senha...' : 'Alterar Senha e Continuar'}
+          </button>
         </form>
       </div>
     </div>
