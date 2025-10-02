@@ -14,7 +14,7 @@ export function TeamsTab() {
   const [newTeam, setNewTeam] = useState({ nome: '' });
   const [editTeamName, setEditTeamName] = useState('');
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
     loadTeams();

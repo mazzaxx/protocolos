@@ -33,7 +33,7 @@ function ConnectivityStatus() {
       const startTime = Date.now();
       
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || window.location.origin;
+        const apiBaseUrl = import.meta.env.VITE_API_URL || (window as any).__API_BASE_URL__ || window.location.origin;
         const healthUrl = `${apiBaseUrl}/health`;
         
         const response = await fetch(healthUrl, { 

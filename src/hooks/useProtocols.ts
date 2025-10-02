@@ -82,7 +82,7 @@ const getUserEmailById = async (userId: number): Promise<string> => {
   if (cached) return cached;
   
   try {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+    const apiBaseUrl = import.meta.env.VITE_API_URL || (window as any).__API_BASE_URL__ || '';
     const response = await fetch(`${apiBaseUrl}/api/admin/funcionarios`, {
       credentials: 'include',
       headers: {
@@ -150,7 +150,7 @@ export function useProtocols() {
     console.log('🔄 SINCRONIZAÇÃO INICIADA:', forceRefresh ? 'FORÇADA' : 'AUTOMÁTICA');
     
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
+      const apiBaseUrl = import.meta.env.VITE_API_URL || (window as any).__API_BASE_URL__ || '';
       const url = `${apiBaseUrl}/api/protocolos`;
       
       const response = await fetch(url, {
@@ -257,7 +257,7 @@ export function useProtocols() {
   // Effect principal para inicialização e polling
   useEffect(() => {
     console.log('🚀 useProtocols: Inicializando sistema otimizado...');
-    console.log('🌐 Backend:', import.meta.env.VITE_API_BASE_URL || 'PROXY LOCAL');
+    console.log('🌐 Backend:', import.meta.env.VITE_API_URL || 'PROXY LOCAL');
     
     // Fetch inicial
     fetchProtocols(true);
@@ -357,7 +357,7 @@ export function useProtocols() {
     lastActivityRef.current = Date.now();
     
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const apiBaseUrl = import.meta.env.VITE_API_URL || '';
       const userEmail = await getUserEmailById(protocol.createdBy);
       
       const protocolData = {
@@ -407,7 +407,7 @@ export function useProtocols() {
   // Função otimizada para atualizar protocolo no servidor
   const updateProtocolInServer = useCallback(async (id: string, updates: any, performedBy?: string) => {
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const apiBaseUrl = import.meta.env.VITE_API_URL || '';
       
       const updateData = { ...updates };
       if (performedBy) {
