@@ -245,10 +245,26 @@ export const initializeDb = async () => {
       CREATE TABLE IF NOT EXISTS equipes_temp (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nome TEXT UNIQUE NOT NULL,
+        gestor TEXT DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
+
+    // Verificar se a coluna gestor existe, se não existir, adicionar
+    console.log('🔧 Verificando estrutura da tabela equipes_temp...');
+    try {
+      await query(`SELECT gestor FROM equipes_temp LIMIT 1`);
+      console.log('✅ Coluna gestor já existe na tabela equipes_temp');
+    } catch (error) {
+      if (error.message.includes('no such column: gestor') || error.message.includes('has no column named gestor')) {
+        console.log('➕ Adicionando coluna gestor à tabela equipes_temp...');
+        await query(`ALTER TABLE equipes_temp ADD COLUMN gestor TEXT DEFAULT NULL`);
+        console.log('✅ Coluna gestor adicionada com sucesso');
+      } else {
+        console.error('❌ Erro inesperado ao verificar coluna gestor:', error);
+      }
+    }
+
     await query(`CREATE INDEX IF NOT EXISTS idx_equipes_temp_nome ON equipes_temp(nome)`);
     
     console.log('📋 Criando tabela protocolos...');
@@ -369,32 +385,118 @@ export const initializeDb = async () => {
 const createTestUsers = async () => {
   console.log('👥 Iniciando criação de usuários de teste...');
   
-  // Definir equipes
+  // Definir equipes com gestores
   const equipes = {
-    'Equipe Rahner': [
-      "Maísa Abreu", "Tais Brandão", "Ana Catarina",
-      "Angélica Andrade", "Dayane Cristina", "Isabela Dornelas",
-      "Layla Oliveira", "Thaisa Gomes", "Rafael Rahner"
-    ],
-    'Equipe Mayssa': [
-      "Camila Pimenta", "Carolina Vieira", "Diná Souza",
-      "Nathalia Cristina", "Stefani Caroline", "Mayssa Marcela"
-    ],
-    'Equipe Juacy': [
-      "Adriana Xavier", "Amanda Marques", "André Alencar", "Daiane Alves",
-      "Eloízio Andrade", "Gabriel Augusto", "Natalia Ferreira", "Priscila Alves",
-      "Ramon Alves", "Rejane Oliveira", "Thalita Gonzaga", "Thiago Paiva", "Juacy Leal"
-    ],
-    'Equipe Johnson': [
-      "Ana Marinho", "Audrey Roberto", "Dayane Machado", "Isabela Nogueira",
-      "Izadora Feital", "Jéssica Oliveira", "Lucas Barroso", "Paloma Teodoro",
-      "Pedro Gama", "Sabrina Alves", "Talita Freitas", "Thiago Johnson"
-    ],
-    'Equipe Flaviana': [
-      "Arthur Ferreira", "Clara Pires", "Deivison José", "Idaelly Dutra",
-      "João Pedro Sales", "Juliana Ferreira", "Priscila Cristina",
-      "Rinara de Sá", "Vandressa Barroso", "Flaviana Estevam"
-    ]
+    'Saúde APS': {
+      gestor: 'Rafael Rahner | NCA',
+      membros: [
+        "Maísa Abreu | NCA", "Tais Brandão | NCA", "Ana Catarina | NCA",
+        "Angélica Andrade | NCA", "Dayane Cristina | NCA", "Isabela Dornelas | NCA",
+        "Layla Oliveira | NCA", "Thaisa Gomes | NCA", "Rafael Rahner | NCA"
+      ]
+    },
+    'Ind BV/Super/Exec Fiscais': {
+      gestor: 'Mayssa Marcella | NCA',
+      membros: [
+        "Camila Pimenta | NCA", "Carolina Vieira | NCA", "Diná Souza | NCA",
+        "Nathalia Cristina | NCA", "Stefani Caroline | NCA", "Mayssa Marcella | NCA",
+        "Dayse Ferreira | NCA", "Lara Carolina | NCA"
+      ]
+    },
+    'Revisional Santander/BV': {
+      gestor: 'Juacy Leal | NCA',
+      membros: [
+        "Adriana Xavier | NCA", "Amanda Marques | NCA", "André Alencar | NCA",
+        "Daiane Alves | NCA", "Eloízio Andrade | NCA", "Gabriel Augusto | NCA",
+        "Natalia Ferreira | NCA", "Priscila Alves | NCA", "Ramon Alves | NCA",
+        "Rejane Oliveira | NCA", "Thalita Gonzaga | NCA", "Thiago Paiva | NCA",
+        "Juacy Leal | NCA"
+      ]
+    },
+    'Indenizatório Santander': {
+      gestor: 'Thiago Johnson | NCA',
+      membros: [
+        "Ana Marinho | NCA", "Audrey Roberto | NCA", "Dayane Machado | NCA",
+        "Isabela Nogueira | NCA", "Izadora Feital | NCA", "Jéssica Oliveira | NCA",
+        "Lucas Barroso | NCA", "Paloma Teodoro | NCA", "Pedro Gama | NCA",
+        "Sabrina Alves | NCA", "Talita Freitas | NCA", "Thiago Johnson | NCA",
+        "Northon Alencar | NCA"
+      ]
+    },
+    'Indenizatório Santander 2': {
+      gestor: 'Flaviana Estevam | NCA',
+      membros: [
+        "Arthur Ferreira | NCA", "Clara Pires | NCA", "Deivison José | NCA",
+        "Idaelly Dutra | NCA", "João Pedro Sales | NCA", "Juliana Ferreira | NCA",
+        "Priscila Cristina | NCA", "Rinara de Sá | NCA", "Vandressa Barroso | NCA",
+        "Flaviana Estevam | NCA", "Bruna Pedra | NCA"
+      ]
+    },
+    'Trabalhista': {
+      gestor: 'Luciano Alves | NCA',
+      membros: [
+        "Luciano Alves | NCA", "Ana Paula | NCA", "Bethânia Couto | NCA",
+        "Gleison Campos | NCA", "Isabela Veloso | NCA", "Julia Assis | NCA",
+        "Laíssa Oliveira | NCA", "Marystela Bonfá | NCA", "Patrícia Lima | NCA",
+        "Rosilene Cassiano | NCA", "Stephanie Prado | NCA"
+      ]
+    },
+    'Safra': {
+      gestor: 'Barbara Gallis | NCA',
+      membros: [
+        "Jéssica Castro | NCA", "Debora Horta | NCA", "Beatriz Gondim | NCA",
+        "Lara Oliveira | NCA", "Amanda Furtado | NCA", "Julia Maria | NCA",
+        "Miguel Tavares | NCA", "Cinara Luisa | NCA", "Barbara Gallis | NCA"
+      ]
+    },
+    'Relevantes': {
+      gestor: 'Guilherme Pacheco | NCA',
+      membros: [
+        "Guilherme Pacheco | NCA", "Ronnie Godinho | NCA", "Paulo Cimini", "Samuel Barbosa | NCA"
+      ]
+    },
+    'Encerramento/OBF': {
+      gestor: null,
+      membros: [
+        "Felipe Santos | NCA", "Giovana Romanhol | NCA", "Luana Soares | NCA"
+      ]
+    },
+    'Banco Pan': {
+      gestor: 'Nivaldo Junior | NCA',
+      membros: [
+        "Nivaldo Junior | NCA", "Maria Fernanda | NCA", "Alexia Andrade | NCA", "Fernanda Faria | NCA"
+      ]
+    },
+    'FSFX Cível': {
+      gestor: null,
+      membros: [
+        "Ronaldo Scarponi | NCA", "Clara Metzker | NCA"
+      ]
+    },
+    'Unimed': {
+      gestor: null,
+      membros: [
+        "Andre Richard | NCA", "Jessica Ferreira | NCA"
+      ]
+    },
+    'Acordos': {
+      gestor: 'Thiago Ribas | NCA',
+      membros: [
+        "Luana Cristina | NCA", "Igor Guimarães | NCA", "Thiago Ribas | NCA"
+      ]
+    },
+    'BRB': {
+      gestor: null,
+      membros: [
+        "Matheus Eleutério | NCA"
+      ]
+    },
+    'Previdência/Aperam': {
+      gestor: null,
+      membros: [
+        "Mario Assis | NCA", "Ana Cláudia | NCA"
+      ]
+    }
   };
 
   const testUsers = [
@@ -404,14 +506,14 @@ const createTestUsers = async () => {
   ];
 
   // Adicionar usuários das equipes
-  Object.entries(equipes).forEach(([nomeEquipe, membros]) => {
-    membros.forEach(nome => {
+  Object.entries(equipes).forEach(([nomeEquipe, equipeDados]) => {
+    equipeDados.membros.forEach(nome => {
       const email = nome.toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '') // Remove acentos
         .replace(/\s+/g, '.')
-        .replace(/[^a-z0-9.]/g, '') + '@nca.com';
-      
+        .replace(/[^a-z0-9.]/g, '') + '@neycampos.adv.br';
+
       testUsers.push({
         email,
         senha: '123456',

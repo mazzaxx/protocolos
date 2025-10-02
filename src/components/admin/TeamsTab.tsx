@@ -3,6 +3,7 @@ import { Users, Plus, CreditCard as Edit, Trash2 } from 'lucide-react';
 
 interface Team {
   nome: string;
+  gestor: string | null;
   membros: number;
 }
 
@@ -11,8 +12,8 @@ export function TeamsTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAddTeam, setShowAddTeam] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-  const [newTeam, setNewTeam] = useState({ nome: '' });
-  const [editTeamName, setEditTeamName] = useState('');
+  const [newTeam, setNewTeam] = useState({ nome: '', gestor: '' });
+  const [editTeamData, setEditTeamData] = useState({ nome: '', gestor: '' });
 
   const apiBaseUrl = import.meta.env.VITE_API_URL || '';
 
@@ -66,25 +67,33 @@ export function TeamsTab() {
   };
 
   const handleEditTeam = async () => {
-    if (!editingTeam || !editTeamName.trim()) {
-      alert('Nome da equipe é obrigatório');
+    if (!editingTeam) {
+      alert('Equipe não selecionada');
       return;
     }
 
     setIsLoading(true);
     try {
+      const body: any = {};
+      if (editTeamData.nome.trim() && editTeamData.nome.trim() !== editingTeam.nome) {
+        body.nomeNovo = editTeamData.nome.trim();
+      }
+      if (editTeamData.gestor.trim() !== (editingTeam.gestor || '')) {
+        body.gestor = editTeamData.gestor.trim() || null;
+      }
+
       const response = await fetch(`${apiBaseUrl}/api/admin/equipes/${encodeURIComponent(editingTeam.nome)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ nomeNovo: editTeamName.trim() })
+        body: JSON.stringify(body)
       });
-      
+
       const data = await response.json();
       if (data.success) {
         await loadTeams();
         setEditingTeam(null);
-        setEditTeamName('');
+        setEditTeamData({ nome: '', gestor: '' });
       } else {
         alert(data.message);
       }
@@ -153,6 +162,7 @@ export function TeamsTab() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome da Equipe</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gestor</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Membros</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
               </tr>
@@ -164,16 +174,19 @@ export function TeamsTab() {
                     {team.nome}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {team.gestor || <span className="italic text-gray-400">Não definido</span>}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {team.membros} funcionário{team.membros !== 1 ? 's' : ''}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => {
                         setEditingTeam(team);
-                        setEditTeamName(team.nome);
+                        setEditTeamData({ nome: team.nome, gestor: team.gestor || '' });
                       }}
                       className="text-indigo-600 hover:text-indigo-900 mr-2"
-                      title="Editar nome da equipe"
+                      title="Editar equipe"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
@@ -204,15 +217,28 @@ export function TeamsTab() {
                   <input
                     type="text"
                     value={newTeam.nome}
-                    onChange={(e) => setNewTeam({ nome: e.target.value })}
+                    onChange={(e) => setNewTeam({ ...newTeam, nome: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Ex: Equipe Alpha"
+                    placeholder="Ex: Saúde APS"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gestor da Equipe (Opcional)</label>
+                  <input
+                    type="text"
+                    value={newTeam.gestor}
+                    onChange={(e) => setNewTeam({ ...newTeam, gestor: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="Ex: Rafael Rahner | NCA"
                   />
                 </div>
               </div>
               <div className="flex justify-end space-x-3 mt-6">
                 <button
-                  onClick={() => setShowAddTeam(false)}
+                  onClick={() => {
+                    setShowAddTeam(false);
+                    setNewTeam({ nome: '', gestor: '' });
+                  }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md"
                 >
                   Cancelar
@@ -235,31 +261,37 @@ export function TeamsTab() {
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Editar Nome da Equipe</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Editar Equipe</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome Atual</label>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">{editingTeam.nome}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Novo Nome</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Equipe</label>
                   <input
                     type="text"
-                    value={editTeamName}
-                    onChange={(e) => setEditTeamName(e.target.value)}
+                    value={editTeamData.nome}
+                    onChange={(e) => setEditTeamData({ ...editTeamData, nome: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Digite o novo nome da equipe"
+                    placeholder="Nome da equipe"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gestor da Equipe</label>
+                  <input
+                    type="text"
+                    value={editTeamData.gestor}
+                    onChange={(e) => setEditTeamData({ ...editTeamData, gestor: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="Ex: Rafael Rahner | NCA (opcional)"
                   />
                 </div>
                 <div className="text-xs text-gray-500">
-                  <p>• {editingTeam.membros} funcionário{editingTeam.membros !== 1 ? 's' : ''} será{editingTeam.membros !== 1 ? 'ão' : ''} atualizado{editingTeam.membros !== 1 ? 's' : ''}</p>
+                  <p>• {editingTeam.membros} funcionário{editingTeam.membros !== 1 ? 's' : ''} nesta equipe</p>
                 </div>
               </div>
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={() => {
                     setEditingTeam(null);
-                    setEditTeamName('');
+                    setEditTeamData({ nome: '', gestor: '' });
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md"
                 >
@@ -267,7 +299,7 @@ export function TeamsTab() {
                 </button>
                 <button
                   onClick={handleEditTeam}
-                  disabled={isLoading || !editTeamName.trim()}
+                  disabled={isLoading}
                   className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md disabled:opacity-50"
                 >
                   {isLoading ? 'Salvando...' : 'Salvar Alterações'}

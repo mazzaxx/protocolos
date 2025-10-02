@@ -137,7 +137,7 @@ export function useProtocols() {
     }
     
     // Throttling inteligente
-    if (!forceRefresh && !protocolCache.canFetch(1500)) {
+    if (!forceRefresh && !protocolCache.canFetch(300)) {
       console.log('⏱️ Throttling ativo, aguardando...');
       return;
     }
@@ -270,20 +270,20 @@ export function useProtocols() {
       
       intervalRef.current = setInterval(() => {
         if (!mountedRef.current) return;
-        
+
         // Polling adaptativo baseado na atividade
         const timeSinceActivity = Date.now() - lastActivityRef.current;
-        let interval = 3000; // 3 segundos padrão
-        
+        let interval = 1500; // 1.5 segundos padrão
+
         if (timeSinceActivity > 60000) {
-          interval = 10000; // 10 segundos se inativo por 1 minuto
+          interval = 5000; // 5 segundos se inativo por 1 minuto
         } else if (timeSinceActivity > 30000) {
-          interval = 5000; // 5 segundos se inativo por 30 segundos
+          interval = 3000; // 3 segundos se inativo por 30 segundos
         }
-        
+
         console.log(`🔄 POLLING AUTOMÁTICO (${interval}ms): Verificando atualizações...`);
         debouncedFetch(false);
-      }, 3000); // Intervalo base de 3 segundos
+      }, 1500); // Intervalo base de 1.5 segundos
     };
     
     setupPolling();
@@ -389,10 +389,8 @@ export function useProtocols() {
         // Invalidar cache e forçar refresh imediato
         protocolCache.clear();
         
-        // Múltiplas sincronizações para garantir consistência
+        // Sincronização rápida após criação
         setTimeout(() => fetchProtocols(true), 100);
-        setTimeout(() => fetchProtocols(true), 500);
-        setTimeout(() => fetchProtocols(true), 1000);
         
         return data.protocolo;
       } else {
@@ -444,7 +442,7 @@ export function useProtocols() {
         
         // Invalidar cache e sincronizar
         protocolCache.clear();
-        setTimeout(() => fetchProtocols(true), 200);
+        setTimeout(() => fetchProtocols(true), 100);
         
         return true;
       } else {

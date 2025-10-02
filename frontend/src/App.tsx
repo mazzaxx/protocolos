@@ -31,39 +31,53 @@ function ConnectivityStatus() {
     const checkBackend = async () => {
       setLastCheck(new Date());
       const startTime = Date.now();
-      
+
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || window.location.origin;
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || '';
         const healthUrl = `${apiBaseUrl}/health`;
-        
-        const response = await fetch(healthUrl, { 
+
+        console.log('❤️ Verificando saúde do backend:', healthUrl);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+        const response = await fetch(healthUrl, {
           method: 'GET',
           credentials: 'include',
           cache: 'no-cache',
-          mode: 'cors'
+          mode: 'cors',
+          signal: controller.signal
         });
-        
+
+        clearTimeout(timeoutId);
         const responseTime = Date.now() - startTime;
-        
+
         if (response.ok) {
           const data = await response.json();
+          console.log('✅ Backend online - Latency:', responseTime + 'ms');
           setBackendStatus('online');
           setPerformanceInfo({
             responseTime,
             lastSync: new Date()
           });
         } else {
+          console.warn('⚠️ Backend respondeu com erro:', response.status);
           setBackendStatus('offline');
           setPerformanceInfo(null);
         }
-      } catch (error) {
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.error('⏱️ Timeout ao verificar backend (>5s)');
+        } else {
+          console.error('❌ Erro ao verificar backend:', error.message);
+        }
         setBackendStatus('offline');
         setPerformanceInfo(null);
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
+    const interval = setInterval(checkBackend, 15000); // Verificar a cada 15 segundos
 
     return () => {
       window.removeEventListener('online', handleOnline);

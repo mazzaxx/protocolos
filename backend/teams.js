@@ -6,42 +6,57 @@ const router = express.Router();
 // Listar todas as equipes
 router.get('/equipes', async (req, res) => {
   console.log('📋 GET /admin/equipes - Listando equipes');
-  
+
   try {
-    // Buscar equipes dos funcionários + equipes temporárias
+    // Buscar equipes dos funcionários + equipes temporárias com gestor
     const result = await query(`
-      SELECT nome, COALESCE(membros, 0) as membros
+      SELECT nome, gestor, COALESCE(membros, 0) as membros
       FROM (
-        SELECT DISTINCT equipe as nome, COUNT(*) as membros
-        FROM funcionarios 
+        SELECT DISTINCT equipe as nome, NULL as gestor, COUNT(*) as membros
+        FROM funcionarios
         WHERE equipe IS NOT NULL AND equipe != ''
         GROUP BY equipe
-        
+
         UNION
-        
-        SELECT nome, 0 as membros
+
+        SELECT nome, gestor, 0 as membros
         FROM equipes_temp
         WHERE nome NOT IN (
-          SELECT DISTINCT equipe 
-          FROM funcionarios 
+          SELECT DISTINCT equipe
+          FROM funcionarios
           WHERE equipe IS NOT NULL AND equipe != ''
         )
       )
       ORDER BY nome
     `);
 
-    const equipes = result.rows || [];
-    console.log(`✅ ${equipes.length} equipes encontradas`);
+    // Buscar gestor de equipes_temp para equipes com membros
+    const equipesComGestores = await Promise.all(
+      result.rows.map(async (equipe) => {
+        if (!equipe.gestor) {
+          const gestorResult = await query(
+            "SELECT gestor FROM equipes_temp WHERE nome = ?",
+            [equipe.nome]
+          );
+          if (gestorResult.rows.length > 0) {
+            equipe.gestor = gestorResult.rows[0].gestor;
+          }
+        }
+        return equipe;
+      })
+    );
+
+    console.log(`✅ ${equipesComGestores.length} equipes encontradas`);
 
     res.json({
       success: true,
-      equipes,
-      total: equipes.length
+      equipes: equipesComGestores,
+      total: equipesComGestores.length
     });
   } catch (error) {
     console.error('❌ Erro ao listar equipes:', error);
-    return res.status(500).json({ 
-      success: false, 
+    return res.status(500).json({
+      success: false,
       message: 'Erro interno do servidor',
       error: error.message
     });
@@ -51,8 +66,8 @@ router.get('/equipes', async (req, res) => {
 // Criar nova equipe
 router.post('/equipes', async (req, res) => {
   console.log('➕ POST /admin/equipes - Criando equipe');
-  
-  const { nome } = req.body;
+
+  const { nome, gestor } = req.body;
 
   if (!nome || !nome.trim()) {
     return res.status(400).json({
@@ -67,8 +82,21 @@ router.post('/equipes', async (req, res) => {
       "SELECT COUNT(*) as count FROM funcionarios WHERE equipe = ?",
       [nome.trim()]
     );
-    
+
     if (existingTeam.rows[0].count > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Equipe já existe'
+      });
+    }
+
+    // Verificar se já existe em equipes_temp
+    const existingTempTeam = await query(
+      "SELECT COUNT(*) as count FROM equipes_temp WHERE nome = ?",
+      [nome.trim()]
+    );
+
+    if (existingTempTeam.rows[0].count > 0) {
       return res.status(400).json({
         success: false,
         message: 'Equipe já existe'
@@ -78,36 +106,37 @@ router.post('/equipes', async (req, res) => {
     // Criar uma entrada temporária para a equipe (será removida quando funcionários forem atribuídos)
     // Isso garante que a equipe apareça na lista mesmo sem funcionários
     await query(
-      "INSERT OR IGNORE INTO equipes_temp (nome, created_at) VALUES (?, CURRENT_TIMESTAMP)",
-      [nome.trim()]
+      "INSERT INTO equipes_temp (nome, gestor, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+      [nome.trim(), gestor || null]
     );
 
-    console.log('✅ Equipe validada para criação:', nome.trim());
-    
+    console.log('✅ Equipe criada com sucesso:', nome.trim(), '| Gestor:', gestor || 'Não definido');
+
     res.json({
       success: true,
       message: 'Equipe criada com sucesso',
       equipe: {
         nome: nome.trim(),
+        gestor: gestor || null,
         membros: 0
       }
     });
   } catch (error) {
     console.error('❌ Erro ao criar equipe:', error);
-    return res.status(500).json({ 
-      success: false, 
+    return res.status(500).json({
+      success: false,
       message: 'Erro ao criar equipe',
       error: error.message
     });
   }
 });
 
-// Renomear equipe
+// Editar equipe (nome e/ou gestor)
 router.put('/equipes/:nomeAntigo', async (req, res) => {
-  console.log('✏️ PUT /admin/equipes/:nomeAntigo - Renomeando equipe');
-  
+  console.log('✏️ PUT /admin/equipes/:nomeAntigo - Editando equipe');
+
   const { nomeAntigo } = req.params;
-  const { nomeNovo } = req.body;
+  const { nomeNovo, gestor } = req.body;
 
   if (!nomeNovo || !nomeNovo.trim()) {
     return res.status(400).json({
@@ -143,22 +172,53 @@ router.put('/equipes/:nomeAntigo', async (req, res) => {
       });
     }
 
-    // Atualizar todos os funcionários da equipe
-    const result = await query(
-      "UPDATE funcionarios SET equipe = ?, updated_at = CURRENT_TIMESTAMP WHERE equipe = ?",
-      [nomeNovo.trim(), decodeURIComponent(nomeAntigo)]
+    let funcionariosAtualizados = 0;
+
+    // Atualizar nome da equipe se foi fornecido
+    if (nomeNovo && nomeNovo.trim()) {
+      const result = await query(
+        "UPDATE funcionarios SET equipe = ?, updated_at = CURRENT_TIMESTAMP WHERE equipe = ?",
+        [nomeNovo.trim(), decodeURIComponent(nomeAntigo)]
+      );
+      funcionariosAtualizados = result.changes;
+    }
+
+    // Atualizar ou criar registro em equipes_temp com o gestor
+    const nomeEquipeFinal = (nomeNovo && nomeNovo.trim()) ? nomeNovo.trim() : decodeURIComponent(nomeAntigo);
+
+    // Verificar se existe em equipes_temp
+    const tempTeamExists = await query(
+      "SELECT COUNT(*) as count FROM equipes_temp WHERE nome = ?",
+      [nomeEquipeFinal]
     );
 
-    console.log('✅ Equipe renomeada com sucesso:', `${nomeAntigo} -> ${nomeNovo.trim()}`);
-    console.log('📊 Funcionários atualizados:', result.changes);
-    
+    if (tempTeamExists.rows[0].count > 0) {
+      // Atualizar gestor
+      await query(
+        "UPDATE equipes_temp SET gestor = ? WHERE nome = ?",
+        [gestor || null, nomeEquipeFinal]
+      );
+    } else {
+      // Criar registro com gestor
+      await query(
+        "INSERT INTO equipes_temp (nome, gestor, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        [nomeEquipeFinal, gestor || null]
+      );
+    }
+
+    console.log('✅ Equipe editada com sucesso:', `${nomeAntigo} -> ${nomeEquipeFinal} | Gestor: ${gestor || 'Não definido'}`);
+    if (funcionariosAtualizados > 0) {
+      console.log('📊 Funcionários atualizados:', funcionariosAtualizados);
+    }
+
     res.json({
       success: true,
-      message: 'Equipe renomeada com sucesso',
-      funcionariosAtualizados: result.changes,
+      message: 'Equipe editada com sucesso',
+      funcionariosAtualizados,
       equipe: {
         nomeAntigo: decodeURIComponent(nomeAntigo),
-        nomeNovo: nomeNovo.trim()
+        nomeNovo: nomeEquipeFinal,
+        gestor: gestor || null
       }
     });
   } catch (error) {
