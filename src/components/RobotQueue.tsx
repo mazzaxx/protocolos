@@ -8,7 +8,7 @@ import { QueueManager } from './QueueManager';
 export function RobotQueue() {
   const { protocols, userEmails, updateProtocolStatus, updateTrigger, forceRefresh } = useProtocols();
   const { protocols: allProtocols, returnProtocol } = useProtocols();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [selectedProtocol, setSelectedProtocol] = useState<Protocol | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProtocols, setSelectedProtocols] = useState<string[]>([]);
@@ -208,11 +208,11 @@ export function RobotQueue() {
       if (newSet.has(protocolId)) {
         newSet.delete(protocolId);
         // Voltar para status "Aguardando"
-        updateProtocolStatus(protocolId, 'Aguardando');
+        updateProtocolStatus(protocolId, 'Aguardando', user?.email || 'Robô', user?.id);
       } else {
         newSet.add(protocolId);
         // Alterar para status "Em Execução"
-        updateProtocolStatus(protocolId, 'Em Execução');
+        updateProtocolStatus(protocolId, 'Em Execução', user?.email || 'Robô', user?.id);
       }
       return newSet;
     });
@@ -225,14 +225,14 @@ export function RobotQueue() {
 
   const handleMarkAsDone = () => {
     if (selectedProtocol) {
-      updateProtocolStatus(selectedProtocol.id, 'Peticionado');
+      updateProtocolStatus(selectedProtocol.id, 'Peticionado', user?.email || 'Robô', user?.id);
       handleCloseModal();
     }
   };
 
   const handleMarkAsError = () => {
     if (selectedProtocol) {
-      updateProtocolStatus(selectedProtocol.id, 'Erro');
+      updateProtocolStatus(selectedProtocol.id, 'Erro', user?.email || 'Robô', user?.id);
       handleCloseModal();
     }
   };
@@ -240,7 +240,7 @@ export function RobotQueue() {
   const handleReturnProtocol = () => {
     if (selectedProtocol) {
       // Devolução do robô sem justificativa - apenas move para fila do Fila Manual
-      returnProtocol(selectedProtocol.id, 'Devolvido pelo Robô para análise manual', 'Robô');
+      returnProtocol(selectedProtocol.id, 'Devolvido pelo Robô para análise manual', 'Robô', undefined);
       
       // Mostrar notificação de sucesso
       setSuccessMessage('Protocolo devolvido com sucesso!');

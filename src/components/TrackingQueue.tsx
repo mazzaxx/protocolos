@@ -132,7 +132,7 @@ export function TrackingQueue() {
 
   const handleCancelProtocol = () => {
     if (selectedProtocol) {
-      cancelProtocol(selectedProtocol.id, userEmails[user!.id] || user!.email);
+      cancelProtocol(selectedProtocol.id, user?.email || 'Sistema', user?.id);
       setShowCancelModal(false);
       handleCloseModal();
     }

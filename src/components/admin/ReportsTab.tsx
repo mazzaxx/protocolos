@@ -640,7 +640,288 @@ export function ReportsTab() {
                 padding: 12px 16px;
             }
         }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            overflow-y: auto;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 800px;
+            width: 100%;
+            margin: 40px auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideDown 0.3s ease-out;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            padding: 20px 24px;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .info-section {
+            margin-bottom: 24px;
+        }
+
+        .info-section h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+
+        .info-section h4::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 16px;
+            background: #2563eb;
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .info-item {
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 0.95rem;
+            color: #1f2937;
+            font-weight: 500;
+        }
+
+        .activity-log {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .activity-item {
+            background: #f8fafc;
+            border-left: 4px solid #2563eb;
+            padding: 12px 16px;
+            border-radius: 6px;
+        }
+
+        .activity-description {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 6px;
+        }
+
+        .activity-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+
+        .activity-user {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
     </style>
+    <script>
+        const protocolsData = ${JSON.stringify(filteredProtocols)};
+
+        function showProtocolDetails(protocolId) {
+            const protocol = protocolsData.find(p => p.id === protocolId);
+            if (!protocol) return;
+
+            const queueName = protocol.assignedTo === 'Manual' ? 'Fila Manual' :
+                             protocol.assignedTo === 'Deyse' ? 'Fila da Deyse' :
+                             protocol.assignedTo === 'Enzo' ? 'Fila do Enzo' :
+                             protocol.assignedTo === 'Iago' ? 'Fila do Iago' : 'Fila do Robô';
+
+            const modalHTML = \`
+                <div class="modal-overlay show" id="protocolModal" onclick="closeModal(event)">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h3>📋 Detalhes do Protocolo</h3>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="info-section">
+                                <h4>Informações Gerais</h4>
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <div class="info-label">Número do Processo</div>
+                                        <div class="info-value">\${protocol.processNumber || 'N/A'}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Tribunal</div>
+                                        <div class="info-value">\${protocol.court || 'N/A'}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Sistema</div>
+                                        <div class="info-value">\${protocol.system || 'N/A'}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Status</div>
+                                        <div class="info-value">\${protocol.status}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Fila</div>
+                                        <div class="info-value">\${queueName}</div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-label">Data de Criação</div>
+                                        <div class="info-value">\${new Date(protocol.createdAt).toLocaleString('pt-BR')}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            \${protocol.observations ? \`
+                                <div class="info-section">
+                                    <h4>Observações</h4>
+                                    <div class="info-item">
+                                        <div class="info-value">\${protocol.observations}</div>
+                                    </div>
+                                </div>
+                            \` : ''}
+
+                            <div class="info-section">
+                                <h4>Histórico de Atividades (\${protocol.activityLog?.length || 0})</h4>
+                                <div class="activity-log">
+                                    \${protocol.activityLog && protocol.activityLog.length > 0 ?
+                                        protocol.activityLog
+                                            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                                            .map(log => \`
+                                                <div class="activity-item">
+                                                    <div class="activity-description">\${log.description}</div>
+                                                    \${log.details ? \`<div style="margin: 4px 0; font-size: 0.85rem; color: #4b5563;">Detalhes: \${log.details}</div>\` : ''}
+                                                    <div class="activity-meta">
+                                                        <div class="activity-user">
+                                                            <span>👤</span>
+                                                            <span>\${log.performedBy || 'Sistema'}</span>
+                                                        </div>
+                                                        <span>\${new Date(log.timestamp).toLocaleString('pt-BR')}</span>
+                                                    </div>
+                                                </div>
+                                            \`).join('')
+                                        : '<div style="text-align: center; padding: 20px; color: #9ca3af;">Nenhum registro de atividade</div>'
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            \`;
+
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function closeModal(event) {
+            if (!event || event.target.id === 'protocolModal' || event.target.classList.contains('modal-close')) {
+                const modal = document.getElementById('protocolModal');
+                if (modal) {
+                    modal.classList.remove('show');
+                    setTimeout(() => modal.remove(), 200);
+                }
+            }
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
 </head>
 <body>
     <div class="container">
@@ -813,7 +1094,7 @@ export function ReportsTab() {
                                         <span style="display: inline-block; padding: 3px 8px; background: #f3f4f6; color: #374151; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">📎 ${docCount}</span>
                                     </td>
                                     <td style="padding: 10px 8px; text-align: center;">
-                                        <button onclick="alert('========== DETALHES DO PROTOCOLO ==========\\n\\n📋 INFORMAÇÕES GERAIS\\nNúmero do Processo: ${protocol.processNumber || 'N/A'}\\nTribunal: ${protocol.court || 'N/A'}\\nSistema: ${protocol.system || 'N/A'}\\nJurisdição: ${protocol.jurisdiction || 'N/A'}\\nData de Criação: ${new Date(protocol.createdAt).toLocaleString('pt-BR')}\\nStatus Atual: ${protocol.status}\\nFila Atual: ${queueName}\\n\\n${protocol.observations ? `💬 OBSERVAÇÕES\\n${protocol.observations}\\n\\n` : ''}📎 DOCUMENTOS ANEXADOS (${docCount})\\n${protocol.documents && protocol.documents.length > 0 ? protocol.documents.map((doc, i) => `${i+1}. ${doc.name} (${doc.category === 'petition' ? 'Petição' : 'Complementar'})`).join('\\n') : 'Nenhum documento anexado'}\\n\\n${protocol.guias && protocol.guias.length > 0 ? `💰 GUIAS DE RECOLHIMENTO (${protocol.guias.length})\\n${protocol.guias.map((g, i) => `${i+1}. ${g.type} - R$ ${g.value}`).join('\\n')}\\n\\n` : ''}📝 HISTÓRICO DE ATIVIDADES (${logCount})\\n${protocol.activityLog && protocol.activityLog.length > 0 ? protocol.activityLog.map((log, i) => `${i+1}. ${log.description} (${new Date(log.timestamp).toLocaleString('pt-BR')})`).join('\\n') : 'Nenhum registro de atividade'}')" style="padding: 4px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer;">📝 Log</button>
+                                        <button onclick="showProtocolDetails('${protocol.id}')" style="padding: 4px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer;">📝 Log</button>
                                     </td>
                                 </tr>
                             `}).join('')}

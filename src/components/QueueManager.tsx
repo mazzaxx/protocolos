@@ -15,7 +15,7 @@ interface QueueManagerProps {
 
 export function QueueManager({ protocols, currentQueue, selectedProtocols, setSelectedProtocols, onProtocolsMoved, updateProtocolStatus }: QueueManagerProps) {
   const { moveProtocolToQueue, moveMultipleProtocols } = useProtocols();
-  const { hasPermission, canMoveToQueue } = useAuth();
+  const { hasPermission, canMoveToQueue, user } = useAuth();
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [movedCount, setMovedCount] = useState(0);
@@ -55,7 +55,7 @@ export function QueueManager({ protocols, currentQueue, selectedProtocols, setSe
         });
       }
 
-      moveMultipleProtocols(selectedProtocols, assignedTo);
+      moveMultipleProtocols(selectedProtocols, assignedTo, user?.email || 'Sistema', user?.id);
       setSelectedProtocols([]);
       setMovedCount(count);
       setShowSuccessNotification(true);

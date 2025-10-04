@@ -405,17 +405,18 @@ export function useProtocols() {
   }, [fetchProtocols]);
   
   // Função otimizada para atualizar protocolo no servidor
-  const updateProtocolInServer = useCallback(async (id: string, updates: any, performedBy?: string) => {
+  const updateProtocolInServer = useCallback(async (id: string, updates: any, performedBy?: string, performedById?: number) => {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_URL || '';
-      
+
       const updateData = { ...updates };
       if (performedBy) {
         updateData.newLogEntry = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'status_changed',
           description: `Status alterado para: ${updates.status || 'atualizado'}`,
-          performedBy
+          performedBy,
+          performedById
         };
       }
       
@@ -457,21 +458,21 @@ export function useProtocols() {
   }, [fetchProtocols]);
   
   // Funções específicas para operações
-  const updateProtocolStatus = useCallback(async (id: string, status: Protocol['status'], performedBy?: string) => {
-    const success = await updateProtocolInServer(id, { status }, performedBy);
+  const updateProtocolStatus = useCallback(async (id: string, status: Protocol['status'], performedBy?: string, performedById?: number) => {
+    const success = await updateProtocolInServer(id, { status }, performedBy, performedById);
     if (!success) {
       throw new Error('Falha ao atualizar status no servidor');
     }
   }, [updateProtocolInServer]);
   
-  const returnProtocol = useCallback(async (id: string, returnReason: string, performedBy?: string) => {
+  const returnProtocol = useCallback(async (id: string, returnReason: string, performedBy?: string, performedById?: number) => {
     const foundProtocol = protocols.find(p => p.id === id);
     if (!foundProtocol) {
       throw new Error('Protocolo não encontrado');
     }
-    
+
     let updates: any = {};
-    
+
     if (performedBy === 'Robô') {
       updates = {
         status: 'Aguardando',
@@ -482,6 +483,7 @@ export function useProtocols() {
           action: 'returned',
           description: 'Protocolo devolvido pelo Robô para Fila Manual',
           performedBy: performedBy || 'Sistema',
+          performedById,
           details: returnReason
         }
       };
@@ -495,6 +497,7 @@ export function useProtocols() {
           action: 'returned',
           description: 'Protocolo devolvido',
           performedBy: performedBy || 'Sistema',
+          performedById,
           details: returnReason
         }
       };
@@ -514,7 +517,7 @@ export function useProtocols() {
     }
   }, [protocols, updateProtocolInServer]);
   
-  const moveProtocolToQueue = useCallback(async (id: string, assignedTo: Protocol['assignedTo'], performedBy?: string) => {
+  const moveProtocolToQueue = useCallback(async (id: string, assignedTo: Protocol['assignedTo'], performedBy?: string, performedById?: number) => {
     const updates = {
       assignedTo,
       status: 'Aguardando',
@@ -522,7 +525,8 @@ export function useProtocols() {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'moved_to_queue',
         description: `Movido para: ${assignedTo ? `Fila do ${assignedTo}` : 'Fila do Robô'}`,
-        performedBy: performedBy || 'Sistema'
+        performedBy: performedBy || 'Sistema',
+        performedById
       }
     };
 
@@ -532,27 +536,28 @@ export function useProtocols() {
     }
   }, [updateProtocolInServer]);
   
-  const moveMultipleProtocols = useCallback(async (ids: string[], assignedTo: Protocol['assignedTo'], performedBy?: string) => {
+  const moveMultipleProtocols = useCallback(async (ids: string[], assignedTo: Protocol['assignedTo'], performedBy?: string, performedById?: number) => {
     console.log(`🔄 Movendo ${ids.length} protocolos para ${assignedTo || 'Robô'}`);
-    
+
     // Processar em lotes para evitar sobrecarga
     const batchSize = 5;
     for (let i = 0; i < ids.length; i += batchSize) {
       const batch = ids.slice(i, i + batchSize);
-      await Promise.all(batch.map(id => moveProtocolToQueue(id, assignedTo, performedBy)));
+      await Promise.all(batch.map(id => moveProtocolToQueue(id, assignedTo, performedBy, performedById)));
     }
-    
+
     console.log('✅ Movimentação em lote concluída');
   }, [moveProtocolToQueue]);
   
-  const cancelProtocol = useCallback(async (id: string, performedBy?: string) => {
+  const cancelProtocol = useCallback(async (id: string, performedBy?: string, performedById?: number) => {
     const updates = {
       status: 'Cancelado',
       newLogEntry: {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'status_changed',
         description: 'Protocolo cancelado',
-        performedBy: performedBy || 'Sistema'
+        performedBy: performedBy || 'Sistema',
+        performedById
       }
     };
     
@@ -562,14 +567,15 @@ export function useProtocols() {
     }
   }, [updateProtocolInServer]);
   
-  const updateProtocol = useCallback(async (id: string, updates: Partial<Protocol>, performedBy?: string) => {
+  const updateProtocol = useCallback(async (id: string, updates: Partial<Protocol>, performedBy?: string, performedById?: number) => {
     const updateData = {
       ...updates,
       newLogEntry: {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'resubmitted',
         description: 'Protocolo editado e reenviado',
-        performedBy: performedBy || 'Usuário'
+        performedBy: performedBy || 'Usuário',
+        performedById
       }
     };
     

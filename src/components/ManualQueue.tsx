@@ -12,7 +12,7 @@ interface ManualQueueProps {
 export function ManualQueue({ employee }: ManualQueueProps) {
   const { protocols, userEmails, updateProtocolStatus, updateTrigger, forceRefresh } = useProtocols();
   const { returnProtocol } = useProtocols();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [selectedProtocol, setSelectedProtocol] = useState<Protocol | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProtocols, setSelectedProtocols] = useState<string[]>([]);
@@ -176,11 +176,11 @@ export function ManualQueue({ employee }: ManualQueueProps) {
       if (newSet.has(protocolId)) {
         newSet.delete(protocolId);
         // Voltar para status "Aguardando"
-        updateProtocolStatus(protocolId, 'Aguardando');
+        updateProtocolStatus(protocolId, 'Aguardando', user?.email || employee, user?.id);
       } else {
         newSet.add(protocolId);
         // Alterar para status "Em Execução"
-        updateProtocolStatus(protocolId, 'Em Execução');
+        updateProtocolStatus(protocolId, 'Em Execução', user?.email || employee, user?.id);
       }
       return newSet;
     });
@@ -193,21 +193,21 @@ export function ManualQueue({ employee }: ManualQueueProps) {
 
   const handleMarkAsDone = () => {
     if (selectedProtocol) {
-      updateProtocolStatus(selectedProtocol.id, 'Peticionado');
+      updateProtocolStatus(selectedProtocol.id, 'Peticionado', user?.email || employee, user?.id);
       handleCloseModal();
     }
   };
 
   const handleMarkAsError = () => {
     if (selectedProtocol) {
-      updateProtocolStatus(selectedProtocol.id, 'Erro');
+      updateProtocolStatus(selectedProtocol.id, 'Erro', user?.email || employee, user?.id);
       handleCloseModal();
     }
   };
 
   const handleReturnProtocol = () => {
     if (selectedProtocol && returnReason.trim()) {
-      returnProtocol(selectedProtocol.id, returnReason.trim(), employee);
+      returnProtocol(selectedProtocol.id, returnReason.trim(), user?.email || employee, user?.id);
       
       // Mostrar notificação de sucesso
       setSuccessMessage('Protocolo devolvido com sucesso!');
