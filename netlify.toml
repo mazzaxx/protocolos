@@ -1,11 +1,16 @@
 [build]
+  base = "frontend"
   command = "npm run build"
-  publish = "dist"
+  publish = "frontend/dist"
 
 [build.environment]
-  NODE_VERSION = "22"
+  NODE_VERSION = "18"
+  VITE_API_URL = "https://protocolos.squareweb.app"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[context.production.environment]
+  VITE_API_URL = "https://protocolos.squareweb.app"
