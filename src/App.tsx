@@ -13,7 +13,7 @@ import { ReturnedQueue } from './components/ReturnedQueue';
 import UserProfile from './components/UserProfile';
 import FirstLoginModal from './components/FirstLoginModal';
 
-// Componente para mostrar status de conectividade
+// Componente para mostrar status de conectividade (bolinha discreta)
 function ConnectivityStatus() {
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [backendStatus, setBackendStatus] = React.useState<'checking' | 'online' | 'offline'>('checking');
@@ -31,22 +31,20 @@ function ConnectivityStatus() {
     const checkBackend = async () => {
       setLastCheck(new Date());
       const startTime = Date.now();
-      
+
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (window as any).__API_BASE_URL__ || window.location.origin;
-        const healthUrl = `${apiBaseUrl}/health`;
-        
-        const response = await fetch(healthUrl, { 
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const healthUrl = `${apiUrl}/health`;
+
+        const response = await fetch(healthUrl, {
           method: 'GET',
-          credentials: 'include',
           cache: 'no-cache',
-          mode: 'cors'
+          signal: AbortSignal.timeout(5000)
         });
-        
+
         const responseTime = Date.now() - startTime;
-        
+
         if (response.ok) {
-          const data = await response.json();
           setBackendStatus('online');
           setPerformanceInfo({
             responseTime,
@@ -63,7 +61,7 @@ function ConnectivityStatus() {
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 10000); // Verificar a cada 10 segundos (otimizado)
+    const interval = setInterval(checkBackend, 5000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -72,45 +70,51 @@ function ConnectivityStatus() {
     };
   }, []);
 
-  if (!isOnline || backendStatus === 'offline') {
-    return (
-      <div className="bg-red-500 text-white px-4 py-2 text-sm text-center">
-        <div className="flex items-center justify-center space-x-2">
-          <span>
-            {!isOnline 
-              ? '🔴 SEM INTERNET - Dados não sincronizados' 
-              : `🔴 SERVIDOR OFFLINE - Sincronização interrompida`
-            }
-          </span>
-          <span className="text-xs opacity-75">
-            (última verificação: {lastCheck.toLocaleTimeString()})
-          </span>
-        </div>
-      </div>
-    );
-  }
+  const getStatusColor = () => {
+    if (!isOnline || backendStatus === 'offline') return 'bg-red-500';
+    if (backendStatus === 'checking') return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
 
-  if (backendStatus === 'checking') {
-    return (
-      <div className="bg-yellow-500 text-white px-4 py-2 text-sm text-center">
-        <div className="flex items-center justify-center space-x-2">
-          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-          <span>🟡 Conectando ao servidor...</span>
-        </div>
-      </div>
-    );
-  }
+  const getStatusText = () => {
+    if (!isOnline) return 'Sem Internet';
+    if (backendStatus === 'offline') return 'Servidor Offline';
+    if (backendStatus === 'checking') return 'Conectando...';
+    return 'Servidor Online';
+  };
 
-  // Mostrar status online com informações de performance
+  const getTooltipContent = () => {
+    const parts = [];
+    parts.push(`Status: ${getStatusText()}`);
+    if (performanceInfo) {
+      parts.push(`Latência: ${performanceInfo.responseTime}ms`);
+      parts.push(`Última Sync: ${performanceInfo.lastSync.toLocaleTimeString()}`);
+    }
+    parts.push(`Última Verificação: ${lastCheck.toLocaleTimeString()}`);
+    return parts.join('\n');
+  };
+
   return (
-    <div className="bg-green-500 text-white px-4 py-1 text-xs text-center">
-      <div className="flex items-center justify-center space-x-4">
-        <span>🟢 SERVIDOR ONLINE - Sincronização ativa</span>
-        {performanceInfo && (
-          <span className="opacity-75">
-            Latência: {performanceInfo.responseTime}ms | Última sync: {performanceInfo.lastSync.toLocaleTimeString()}
-          </span>
-        )}
+    <div
+      className="fixed bottom-6 right-6 z-50 group"
+      title={getTooltipContent()}
+    >
+      <div className={`w-4 h-4 rounded-full ${getStatusColor()} shadow-lg ${backendStatus === 'checking' ? 'animate-pulse' : ''}`} />
+
+      {/* Tooltip ao passar o mouse */}
+      <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
+        <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-xl whitespace-nowrap">
+          <div className="font-semibold mb-1">{getStatusText()}</div>
+          {performanceInfo && (
+            <>
+              <div>Latência: {performanceInfo.responseTime}ms</div>
+              <div>Última Sync: {performanceInfo.lastSync.toLocaleTimeString()}</div>
+            </>
+          )}
+          <div className="text-gray-400 mt-1 text-[10px]">
+            Verificado: {lastCheck.toLocaleTimeString()}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -184,7 +188,6 @@ function Dashboard() {
   return (
     <>
       <Header />
-      <ConnectivityStatus />
       <div className="min-h-screen bg-gray-50">
 
       {/* Navigation Tabs */}
@@ -248,6 +251,9 @@ function Dashboard() {
       {/* Modals */}
       <UserProfile isOpen={showUserProfile} onClose={() => setShowUserProfile(false)} />
       {showFirstLoginModal && <FirstLoginModal onPasswordChanged={handlePasswordChanged} />}
+
+      {/* Status do Servidor - Bolinha Discreta */}
+      <ConnectivityStatus />
       </div>
     </>
   );

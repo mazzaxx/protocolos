@@ -394,7 +394,20 @@ export const initializeDb = async () => {
 // Função para criar usuários de teste
 const createTestUsers = async () => {
   console.log('👥 Iniciando criação de usuários de teste...');
-  
+
+  // Limpar funcionários antigos/duplicados (manter apenas admin e mod do sistema)
+  try {
+    console.log('🧹 Limpando funcionários antigos...');
+    const result = await query(
+      "DELETE FROM funcionarios WHERE email NOT IN ('admin@escritorio.com', 'mod@escritorio.com')"
+    );
+    if (result.changes > 0) {
+      console.log(`✅ ${result.changes} funcionários antigos removidos`);
+    }
+  } catch (error) {
+    console.error('❌ Erro ao limpar funcionários antigos:', error);
+  }
+
   // Definir equipes com gestores
   const equipes = {
     'Saúde APS': {
@@ -581,7 +594,30 @@ const createTestUsers = async () => {
   } else {
     console.log(`ℹ️ Nenhum usuário novo foi criado (todos já existem)`);
   }
-  
+
+  // Criar equipes temporárias com gestores
+  console.log('👥 Criando equipes temporárias com gestores...');
+  try {
+    // Limpar equipes antigas
+    await query("DELETE FROM equipes_temp");
+
+    let equipesCreated = 0;
+    for (const [nomeEquipe, equipeDados] of Object.entries(equipes)) {
+      try {
+        await query(
+          "INSERT INTO equipes_temp (nome, gestor) VALUES (?, ?)",
+          [nomeEquipe, equipeDados.gestor]
+        );
+        equipesCreated++;
+      } catch (error) {
+        console.error(`❌ Erro ao criar equipe ${nomeEquipe}:`, error.message);
+      }
+    }
+    console.log(`✅ ${equipesCreated} equipes criadas`);
+  } catch (error) {
+    console.error('❌ Erro ao criar equipes:', error);
+  }
+
   // Verificar total de usuários após criação
   try {
     const totalResult = await query('SELECT COUNT(*) as count FROM funcionarios');

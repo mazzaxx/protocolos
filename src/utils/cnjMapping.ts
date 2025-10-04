@@ -143,6 +143,7 @@ function determineSpecificSystem(
 ): string {
   const firstDigitSequential = sequentialNumber.charAt(0);
   const firstTwoDigitsSequential = sequentialNumber.substring(0, 2);
+  const firstThreeDigitsSequential = sequentialNumber.substring(0, 3);
   
   switch (tribunalCode) {
     case '04': // Amazonas
@@ -168,10 +169,9 @@ function determineSpecificSystem(
       return 'PJe'; // padrão para MG
       
     case '19': // Rio de Janeiro
-      // Se começar com 08 ou 09 é PJe, demais casos é TJRJ eletronico
-      // Para processos que começam com 08 ou 09, usar PJe
-      // Demais casos usar TJRJ Eletrônico
-      if (firstTwoDigitsSequential === '08' || firstTwoDigitsSequential === '09') {
+      // Se começar com 08, 09, 008 ou 009 é PJe RJ, demais casos é TJRJ Eletrônico
+      if (firstTwoDigitsSequential === '08' || firstTwoDigitsSequential === '09' ||
+          firstThreeDigitsSequential === '008' || firstThreeDigitsSequential === '009') {
         return 'PJe';
       }
       return 'TJRJ Eletrônico';
