@@ -17,18 +17,20 @@ interface Team {
   membros: number;
 }
 
-type DateFilter = 'today' | 'last3days' | 'last7days' | 'last30days' | 'all';
+type DateFilter = 'today' | 'last3days' | 'last7days' | 'last30days' | 'custom' | 'all';
 
 export function ReportsTab() {
   const { protocols } = useProtocols();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [protocolNumberSearch, setProtocolNumberSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const protocolsPerPage = 10;
   const [filteredProtocols, setFilteredProtocols] = useState<Protocol[]>([]);
@@ -47,11 +49,11 @@ export function ReportsTab() {
 
   useEffect(() => {
     applyFilters();
-  }, [protocols, searchTerm, protocolNumberSearch, dateFilter]);
+  }, [protocols, searchTerm, protocolNumberSearch, dateFilter, customStartDate, customEndDate]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, protocolNumberSearch, dateFilter]);
+  }, [searchTerm, protocolNumberSearch, dateFilter, customStartDate, customEndDate]);
 
   const loadEmployees = async () => {
     try {
@@ -81,30 +83,39 @@ export function ReportsTab() {
     }
   };
 
-  const getDateFilterRange = (filter: DateFilter): Date | null => {
+  const getDateFilterRange = (filter: DateFilter): { start: Date | null, end: Date | null } => {
     const now = new Date();
     switch (filter) {
       case 'today':
         const today = new Date(now);
         today.setHours(0, 0, 0, 0);
-        return today;
+        return { start: today, end: null };
       case 'last3days':
         const threeDaysAgo = new Date(now);
         threeDaysAgo.setDate(now.getDate() - 3);
         threeDaysAgo.setHours(0, 0, 0, 0);
-        return threeDaysAgo;
+        return { start: threeDaysAgo, end: null };
       case 'last7days':
         const sevenDaysAgo = new Date(now);
         sevenDaysAgo.setDate(now.getDate() - 7);
         sevenDaysAgo.setHours(0, 0, 0, 0);
-        return sevenDaysAgo;
+        return { start: sevenDaysAgo, end: null };
       case 'last30days':
         const thirtyDaysAgo = new Date(now);
         thirtyDaysAgo.setDate(now.getDate() - 30);
         thirtyDaysAgo.setHours(0, 0, 0, 0);
-        return thirtyDaysAgo;
+        return { start: thirtyDaysAgo, end: null };
+      case 'custom':
+        if (customStartDate) {
+          const start = new Date(customStartDate);
+          start.setHours(0, 0, 0, 0);
+          const end = customEndDate ? new Date(customEndDate) : null;
+          if (end) end.setHours(23, 59, 59, 999);
+          return { start, end };
+        }
+        return { start: null, end: null };
       default:
-        return null;
+        return { start: null, end: null };
     }
   };
 
@@ -113,8 +124,14 @@ export function ReportsTab() {
 
     // Filtro de data
     const dateRange = getDateFilterRange(dateFilter);
-    if (dateRange) {
-      filtered = filtered.filter(p => new Date(p.createdAt) >= dateRange);
+    if (dateRange.start) {
+      filtered = filtered.filter(p => {
+        const protocolDate = new Date(p.createdAt);
+        if (dateRange.end) {
+          return protocolDate >= dateRange.start && protocolDate <= dateRange.end;
+        }
+        return protocolDate >= dateRange.start;
+      });
     }
 
     // Filtro de pesquisa geral
@@ -1248,6 +1265,13 @@ export function ReportsTab() {
       case 'last3days': return 'Últimos 3 dias';
       case 'last7days': return 'Últimos 7 dias';
       case 'last30days': return 'Últimos 30 dias';
+      case 'custom':
+        if (customStartDate && customEndDate) {
+          return `${new Date(customStartDate).toLocaleDateString('pt-BR')} até ${new Date(customEndDate).toLocaleDateString('pt-BR')}`;
+        } else if (customStartDate) {
+          return `A partir de ${new Date(customStartDate).toLocaleDateString('pt-BR')}`;
+        }
+        return 'Período Personalizado';
       default: return 'Todos os períodos';
     }
   };
@@ -1332,10 +1356,40 @@ export function ReportsTab() {
               <option value="last3days">Últimos 3 dias</option>
               <option value="last7days">Últimos 7 dias</option>
               <option value="last30days">Últimos 30 dias</option>
+              <option value="custom">Período Personalizado</option>
               <option value="all">Todos os períodos</option>
             </select>
           </div>
         </div>
+
+        {/* Filtros de Data Personalizada */}
+        {dateFilter === 'custom' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data Inicial
+              </label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data Final (opcional)
+              </label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                min={customStartDate}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Resumo dos Filtros */}
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
