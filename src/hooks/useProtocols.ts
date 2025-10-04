@@ -132,22 +132,17 @@ export function useProtocols() {
     
     // Evitar múltiplas requisições simultâneas
     if (isFetchingRef.current && !forceRefresh) {
-      console.log('🔄 Requisição já em andamento, ignorando...');
       return;
     }
-    
+
     // Throttling inteligente
     if (!forceRefresh && !protocolCache.canFetch(1500)) {
-      console.log('⏱️ Throttling ativo, aguardando...');
       return;
     }
-    
+
     isFetchingRef.current = true;
     setIsLoading(true);
     setConnectionStatus('checking');
-    
-    const startTime = Date.now();
-    console.log('🔄 SINCRONIZAÇÃO INICIADA:', forceRefresh ? 'FORÇADA' : 'AUTOMÁTICA');
     
     try {
       const apiBaseUrl = import.meta.env.VITE_API_URL || (window as any).__API_BASE_URL__ || '';
@@ -165,9 +160,6 @@ export function useProtocols() {
         mode: 'cors'
       });
       
-      const duration = Date.now() - startTime;
-      console.log(`📡 Resposta recebida em ${duration}ms - Status: ${response.status}`);
-      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -180,7 +172,6 @@ export function useProtocols() {
       
       // Verificar se os dados realmente mudaram
       if (!forceRefresh && !protocolCache.hasChanged(data.protocolos)) {
-        console.log('📊 Dados inalterados, mantendo cache');
         setConnectionStatus('connected');
         setLastSyncTime(new Date());
         retryCountRef.current = 0;
@@ -203,11 +194,7 @@ export function useProtocols() {
           return null;
         }
       }).filter(Boolean);
-      
-      console.log(`✅ SINCRONIZAÇÃO COMPLETA: ${protocolsWithDates.length} protocolos`);
-      console.log(`📊 Performance: ${duration}ms`);
-      console.log(`🎯 Filas: Robô(${protocolsWithDates.filter(p => !p.assignedTo && p.status === 'Aguardando').length}) Manual(${protocolsWithDates.filter(p => p.assignedTo === 'Manual' && p.status === 'Aguardando').length}) Deyse(${protocolsWithDates.filter(p => p.assignedTo === 'Deyse' && p.status === 'Aguardando').length}) Enzo(${protocolsWithDates.filter(p => p.assignedTo === 'Enzo' && p.status === 'Aguardando').length}) Iago(${protocolsWithDates.filter(p => p.assignedTo === 'Iago' && p.status === 'Aguardando').length})`);
-      
+
       // Atualizar estado apenas se o componente ainda estiver montado
       if (mountedRef.current) {
         setProtocols(protocolsWithDates);
@@ -216,9 +203,9 @@ export function useProtocols() {
         retryCountRef.current = 0;
         lastActivityRef.current = Date.now();
       }
-      
+
     } catch (error) {
-      console.error('❌ ERRO DE SINCRONIZAÇÃO:', error);
+      console.error('Erro de sincronização:', error);
       
       if (mountedRef.current) {
         setConnectionStatus('disconnected');
@@ -226,20 +213,14 @@ export function useProtocols() {
         
         // Estratégia de retry exponencial
         const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
-        console.log(`🔄 Tentativa ${retryCountRef.current}, próxima em ${retryDelay}ms`);
-        
+
         setTimeout(() => {
           if (mountedRef.current && retryCountRef.current < 5) {
             fetchProtocols(true);
           }
         }, retryDelay);
       }
-      
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        console.error('🚨 ERRO CRÍTICO: Backend inacessível');
-        console.error('🔧 Verifique: https://sistema-protocolos-juridicos-production.up.railway.app');
-      }
-      
+
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
@@ -256,9 +237,6 @@ export function useProtocols() {
   
   // Effect principal para inicialização e polling
   useEffect(() => {
-    console.log('🚀 useProtocols: Inicializando sistema otimizado...');
-    console.log('🌐 Backend:', import.meta.env.VITE_API_URL || 'PROXY LOCAL');
-    
     // Fetch inicial
     fetchProtocols(true);
     
@@ -280,17 +258,16 @@ export function useProtocols() {
         } else if (timeSinceActivity > 30000) {
           interval = 5000; // 5 segundos se inativo por 30 segundos
         }
-        
-        console.log(`🔄 POLLING AUTOMÁTICO (${interval}ms): Verificando atualizações...`);
+
         debouncedFetch(false);
       }, 3000); // Intervalo base de 3 segundos
     };
     
     setupPolling();
-    
+
+
     // Cleanup
     return () => {
-      console.log('🛑 useProtocols: Limpando recursos...');
       mountedRef.current = false;
       isFetchingRef.current = false;
       
@@ -345,7 +322,6 @@ export function useProtocols() {
   
   // Função para forçar refresh
   const forceRefresh = useCallback(() => {
-    console.log('🔄 Forçando refresh dos protocolos...');
     protocolCache.clear();
     lastActivityRef.current = Date.now();
     fetchProtocols(true);
@@ -353,7 +329,6 @@ export function useProtocols() {
   
   // Função otimizada para adicionar protocolo
   const addProtocol = useCallback(async (protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt' | 'queuePosition'>) => {
-    console.log('🚀 CRIANDO PROTOCOLO - Sincronização iniciada');
     lastActivityRef.current = Date.now();
     
     try {
@@ -382,10 +357,8 @@ export function useProtocols() {
       }
       
       const data = await response.json();
-      
+
       if (data.success) {
-        console.log('🎉 PROTOCOLO CRIADO COM SUCESSO!');
-        
         // Invalidar cache e forçar refresh imediato
         protocolCache.clear();
         
@@ -399,8 +372,8 @@ export function useProtocols() {
         throw new Error(data.message || 'Erro ao criar protocolo');
       }
     } catch (error) {
-      console.error('🚨 ERRO CRÍTICO:', error);
-      throw new Error(`ERRO DE CONEXÃO: ${error.message}`);
+      console.error('Erro ao criar protocolo:', error);
+      throw new Error(`Erro de conexão: ${error.message}`);
     }
   }, [fetchProtocols]);
   
@@ -419,8 +392,7 @@ export function useProtocols() {
           performedById
         };
       }
-      
-      console.log('🔄 ATUALIZANDO PROTOCOLO:', id);
+
       lastActivityRef.current = Date.now();
       
       const response = await fetch(`${apiBaseUrl}/api/protocolos/${id}`, {
@@ -439,10 +411,8 @@ export function useProtocols() {
       }
       
       const data = await response.json();
-      
+
       if (data.success) {
-        console.log('✅ PROTOCOLO ATUALIZADO - Sincronizando...');
-        
         // Invalidar cache e sincronizar
         protocolCache.clear();
         setTimeout(() => fetchProtocols(true), 200);
@@ -452,7 +422,7 @@ export function useProtocols() {
         throw new Error(data.message || 'Erro ao atualizar protocolo');
       }
     } catch (error) {
-      console.error('🚨 ERRO DE ATUALIZAÇÃO:', error);
+      console.error('Erro de atualização:', error);
       return false;
     }
   }, [fetchProtocols]);
@@ -537,16 +507,12 @@ export function useProtocols() {
   }, [updateProtocolInServer]);
   
   const moveMultipleProtocols = useCallback(async (ids: string[], assignedTo: Protocol['assignedTo'], performedBy?: string, performedById?: number) => {
-    console.log(`🔄 Movendo ${ids.length} protocolos para ${assignedTo || 'Robô'}`);
-
     // Processar em lotes para evitar sobrecarga
     const batchSize = 5;
     for (let i = 0; i < ids.length; i += batchSize) {
       const batch = ids.slice(i, i + batchSize);
       await Promise.all(batch.map(id => moveProtocolToQueue(id, assignedTo, performedBy, performedById)));
     }
-
-    console.log('✅ Movimentação em lote concluída');
   }, [moveProtocolToQueue]);
   
   const cancelProtocol = useCallback(async (id: string, performedBy?: string, performedById?: number) => {
