@@ -680,6 +680,7 @@ export function TrackingQueue() {
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {selectedProtocol.activityLog && selectedProtocol.activityLog.length > 0 ? (
                       selectedProtocol.activityLog
+                        .filter(activity => activity.performedBy)
                         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                         .map((activity) => (
                           <div key={activity.id} className="bg-white border rounded-lg p-4 shadow-sm">
@@ -700,12 +701,10 @@ export function TrackingQueue() {
                                 )}
                                 <div className="flex items-center justify-between mt-2">
                                   <span className="text-sm text-gray-500">
-                                    {activity.performedBy && (
-                                      <span className="flex items-center">
-                                        <User className="h-3 w-3 mr-1" />
-                                        {activity.performedBy}
-                                      </span>
-                                    )}
+                                    <span className="flex items-center">
+                                      <User className="h-3 w-3 mr-1" />
+                                      {activity.performedBy}
+                                    </span>
                                   </span>
                                   <span className="text-xs text-gray-400">
                                     {formatActivityDate(new Date(activity.timestamp))}

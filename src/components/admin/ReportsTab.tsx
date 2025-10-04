@@ -876,10 +876,11 @@ export function ReportsTab() {
                             \` : ''}
 
                             <div class="info-section">
-                                <h4>Histórico de Atividades (\${protocol.activityLog?.length || 0})</h4>
+                                <h4>Histórico de Atividades (\${protocol.activityLog?.filter(log => log.performedBy).length || 0})</h4>
                                 <div class="activity-log">
                                     \${protocol.activityLog && protocol.activityLog.length > 0 ?
                                         protocol.activityLog
+                                            .filter(log => log.performedBy)
                                             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                                             .map(log => \`
                                                 <div class="activity-item">
@@ -888,7 +889,7 @@ export function ReportsTab() {
                                                     <div class="activity-meta">
                                                         <div class="activity-user">
                                                             <span>👤</span>
-                                                            <span>\${log.performedBy || 'Sistema'}</span>
+                                                            <span>\${log.performedBy}</span>
                                                         </div>
                                                         <span>\${new Date(log.timestamp).toLocaleString('pt-BR')}</span>
                                                     </div>
@@ -897,6 +898,13 @@ export function ReportsTab() {
                                         : '<div style="text-align: center; padding: 20px; color: #9ca3af;">Nenhum registro de atividade</div>'
                                     }
                                 </div>
+                            </div>
+
+                            <div class="info-section">
+                                <h4>Documentos Anexados (\${protocol.documents?.length || 0})</h4>
+                                <button onclick="showDocuments('\${protocol.id}')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; width: 100%;">
+                                    📎 Ver Documentos Anexados
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -909,6 +917,62 @@ export function ReportsTab() {
         function closeModal(event) {
             if (!event || event.target.id === 'protocolModal' || event.target.classList.contains('modal-close')) {
                 const modal = document.getElementById('protocolModal');
+                if (modal) {
+                    modal.classList.remove('show');
+                    setTimeout(() => modal.remove(), 200);
+                }
+            }
+        }
+
+        function showDocuments(protocolId) {
+            const protocol = protocolsData.find(p => p.id === protocolId);
+            if (!protocol || !protocol.documents || protocol.documents.length === 0) {
+                alert('Nenhum documento anexado a este protocolo.');
+                return;
+            }
+
+            const documentsHTML = \`
+                <div class="modal-overlay show" id="documentsModal" onclick="closeDocumentsModal(event)">
+                    <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+                        <div class="modal-header">
+                            <h3>📎 Documentos Anexados</h3>
+                            <button class="modal-close" onclick="closeDocumentsModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="info-section">
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    \${protocol.documents.map((doc, index) => \`
+                                        <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 10px 12px; border-radius: 4px;">
+                                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                                <div>
+                                                    <div style="font-size: 0.9rem; font-weight: 600; color: #1f2937; margin-bottom: 2px;">
+                                                        \${index + 1}. \${doc.name}
+                                                    </div>
+                                                    <div style="font-size: 0.75rem; color: #6b7280;">
+                                                        \${doc.category === 'petition' ? '📄 Petição' : '📎 Complementar'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    \`).join('')}
+                                </div>
+                            </div>
+                            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center;">
+                                <p style="font-size: 0.85rem; color: #6b7280;">
+                                    Total: <strong>\${protocol.documents.length}</strong> documento(s)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            \`;
+
+            document.body.insertAdjacentHTML('beforeend', documentsHTML);
+        }
+
+        function closeDocumentsModal(event) {
+            if (!event || event.target.id === 'documentsModal' || event.target.classList.contains('modal-close')) {
+                const modal = document.getElementById('documentsModal');
                 if (modal) {
                     modal.classList.remove('show');
                     setTimeout(() => modal.remove(), 200);
