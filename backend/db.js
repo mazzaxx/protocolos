@@ -359,6 +359,16 @@ export const initializeDb = async () => {
       END
     `);
     
+    // Limpar funcionários antigos/duplicados antes de criar novos
+    console.log('🧹 Limpando funcionários antigos/duplicados...');
+    await query(`DELETE FROM funcionarios WHERE email NOT IN ('admin@escritorio.com', 'mod@escritorio.com')`);
+    console.log('✅ Funcionários antigos removidos');
+
+    // Limpar equipes temporárias antigas
+    console.log('🧹 Limpando equipes temporárias antigas...');
+    await query(`DELETE FROM equipes_temp`);
+    console.log('✅ Equipes temporárias antigas removidas');
+
     // Criar usuários de teste
     console.log('👥 Iniciando processo de criação de usuários...');
     await createTestUsers();
@@ -501,17 +511,19 @@ const createTestUsers = async () => {
 
   const testUsers = [
     { email: 'admin@escritorio.com', senha: '123456', permissao: 'admin', equipe: null },
-    { email: 'mod@escritorio.com', senha: '123456', permissao: 'mod', equipe: null },
-    { email: 'advogado@escritorio.com', senha: '123456', permissao: 'advogado', equipe: null }
+    { email: 'mod@escritorio.com', senha: '123456', permissao: 'mod', equipe: null }
   ];
 
-  // Adicionar usuários das equipes
+  // Adicionar usuários das equipes (apenas primeiros 2 nomes)
   Object.entries(equipes).forEach(([nomeEquipe, equipeDados]) => {
     equipeDados.membros.forEach(nome => {
-      const email = nome.toLowerCase()
+      // Extrair apenas os 2 primeiros nomes
+      const nomeParts = nome.split('|')[0].trim().split(' ');
+      const primeirosDoisNomes = nomeParts.slice(0, 2).join('.');
+
+      const email = primeirosDoisNomes.toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-        .replace(/\s+/g, '.')
         .replace(/[^a-z0-9.]/g, '') + '@neycampos.adv.br';
 
       testUsers.push({

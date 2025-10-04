@@ -168,10 +168,16 @@ function determineSpecificSystem(
       return 'PJe'; // padrão para MG
       
     case '19': // Rio de Janeiro
-      // Se começar com 08 ou 09 é PJe, demais casos é TJRJ eletronico
-      // Para processos que começam com 08 ou 09, usar PJe
-      // Demais casos usar TJRJ Eletrônico
+      // Números começando com 08, 09, 008 ou 009 são PJe RJ
+      // Demais casos são TJRJ Eletrônico
+      const firstThreeDigitsSequential = sequentialNumber.substring(0, 3);
+
+      // Verificar se começa com 08, 09, 008 ou 009
+      // 08XXXXX ou 09XXXXX (2 dígitos) OU 008XXXX ou 009XXXX (3 dígitos)
       if (firstTwoDigitsSequential === '08' || firstTwoDigitsSequential === '09') {
+        return 'PJe';
+      }
+      if (firstThreeDigitsSequential === '008' || firstThreeDigitsSequential === '009') {
         return 'PJe';
       }
       return 'TJRJ Eletrônico';
