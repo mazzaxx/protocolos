@@ -429,16 +429,53 @@ export function useProtocols() {
   
   // Funções específicas para operações
   const updateProtocolStatus = useCallback(async (id: string, status: Protocol['status'], performedBy?: string, performedById?: number) => {
-    const success = await updateProtocolInServer(id, { status }, performedBy, performedById);
+    if (!performedBy || !performedById) {
+      throw new Error('Informações do usuário são obrigatórias');
+    }
+
+    const updates = {
+      status,
+      newLogEntry: {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        action: 'status_changed',
+        description: getStatusDescription(status),
+        performedBy,
+        performedById
+      }
+    };
+
+    const success = await updateProtocolInServer(id, updates);
     if (!success) {
       throw new Error('Falha ao atualizar status no servidor');
     }
   }, [updateProtocolInServer]);
+
+  // Helper para gerar descrição de status
+  function getStatusDescription(status: Protocol['status']): string {
+    switch (status) {
+      case 'Peticionado':
+        return 'Protocolo peticionado com sucesso';
+      case 'Devolvido':
+        return 'Protocolo devolvido';
+      case 'Cancelado':
+        return 'Protocolo cancelado';
+      case 'Em Execução':
+        return 'Protocolo iniciado';
+      case 'Aguardando':
+        return 'Protocolo em espera';
+      default:
+        return `Status alterado para: ${status}`;
+    }
+  }
   
   const returnProtocol = useCallback(async (id: string, returnReason: string, performedBy?: string, performedById?: number) => {
     const foundProtocol = protocols.find(p => p.id === id);
     if (!foundProtocol) {
       throw new Error('Protocolo não encontrado');
+    }
+
+    if (!performedBy || !performedById) {
+      throw new Error('Informações do usuário são obrigatórias');
     }
 
     let updates: any = {};
@@ -448,28 +485,28 @@ export function useProtocols() {
         status: 'Aguardando',
         assignedTo: 'Manual',
         returnReason: `Devolvido pelo Robô: ${returnReason}`,
-        newLogEntry: performedBy ? {
+        newLogEntry: {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'returned',
           description: 'Protocolo devolvido pelo Robô para Fila Manual',
           performedBy,
           performedById,
           details: returnReason
-        } : undefined
+        }
       };
     } else {
       updates = {
         status: 'Devolvido',
         returnReason,
         assignedTo: null,
-        newLogEntry: performedBy ? {
+        newLogEntry: {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'returned',
           description: 'Protocolo devolvido',
           performedBy,
           performedById,
           details: returnReason
-        } : undefined
+        }
       };
     }
     
@@ -488,16 +525,20 @@ export function useProtocols() {
   }, [protocols, updateProtocolInServer]);
   
   const moveProtocolToQueue = useCallback(async (id: string, assignedTo: Protocol['assignedTo'], performedBy?: string, performedById?: number) => {
+    if (!performedBy || !performedById) {
+      throw new Error('Informações do usuário são obrigatórias');
+    }
+
     const updates = {
       assignedTo,
       status: 'Aguardando',
-      newLogEntry: performedBy ? {
+      newLogEntry: {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'moved_to_queue',
         description: `Movido para: ${assignedTo ? `Fila do ${assignedTo}` : 'Fila do Robô'}`,
         performedBy,
         performedById
-      } : undefined
+      }
     };
 
     const success = await updateProtocolInServer(id, updates);
@@ -516,17 +557,21 @@ export function useProtocols() {
   }, [moveProtocolToQueue]);
   
   const cancelProtocol = useCallback(async (id: string, performedBy?: string, performedById?: number) => {
+    if (!performedBy || !performedById) {
+      throw new Error('Informações do usuário são obrigatórias');
+    }
+
     const updates = {
       status: 'Cancelado',
-      newLogEntry: performedBy ? {
+      newLogEntry: {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'status_changed',
         description: 'Protocolo cancelado',
         performedBy,
         performedById
-      } : undefined
+      }
     };
-    
+
     const success = await updateProtocolInServer(id, updates);
     if (!success) {
       throw new Error('Falha ao cancelar protocolo no servidor');

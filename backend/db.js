@@ -359,15 +359,8 @@ export const initializeDb = async () => {
       END
     `);
     
-    // Limpar funcionários antigos/duplicados antes de criar novos
-    console.log('🧹 Limpando funcionários antigos/duplicados...');
-    await query(`DELETE FROM funcionarios WHERE email NOT IN ('admin@escritorio.com', 'mod@escritorio.com')`);
-    console.log('✅ Funcionários antigos removidos');
-
-    // Limpar equipes temporárias antigas
-    console.log('🧹 Limpando equipes temporárias antigas...');
-    await query(`DELETE FROM equipes_temp`);
-    console.log('✅ Equipes temporárias antigas removidas');
+    // Não limpar funcionários existentes - manter dados persistentes
+    console.log('ℹ️ Mantendo funcionários existentes no banco de dados');
 
     // Criar usuários de teste
     console.log('👥 Iniciando processo de criação de usuários...');
@@ -393,20 +386,10 @@ export const initializeDb = async () => {
 
 // Função para criar usuários de teste
 const createTestUsers = async () => {
-  console.log('👥 Iniciando criação de usuários de teste...');
+  console.log('👥 Verificando usuários no banco de dados...');
 
-  // Limpar funcionários antigos/duplicados (manter apenas admin e mod do sistema)
-  try {
-    console.log('🧹 Limpando funcionários antigos...');
-    const result = await query(
-      "DELETE FROM funcionarios WHERE email NOT IN ('admin@escritorio.com', 'mod@escritorio.com')"
-    );
-    if (result.changes > 0) {
-      console.log(`✅ ${result.changes} funcionários antigos removidos`);
-    }
-  } catch (error) {
-    console.error('❌ Erro ao limpar funcionários antigos:', error);
-  }
+  // Não limpar funcionários - manter todos os dados persistentes
+  console.log('ℹ️ Mantendo todos os funcionários existentes');
 
   // Definir equipes com gestores
   const equipes = {

@@ -3,6 +3,40 @@ import { query } from './db.js';
 
 const router = express.Router();
 
+// Função helper para gerar descrições de mudanças de status
+function getStatusChangeDescription(oldStatus, newStatus, newAssignedTo, oldAssignedTo) {
+  // Mudança de fila
+  if (newAssignedTo !== oldAssignedTo) {
+    if (!newAssignedTo && oldAssignedTo) {
+      return `Movido da fila ${oldAssignedTo} para fila do Robô`;
+    } else if (newAssignedTo && !oldAssignedTo) {
+      return `Movido da fila do Robô para fila ${newAssignedTo}`;
+    } else if (newAssignedTo && oldAssignedTo) {
+      return `Movido da fila ${oldAssignedTo} para fila ${newAssignedTo}`;
+    }
+  }
+
+  // Mudança de status específica
+  if (newStatus !== oldStatus) {
+    switch (newStatus) {
+      case 'Peticionado':
+        return 'Protocolo peticionado com sucesso';
+      case 'Devolvido':
+        return 'Protocolo devolvido';
+      case 'Cancelado':
+        return 'Protocolo cancelado';
+      case 'Em Execução':
+        return 'Protocolo em execução';
+      case 'Aguardando':
+        return 'Protocolo aguardando processamento';
+      default:
+        return `Status alterado de ${oldStatus} para ${newStatus}`;
+    }
+  }
+
+  return 'Protocolo atualizado';
+}
+
 // Listar todos os protocolos
 router.get('/protocolos', async (req, res) => {
   try {
@@ -100,13 +134,14 @@ router.post('/protocolos', async (req, res) => {
   const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
   const now = new Date().toISOString();
 
-  // Criar log inicial
+  // Criar log inicial com informações completas
   const initialLog = [{
     id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
     timestamp: now,
     action: 'created',
-    description: 'Protocolo criado',
-    performedBy: createdByEmail || 'Usuário'
+    description: `Protocolo criado${assignedTo ? ` e atribuído à fila ${assignedTo}` : ' na fila do Robô'}`,
+    performedBy: createdByEmail || 'Usuário',
+    performedById: createdBy
   }];
 
   try {
@@ -217,25 +252,28 @@ router.put('/protocolos/:id', async (req, res) => {
       currentLog = [];
     }
 
-    if (updates.newLogEntry) {
+    // Sistema unificado de logs - evita duplicação
+    if (updates.newLogEntry && updates.newLogEntry.performedBy) {
       const newEntry = {
         ...updates.newLogEntry,
         timestamp: now,
         id: updates.newLogEntry.id || (Date.now().toString() + Math.random().toString(36).substr(2, 9))
       };
       currentLog.push(newEntry);
-    }
-
-    // Adicionar log automático para mudanças de status importantes
-    if (updates.status && updates.status !== row.status) {
+    } else if (updates.status && updates.status !== row.status) {
+      // Somente criar log automático se não houver log manual
       const statusChangeEntry = {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         timestamp: now,
-        action: updates.status === 'Peticionado' ? 'status_changed' : 'status_changed',
-        description: updates.status === 'Peticionado' ? 'Protocolo peticionado com sucesso' : `Status alterado para: ${updates.status}`,
-        performedBy: updates.performedBy || 'Sistema'
+        action: 'status_changed',
+        description: getStatusChangeDescription(row.status, updates.status, updates.assignedTo, row.assignedTo),
+        performedBy: updates.performedBy || 'Sistema',
+        performedById: updates.performedById
       };
-      currentLog.push(statusChangeEntry);
+
+      if (statusChangeEntry.performedBy !== 'Sistema') {
+        currentLog.push(statusChangeEntry);
+      }
     }
 
     // Construir query de atualização dinamicamente
