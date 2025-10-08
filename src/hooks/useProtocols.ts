@@ -448,28 +448,28 @@ export function useProtocols() {
         status: 'Aguardando',
         assignedTo: 'Manual',
         returnReason: `Devolvido pelo Robô: ${returnReason}`,
-        newLogEntry: {
+        newLogEntry: performedBy ? {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'returned',
           description: 'Protocolo devolvido pelo Robô para Fila Manual',
-          performedBy: performedBy || 'Sistema',
+          performedBy,
           performedById,
           details: returnReason
-        }
+        } : undefined
       };
     } else {
       updates = {
         status: 'Devolvido',
         returnReason,
         assignedTo: null,
-        newLogEntry: {
+        newLogEntry: performedBy ? {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           action: 'returned',
           description: 'Protocolo devolvido',
-          performedBy: performedBy || 'Sistema',
+          performedBy,
           performedById,
           details: returnReason
-        }
+        } : undefined
       };
     }
     
@@ -491,13 +491,13 @@ export function useProtocols() {
     const updates = {
       assignedTo,
       status: 'Aguardando',
-      newLogEntry: {
+      newLogEntry: performedBy ? {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'moved_to_queue',
         description: `Movido para: ${assignedTo ? `Fila do ${assignedTo}` : 'Fila do Robô'}`,
-        performedBy: performedBy || 'Sistema',
+        performedBy,
         performedById
-      }
+      } : undefined
     };
 
     const success = await updateProtocolInServer(id, updates);
@@ -518,13 +518,13 @@ export function useProtocols() {
   const cancelProtocol = useCallback(async (id: string, performedBy?: string, performedById?: number) => {
     const updates = {
       status: 'Cancelado',
-      newLogEntry: {
+      newLogEntry: performedBy ? {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         action: 'status_changed',
         description: 'Protocolo cancelado',
-        performedBy: performedBy || 'Sistema',
+        performedBy,
         performedById
-      }
+      } : undefined
     };
     
     const success = await updateProtocolInServer(id, updates);

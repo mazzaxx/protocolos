@@ -50,7 +50,7 @@ export function RobotQueue() {
   const getRobotProtocols = () => {
     const pendingProtocols = protocols.filter(p => p.status === 'Aguardando' || p.status === 'Em Execução');
     let robotProtocols = pendingProtocols.filter(p => !p.assignedTo);
-    
+
     // Aplicar filtro de sistema se selecionado
     if (systemFilter) {
       const selectedGroup = SYSTEM_GROUPS[systemFilter as keyof typeof SYSTEM_GROUPS];
@@ -82,8 +82,8 @@ export function RobotQueue() {
         });
       }
     }
-    
-    return robotProtocols;
+
+    return robotProtocols.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   };
 
   const robotProtocols = getRobotProtocols();

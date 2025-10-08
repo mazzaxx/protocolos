@@ -28,10 +28,12 @@ export function ManualQueue({ employee }: ManualQueueProps) {
 
   // Filtrar protocolos do funcionário em tempo real
   const getEmployeeProtocols = () => {
-    return protocols.filter(p => 
-      (p.status === 'Aguardando' || p.status === 'Em Execução') && 
-      p.assignedTo === employee
-    );
+    return protocols
+      .filter(p =>
+        (p.status === 'Aguardando' || p.status === 'Em Execução') &&
+        p.assignedTo === employee
+      )
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   };
 
   const employeeProtocols = getEmployeeProtocols();
