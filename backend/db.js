@@ -536,15 +536,18 @@ const createTestUsers = async () => {
   for (const user of testUsers) {
     // Log detalhado para debug
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`🔍 Tentando criar usuário: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
+      console.log(`🔍 Verificando usuário: ${user.email} (${user.permissao}${user.equipe ? ` - ${user.equipe}` : ''})`);
     }
-    
+
     try {
+      // IMPORTANTE: Verificar se o usuário já existe no banco
+      // Se existir, NÃO fazemos nada - mantemos senha e dados originais
       const existingUser = await query(
         "SELECT email FROM funcionarios WHERE email = ?",
         [user.email]
       );
-      
+
+      // Só criar o usuário se NÃO existir no banco
       if (existingUser.rows.length === 0) {
         const result = await query(
           "INSERT INTO funcionarios (email, senha, permissao, equipe) VALUES (?, ?, ?, ?)",
@@ -558,8 +561,9 @@ const createTestUsers = async () => {
           console.warn(`⚠️ Usuário não foi criado (sem mudanças): ${user.email}`);
         }
       } else {
+        // Usuário já existe - NÃO alteramos nada (senha, equipe, etc)
         if (process.env.NODE_ENV !== 'production') {
-          console.log(`ℹ️ Usuário já existe: ${user.email}`);
+          console.log(`ℹ️ Usuário já existe (mantendo dados originais): ${user.email}`);
         }
       }
     } catch (error) {

@@ -374,7 +374,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Fila {employee === 'Manual' ? 'Manual' : `do ${employee}`} - Protocolos Aguardando</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Fila {employee} - Protocolos Aguardando</h2>
         <button
           onClick={handleRefreshQueue}
           disabled={isRefreshing}
@@ -394,7 +394,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
               <User className={`h-8 w-8 ${getEmployeeTextColor()} mr-3`} />
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">{employee === 'Manual' ? 'Fila Manual' : employee}</h3>
-                <p className="text-sm text-gray-600">{employee === 'Manual' ? 'Distribuição' : `Funcionário${employee === 'Deyse' ? 'a' : ''}`}</p>
+                <p className="text-sm text-gray-600">{employee === 'Manual' ? 'Distribuição' : ''}</p>
               </div>
             </div>
             <div className="text-right">
@@ -771,7 +771,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
                     {getEmployeeQueuePosition(selectedProtocol) && (
                       <div className={`border rounded p-3 ${getEmployeeModalBg()}`}>
                         <h5 className={`text-xs font-medium mb-1 ${getEmployeeModalText()}`}>
-                          👤 Posição na Fila do {employee}
+                          👤 Posição na Fila {employee}
                         </h5>
                         <div className="flex items-center">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getEmployeeColor(employee)}`}>
@@ -1110,7 +1110,7 @@ export function ManualQueue({ employee }: ManualQueueProps) {
       
       <div className={`mt-6 p-4 ${employee === 'Manual' ? 'bg-blue-50' : employee === 'Deyse' ? 'bg-purple-50' : employee === 'Enzo' ? 'bg-green-50' : 'bg-orange-50'} rounded-lg`}>
         <h3 className={`font-medium ${getEmployeeModalTextDark()} mb-2`}>
-          Instruções para {employee}:
+          Instruções {employee}:
         </h3>
         <ul className={`text-sm ${getEmployeeModalText()} space-y-1`}>
           <li>• Esta é sua fila pessoal de protocolos para peticionamento manual</li>

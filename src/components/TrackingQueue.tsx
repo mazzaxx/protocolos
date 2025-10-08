@@ -103,16 +103,16 @@ export function TrackingQueue() {
       return protocol.status === 'Aguardando' ? 'Em espera na Fila Manual' : 'Fila Manual';
     }
     if (protocol.assignedTo === 'Enzo') {
-      return protocol.status === 'Aguardando' ? 'Em espera na fila do Enzo' : 'Fila do Enzo';
+      return protocol.status === 'Aguardando' ? 'Em espera na Fila Enzo' : 'Fila Enzo';
     }
     if (protocol.assignedTo === 'Iago') {
-      return protocol.status === 'Aguardando' ? 'Em espera na fila do Iago' : 'Fila do Iago';
+      return protocol.status === 'Aguardando' ? 'Em espera na Fila Iago' : 'Fila Iago';
     }
     if (protocol.assignedTo === 'Deyse') {
-      return protocol.status === 'Aguardando' ? 'Em espera na fila da Deyse' : 'Fila da Deyse';
+      return protocol.status === 'Aguardando' ? 'Em espera na Fila Deyse' : 'Fila Deyse';
     }
     // Caso contrário, está na fila do robô
-    return protocol.status === 'Aguardando' ? 'Em espera na fila do robô' : 'Fila do Robô';
+    return protocol.status === 'Aguardando' ? 'Em espera na Fila Robô' : 'Fila Robô';
   };
 
   const getQueuePosition = (protocol: Protocol) => {

@@ -285,7 +285,7 @@ export function RobotQueue() {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Fila do Robô - Protocolos Aguardando</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Fila Robô - Protocolos Aguardando</h2>
         <button
           onClick={handleRefreshQueue}
           disabled={isRefreshing}
@@ -674,7 +674,7 @@ export function RobotQueue() {
                     {/* Posição na Fila do Robô */}
                     {getRobotQueuePosition(selectedProtocol) && (
                       <div className="bg-red-50 border border-red-200 rounded p-3">
-                        <h5 className="text-xs font-medium text-red-800 mb-1">🤖 Posição na Fila do Robô</h5>
+                        <h5 className="text-xs font-medium text-red-800 mb-1">🤖 Posição na Fila Robô</h5>
                         <div className="flex items-center">
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             #{getRobotQueuePosition(selectedProtocol)} na fila
@@ -762,7 +762,7 @@ export function RobotQueue() {
                       
                       {/* Botões de Ação - Sempre Visíveis */}
                       <div className="bg-gray-50 border border-gray-200 rounded p-3">
-                        <h5 className="text-xs font-medium text-gray-800 mb-2">🎯 Ações do Robô</h5>
+                        <h5 className="text-xs font-medium text-gray-800 mb-2">🎯 Ações Robô</h5>
                         <div className="grid grid-cols-1 gap-2">
                           <button
                             onClick={handleMarkAsDone}
@@ -994,7 +994,7 @@ export function RobotQueue() {
       )}
       
       <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-        <h3 className="font-medium text-blue-900 mb-2">Instruções para o Robô:</h3>
+        <h3 className="font-medium text-blue-900 mb-2">Instruções Robô:</h3>
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• <strong>Filtros de Sistema:</strong> Use os filtros para visualizar apenas protocolos de sistemas específicos</li>
           <li>• Clique no botão "Visualizar" para abrir os detalhes do protocolo</li>
